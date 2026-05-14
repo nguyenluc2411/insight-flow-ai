@@ -1,0 +1,72 @@
+# =========================
+# JAVA  SPRING BOOT
+# =========================
+target
+build
+.gradle
+
+
+.idea
+.iml
+
+.vscode
+.settings
+.project
+.classpath
+
+
+.log
+logs
+
+# =========================
+# ENV
+# =========================
+.env
+.env.
+
+
+.DS_Store
+Thumbs.db
+
+__pycache__
+.pyc
+.pyo
+.pyd
+
+venv
+.envrc
+
+# =========================
+# NODEJS
+# =========================
+node_modules
+dist
+.next
+coverage
+
+# =========================
+# DOCKER
+# =========================
+docker-data
+
+# =========================
+# TEST
+# =========================
+test-output
+
+# =========================
+# TEMP
+# =========================
+tmp
+temp
+
+
+kafka-logs
+
+
+.db
+.sqlite
+
+
+generated
+out
