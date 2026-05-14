@@ -225,7 +225,44 @@ Task arrives
 7. **Fail-fast validation**: Validate at DTO boundary, not in service layer.
 8. **Configuration over code**: Routing, feature flags, thresholds → config files, not hardcoded.
 
-## 11. Quick Reference
+## 11. Environment: Windows Development Notes
+
+**Context**: The project lives on Windows (`D:\SU26\EXE201\insight-flow-ai`), but Claude Code executes shell commands through a Unix-like shell (Git Bash / WSL). These two environments have incompatible path conventions — always follow the Unix rules below.
+
+### Path Conventions (CRITICAL)
+
+| | Example | Result |
+|---|---|---|
+| ❌ WRONG | `ls D:\SU26\EXE201\insight-flow-ai\business-services\` | Parse error — backslash is escape char in Bash |
+| ✅ CORRECT | `ls business-services/` | Works — CWD is already project root |
+| ❌ WRONG | `cd D:\SU26\EXE201\insight-flow-ai\platform-services` | Same parse error |
+| ✅ CORRECT | `cd platform-services/` | Works cross-platform |
+
+**Rules**:
+- Always use **Unix-style relative paths** from project root
+- **Never** include drive letters (`D:\`) or backslashes (`\`) in Bash/tool paths
+- Forward slashes work on both Windows and Unix; backslashes do not
+
+### Why This Matters
+
+- Bash treats `\` as an escape character, so `D:\path` silently parses as `D:` + escape sequences
+- The working directory is always set to the project root (`D:\SU26\EXE201\insight-flow-ai`) — no absolute path is ever needed
+- Relative forward-slash paths work identically in Git Bash, WSL, and CI (Linux)
+
+### Exceptions
+
+- PowerShell scripts under `scripts/*.ps1` may use Windows-style paths internally — that is intentional and acceptable
+- When invoking PowerShell via the PowerShell tool, Windows paths are fine
+
+### Tool Usage
+
+- **Read / Edit / Write / Glob / Grep tools**: use Unix-style paths, e.g. `business-services/auth-service/pom.xml`
+- **Bash tool**: use relative Unix paths, e.g. `cd platform-services/api-gateway && ./mvnw clean install`
+- **Never** pass a drive letter or backslash to any tool
+
+---
+
+## 12. Quick Reference
 
 ### Common file locations
 - Multi-tenancy filter: `shared-core/common-security/`
@@ -258,7 +295,7 @@ cd platform-services/api-gateway && ./mvnw clean install
 ./mvnw springdoc-openapi:generate
 ```
 
-## 12. When You're Stuck
+## 13. When You're Stuck
 
 1. **Check PROJECT_CONTEXT.md** for product decisions already made
 2. **Check this file** for engineering conventions

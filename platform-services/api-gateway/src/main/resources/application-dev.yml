@@ -1,0 +1,99 @@
+# =============================================================================
+# api-gateway — application-dev.yml
+# Activated via: -Dspring.profiles.active=dev
+# Overrides base application.yml values for local development.
+# All values here are safe to commit — no real secrets.
+# =============================================================================
+
+spring:
+  cloud:
+    config:
+      uri: http://localhost:8888
+      # fail-fast: false lets the gateway boot without a config server running locally
+      fail-fast: false
+
+    gateway:
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowed-origins:
+              - "http://localhost:3000"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowed-headers:
+              - Authorization
+              - Content-Type
+              - X-Requested-With
+              - X-Correlation-Id
+            exposed-headers:
+              - X-Correlation-Id
+              - X-RateLimit-Remaining
+            allow-credentials: true
+            max-age: 3600
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # No password in dev (matches docker-compose default Redis with no auth)
+
+# =============================================================================
+# Eureka — dev override pointing to local discovery server
+# =============================================================================
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+# =============================================================================
+# Resilience4j — tighter windows for faster feedback during local testing
+# =============================================================================
+resilience4j:
+  circuitbreaker:
+    instances:
+      default-cb:
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+        wait-duration-in-open-state: 5s
+
+# =============================================================================
+# Application — dev JWT secret.
+# WARNING: Dev-only. auth-service dev config MUST use this same secret for
+# end-to-end signature verification to succeed locally.
+# NEVER use in staging or production.
+# =============================================================================
+app:
+  jwt:
+    secret: "dev-insightflow-jwt-secret-32chars-min-for-HS256-algorithm"
+    issuer: "insightflow-auth-service"
+    clock-skew-seconds: 60
+
+# =============================================================================
+# Actuator — expose all endpoints in dev for easier debugging
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+
+# =============================================================================
+# Logging — verbose in dev
+# Uncomment reactor.netty to trace reactive chain execution (very noisy)
+# =============================================================================
+logging:
+  level:
+    root: INFO
+    com.insightflow.gateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway.filter: DEBUG
+    # reactor.netty: DEBUG
+    # io.netty: DEBUG

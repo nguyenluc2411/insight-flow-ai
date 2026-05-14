@@ -1,0 +1,318 @@
+# =============================================================================
+# api-gateway — application.yml
+# Base configuration. Loaded in ALL profiles.
+# Profile-specific files (application-dev.yml, application-prod.yml) override
+# only the values they explicitly declare.
+# =============================================================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # ---------------------------------------------------------------------------
+  # Spring Cloud Config — pull from config server at startup.
+  # "optional:" means the gateway still starts if config server is absent
+  # (useful for local dev without full infra). Remove "optional:" in prod CI.
+  # ---------------------------------------------------------------------------
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        initial-interval: 1000
+        max-interval: 2000
+        multiplier: 1.5
+        max-attempts: 6
+
+    # -------------------------------------------------------------------------
+    # Spring Cloud Gateway
+    # default-filters is intentionally EMPTY. Cross-cutting behaviour
+    # (correlation ID, logging, JWT auth, tenant context) is implemented as
+    # @Bean GlobalFilter / GatewayFilter beans so that filter ordering is
+    # enforced in code rather than YAML position (see filter/ package).
+    # -------------------------------------------------------------------------
+    gateway:
+      default-filters: []
+
+      # -----------------------------------------------------------------------
+      # Global CORS — applies to every route.
+      # NEVER use "*" for allowed-origins when allow-credentials is true
+      # (browsers reject the pre-flight response per CORS spec).
+      # -----------------------------------------------------------------------
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowed-origins:
+              - "http://localhost:3000"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowed-headers:
+              - Authorization
+              - Content-Type
+              - X-Requested-With
+              - X-Correlation-Id
+            exposed-headers:
+              - X-Correlation-Id
+              - X-RateLimit-Remaining
+            allow-credentials: true
+            max-age: 3600
+
+      # -----------------------------------------------------------------------
+      # Route definition contract:
+      # - metadata.public: true|false (REQUIRED) - determines JWT filter behavior
+      # - metadata.rateLimiter: bean name (REQUIRED) - which limiter to apply
+      # - Order matters: webhook routes BEFORE integration routes (more specific first)
+      # See docs/architecture/rate-limiting-strategy.md for L1 design
+      # -----------------------------------------------------------------------
+      routes:
+
+        # ── Auth service — public endpoints (no JWT) ─────────────────────────
+        # Covers login, tenant registration, and token refresh.
+        # Rate limit: 5 req / 15 min / IP (loginRateLimiter — FixedWindow custom bean).
+        - id: auth-service-public
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/login,/api/v1/auth/register-tenant,/api/v1/auth/refresh
+            - Method=POST
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@loginRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: loginRateLimiter
+          order: 1
+
+        # ── Auth service — protected endpoints (JWT required) ─────────────────
+        # Covers password change, profile, admin user management, etc.
+        - id: auth-service-protected
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 2
+
+        # ── Catalog service ───────────────────────────────────────────────────
+        - id: catalog-service
+          uri: lb://catalog-service
+          predicates:
+            - Path=/api/v1/catalog/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 10
+
+        # ── Sales service ─────────────────────────────────────────────────────
+        - id: sales-service
+          uri: lb://sales-service
+          predicates:
+            - Path=/api/v1/sales/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 20
+
+        # ── Integration service — POS webhooks (PUBLIC, POST only) ────────────
+        # POS platforms authenticate via HMAC payload signature verified inside
+        # integration-service. Gateway MUST forward these headers unmodified:
+        #   X-KiotViet-Signature, X-Sapo-Signature,
+        #   X-Shopify-Hmac-Sha256, X-Haravan-Signature
+        # DO NOT add RemoveRequestHeader or any header-manipulation filter here.
+        # CorrelationIdFilter (order -100) generates X-Correlation-Id for all routes.
+        # Rate limit: ~600 req/min burst (replenishRate=10, burstCapacity=30).
+        # This route MUST appear before integration-service-protected (more specific).
+        - id: integration-service-webhooks
+          uri: lb://integration-service
+          predicates:
+            - Path=/api/v1/webhooks/**
+            - Method=POST
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@webhookRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: webhookRateLimiter
+          order: 30
+
+        # ── Integration service — protected management endpoints ───────────────
+        # Covers connector configuration, OAuth flows, manual sync triggers.
+        - id: integration-service-protected
+          uri: lb://integration-service
+          predicates:
+            - Path=/api/v1/integrations/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 31
+
+        # ── Dashboard BFF ─────────────────────────────────────────────────────
+        - id: dashboard-bff
+          uri: lb://dashboard-bff
+          predicates:
+            - Path=/api/v1/dashboard/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 40
+
+        # ── ML service ────────────────────────────────────────────────────────
+        - id: ml-service
+          uri: lb://ml-service
+          predicates:
+            - Path=/api/v1/ml/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 50
+
+        # NOTE: /actuator/health and /v3/api-docs/** are served by the gateway
+        # process itself — Spring Boot exposes them on port 8080 automatically.
+        # No routing entries needed.
+
+  # ---------------------------------------------------------------------------
+  # Codec — 25 MB global limit.
+  # KiotViet batch sync payloads reach ~10 MB; Shopify bulk ops up to ~20 MB.
+  # Without this, DataBufferLimitException is thrown on large webhook bodies.
+  # ---------------------------------------------------------------------------
+  codec:
+    max-in-memory-size: 26214400
+
+  # ---------------------------------------------------------------------------
+  # Redis — backing store for RequestRateLimiter token-bucket state.
+  # State is shared across gateway replicas and survives restarts.
+  # ---------------------------------------------------------------------------
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      lettuce:
+        pool:
+          min-idle: 2
+          max-idle: 8
+          max-active: 16
+          max-wait: -1ms
+
+# =============================================================================
+# Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
+# spring-cloud-starter-netflix-eureka-client binds to the eureka.* namespace.
+# =============================================================================
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: "${spring.application.name}:${random.value}"
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+# =============================================================================
+# Resilience4j — Circuit breaker foundation.
+#
+# TODO(Phase 2): Wire CircuitBreaker filters per route once fallback controller
+# is implemented and baseline failure rates are known from production traffic.
+# See docs/adr/gateway-circuit-breaker.md
+# =============================================================================
+resilience4j:
+  circuitbreaker:
+    instances:
+      default-cb:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 10s
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.cloud.gateway.support.NotFoundException
+
+# =============================================================================
+# Application-level configuration.
+# jwt.secret MUST come from Config Server in prod — this is a placeholder only.
+# =============================================================================
+app:
+  jwt:
+    secret: "PLACEHOLDER_OVERRIDE_IN_CONFIG_SERVER"
+    issuer: "insightflow-auth-service"
+    clock-skew-seconds: 30
+
+# =============================================================================
+# Spring Boot Actuator
+# /actuator/health and /v3/api-docs/** are served directly by this process.
+# /actuator/gateway exposes route table for operational visibility.
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: when-authorized
+    gateway:
+      enabled: true
+  health:
+    redis:
+      enabled: true
+
+# =============================================================================
+# Logging
+# %X{correlationId} is populated by CorrelationIdFilter (order -100) via MDC.
+# =============================================================================
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId}] - %msg%n"
+  level:
+    root: INFO
+    com.insightflow.gateway: INFO

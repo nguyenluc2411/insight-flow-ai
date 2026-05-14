@@ -77,15 +77,29 @@ X-Correlation-Id: <generated UUID for request tracing>
 - `POST /api/v1/webhooks/**` (POS webhooks — verified separately by signature)
 
 ### Rate limiting strategy
-- **Redis** as backend (already in docker-compose)
-- **Keys**: 
-  - Unauthenticated: per IP — `rl:ip:{ip}:{minute}`
-  - Authenticated: per user — `rl:user:{user_id}:{minute}`
-  - Per tenant: `rl:tenant:{tenant_id}:{minute}`
-- **Default limits**: 
-  - Anonymous: 30 req/min/IP
-  - Authenticated: 300 req/min/user, 3000 req/min/tenant
-  - Login endpoint: 5 attempts / 15min / IP (separate stricter limit)
+
+**Gateway enforces L1 IP-based anti-DDoS only. NEVER add user-based or
+tenant-based key resolvers at the gateway.**
+
+Structural reason: the rate-limit filter runs at order 0, before JWT validation
+(order 100). Tenant/user claims are not yet available. Parsing an unverified JWT
+for key resolution is a security anti-pattern.
+
+Architectural reason: per-user and per-tenant quotas are business rules owned by
+downstream services. Full rationale: `docs/architecture/rate-limiting-strategy.md`.
+
+- **Backend**: Redis (shared across gateway replicas, survives restarts)
+- **Key resolver**: `ipKeyResolver` on ALL routes — `X-Forwarded-For` with fallback to `RemoteAddress`
+- **Beans** (defined in `RateLimitConfig.java`):
+
+| Bean | Type | Config | Applies to |
+|------|------|--------|------------|
+| `defaultRateLimiter` | `RedisRateLimiter` token bucket | replenishRate=5, burstCapacity=10 | All general routes (~300 req/min) |
+| `webhookRateLimiter` | `RedisRateLimiter` token bucket | replenishRate=10, burstCapacity=30 | POS webhook routes (~600 req/min) |
+| `loginRateLimiter` | Custom `FixedWindowRedisRateLimiter` | 5 req / 900 s / IP | Auth public endpoints |
+
+**L2 (per-user)** and **L3 (per-tenant)** rate limiting are downstream service
+responsibility — Phase 1.5 and Phase 2 respectively. Do not implement at gateway.
 
 ### CORS configuration
 - **Allowed origins**: `localhost:3000` (dev), production domain from `config-repo`

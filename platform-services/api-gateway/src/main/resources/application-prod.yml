@@ -1,0 +1,108 @@
+# =============================================================================
+# api-gateway — application-prod.yml
+# Activated via: -Dspring.profiles.active=prod
+#
+# REQUIRED ENVIRONMENT VARIABLES — must be set before the gateway starts:
+#
+#   CONFIG_SERVER_URL      URL of the Spring Cloud Config Server
+#                          e.g. https://config.internal.insightflow.ai
+#   EUREKA_DEFAULT_ZONE    Eureka server URL
+#                          e.g. http://discovery.internal.insightflow.ai:8761/eureka/
+#   REDIS_HOST             Redis hostname (ElastiCache endpoint, etc.)
+#   REDIS_PORT             Redis port (typically 6380 for TLS-enabled ElastiCache)
+#   REDIS_PASSWORD         Redis AUTH password (mandatory in prod)
+#   JWT_SECRET             HS256 signing secret (min 32 chars, high entropy).
+#                          Must match auth-service JWT_SECRET exactly.
+#   CORS_ALLOWED_ORIGIN    Production frontend origin
+#                          e.g. https://app.insightflow.ai
+# =============================================================================
+
+server:
+  port: 8080
+  http2:
+    enabled: true
+  compression:
+    enabled: true
+    mime-types: application/json,application/problem+json
+    min-response-size: 2048
+
+spring:
+  cloud:
+    config:
+      uri: "${CONFIG_SERVER_URL}"
+      fail-fast: true
+
+    gateway:
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowed-origins:
+              - "${CORS_ALLOWED_ORIGIN}"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowed-headers:
+              - Authorization
+              - Content-Type
+              - X-Requested-With
+              - X-Correlation-Id
+            exposed-headers:
+              - X-Correlation-Id
+              - X-RateLimit-Remaining
+            allow-credentials: true
+            max-age: 3600
+
+  data:
+    redis:
+      host: "${REDIS_HOST}"
+      port: "${REDIS_PORT}"
+      password: "${REDIS_PASSWORD}"
+      ssl:
+        enabled: true
+      lettuce:
+        pool:
+          min-idle: 4
+          max-idle: 16
+          max-active: 32
+          max-wait: 500ms
+
+# =============================================================================
+# Eureka — prod service registry
+# =============================================================================
+eureka:
+  client:
+    service-url:
+      defaultZone: "${EUREKA_DEFAULT_ZONE}"
+
+# =============================================================================
+# Application — JWT secret from environment, never hardcoded
+# =============================================================================
+app:
+  jwt:
+    secret: "${JWT_SECRET}"
+    issuer: "insightflow-auth-service"
+    clock-skew-seconds: 30
+
+# =============================================================================
+# Actuator — minimal exposure in prod
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: never
+
+# =============================================================================
+# Logging — reduced verbosity; gateway package at INFO for audit trail
+# =============================================================================
+logging:
+  level:
+    root: WARN
+    com.insightflow.gateway: INFO
