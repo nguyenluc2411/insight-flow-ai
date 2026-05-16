@@ -1,0 +1,54 @@
+spring:
+  cloud:
+    config:
+      fail-fast: false
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/insightflow?currentSchema=auth_db
+    username: postgres
+    password: postgres
+
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    out-of-order: false
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+# =============================================================================
+# App — Dev JWT config.
+# Secret MUST match api-gateway/application-dev.yml — both services share the
+# same HMAC key for sign (auth-service) + verify (gateway).
+# Value: Base64("insightflow-dev-32bytes-secret!!")
+# =============================================================================
+app:
+  jwt:
+    secret: "aW5zaWdodGZsb3ctZGV2LTMyYnl0ZXMtc2VjcmV0ISE="
+    issuer: "insightflow-auth-service"
+    expiration-minutes: 15
+    refresh-expiration-days: 30
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.insightflow.auth: DEBUG
+    org.springframework.security: DEBUG
+    org.flywaydb: DEBUG
