@@ -69,7 +69,9 @@ resilience4j:
 # =============================================================================
 app:
   jwt:
-    secret: "dev-insightflow-jwt-secret-32chars-min-for-HS256-algorithm"
+    # Base64("insightflow-dev-32bytes-secret!!") — 32 bytes, HS256-safe dev key.
+    # auth-service dev config MUST use this same encoded secret.
+    secret: "aW5zaWdodGZsb3ctZGV2LTMyYnl0ZXMtc2VjcmV0ISE="
     issuer: "insightflow-auth-service"
     clock-skew-seconds: 60
 
