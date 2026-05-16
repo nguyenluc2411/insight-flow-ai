@@ -1,0 +1,11 @@
+# Config-server managed overrides for api-gateway.
+# Production values (jwt.secret, allowed-origins) should be set here
+# and NOT committed — inject via CI secrets or Vault.
+#
+# This file intentionally minimal: api-gateway/application-dev.yml
+# carries all dev values and is the source of truth in local dev.
+app:
+  jwt:
+    # OVERRIDE IN PROD: provide Base64-encoded 256-bit HMAC key via CI secret
+    # secret: <injected-by-ci>
+    issuer: "insightflow-auth-service"
