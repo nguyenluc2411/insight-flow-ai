@@ -1,0 +1,293 @@
+openapi: "3.1.0"
+info:
+  title: Auth Service API
+  description: |
+    Tenant onboarding, user authentication, and JWT token management.
+
+    ## Token Lifecycle
+    - `POST /register-tenant` issues access + refresh tokens on creation
+    - `POST /login` issues tokens; use `tenantSlug` + `email` + `password`
+    - `POST /refresh` rotates the refresh token (old one is revoked)
+    - `POST /logout` revokes the refresh token
+    - Access tokens expire in **15 minutes** (HS256, verified by api-gateway)
+    - Refresh tokens expire in **30 days** (stored as SHA-256 hash)
+
+    ## JWT Claim Structure
+    ```json
+    {
+      "sub": "user-uuid",
+      "tenant_id": "tenant-uuid",
+      "tenant_slug": "shop-abc",
+      "plan": "trial",
+      "roles": ["OWNER"],
+      "permissions": ["catalog:read", "inventory:write"],
+      "iat": 1715000000,
+      "exp": 1715000900
+    }
+    ```
+  version: "1.0.0"
+  contact:
+    name: Insight Flow AI
+    email: dev@insightflow.ai
+
+servers:
+  - url: http://localhost:8080/api/v1/auth
+    description: Via API Gateway (dev)
+  - url: http://localhost:8081/api/v1/auth
+    description: Direct (dev)
+
+paths:
+  /register-tenant:
+    post:
+      operationId: registerTenant
+      summary: Register a new tenant with an owner account
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterTenantRequest'
+      responses:
+        '201':
+          description: Tenant and owner created, tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantRegistrationResult'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /login:
+    post:
+      operationId: login
+      summary: Authenticate and receive tokens
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+
+  /refresh:
+    post:
+      operationId: refreshToken
+      summary: Rotate refresh token (old token is revoked)
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Tokens rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+
+  /logout:
+    post:
+      operationId: logout
+      summary: Revoke refresh token
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '204':
+          description: Token revoked
+
+  /me:
+    get:
+      operationId: getCurrentUser
+      summary: Get current user info (requires gateway JWT validation)
+      tags: [Authentication]
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Set by api-gateway TenantContextFilter after JWT validation
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '401':
+          $ref: '#/components/responses/AuthError'
+
+components:
+  schemas:
+    RegisterTenantRequest:
+      type: object
+      required: [tenantName, slug, ownerEmail, ownerPassword, ownerFullName]
+      properties:
+        tenantName:
+          type: string
+          example: "Test Shop"
+        slug:
+          type: string
+          pattern: '^[a-z0-9-]{3,50}$'
+          example: "test-shop"
+        ownerEmail:
+          type: string
+          format: email
+          example: "owner@test.com"
+        ownerPassword:
+          type: string
+          minLength: 8
+          writeOnly: true
+        ownerFullName:
+          type: string
+          example: "Shop Owner"
+
+    LoginRequest:
+      type: object
+      required: [tenantSlug, email, password]
+      properties:
+        tenantSlug:
+          type: string
+          example: "test-shop"
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    LogoutRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          description: Access token lifetime in seconds
+          example: 900
+        user:
+          $ref: '#/components/schemas/UserInfo'
+
+    TenantRegistrationResult:
+      allOf:
+        - $ref: '#/components/schemas/AuthResponse'
+        - type: object
+          properties:
+            tenant:
+              $ref: '#/components/schemas/TenantInfo'
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        tenantId:
+          type: string
+          format: uuid
+        tenantSlug:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+
+    TenantInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+          enum: [trial, starter, pro]
+        trialEndsAt:
+          type: string
+          format: date-time
+
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    AuthError:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Conflict:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
