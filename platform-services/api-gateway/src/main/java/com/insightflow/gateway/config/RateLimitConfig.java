@@ -6,6 +6,7 @@ import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
@@ -32,6 +33,7 @@ public class RateLimitConfig {
      * Replenish: 5 tokens/sec (~300 req/min sustained), burst: 10.
      */
     @Bean
+    @Primary
     public RedisRateLimiter defaultRateLimiter() {
         return new RedisRateLimiter(5, 10, 1);
     }
