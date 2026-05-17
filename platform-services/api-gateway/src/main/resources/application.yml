@@ -248,6 +248,8 @@ springdoc:
         url: /v3/api-docs/auth
       - name: "Catalog Service"
         url: /v3/api-docs/catalog
+      - name: "Sales Service"
+        url: /v3/api-docs/sales
 
 # =============================================================================
 # Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
@@ -312,6 +314,8 @@ app:
         service-id: auth-service
       - alias: catalog
         service-id: catalog-service
+      - alias: sales
+        service-id: sales-service
 
 # =============================================================================
 # Spring Boot Actuator

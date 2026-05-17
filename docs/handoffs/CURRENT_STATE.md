@@ -1,5 +1,5 @@
 # Implementation State — Insight Flow AI Backend
-Updated: 2026-05-18T08:00:00Z
+Updated: 2026-05-18T10:00:00Z
 
 ---
 
@@ -107,6 +107,7 @@ Tables: categories, products, product_variants, locations, inventory_levels, inv
 | api-gateway | 8080 | Done + Swagger aggregator | `dc5ab83` |
 | auth-service | 8081 | Done + env vars standardized | `f0c72ce` |
 | catalog-service | 8082 | Done | `35481bb` |
+| sales-service | 8083 | Done | `2cec988` |
 
 ### Cross-cutting changes (2026-05-18)
 - `chore(root)`: `.env.example` template added, `.gitignore` whitelist | `fb7d124`
@@ -123,6 +124,7 @@ Tables: categories, products, product_variants, locations, inventory_levels, inv
 4. ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev  (api-gateway, port 8080)
 5. ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev  (auth-service, port 8081)
 6. ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev  (catalog-service, port 8082)
+7. ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev  (sales-service, port 8083)
 ```
 
 ---
@@ -135,9 +137,68 @@ Tables: categories, products, product_variants, locations, inventory_levels, inv
 - [ ] Implement ProductVariant CRUD endpoints
 - [ ] Consumer for `sales.order.completed` → adjust inventory
 
-### sales-service (next major service)
-- [ ] Orders, order items, customers, suppliers
-- [ ] Event: `sales.order.completed` → consumed by catalog-service
+---
+
+## Sales Service — COMPLETE ✅
+
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| S1 | Project skeleton (pom.xml, yml, Dockerfile) | `8e36866` |
+| S2 | Flyway migrations V1-V6 (schema + all tables + materialized view) | `3f24b99` |
+| S3 | JPA entities + repositories (4 entities, 4 repos) | `1a3e1c6` |
+| S4 | Services, DTOs, mappers, Kafka event | `cbfaa24` |
+| S5 | REST controllers (Order, Customer, Supplier) | `2cec988` |
+| S6 | Gateway: Swagger dropdown + sales route | current |
+
+### Endpoints implemented
+```
+GET  /api/v1/sales/orders              list (paginated)
+POST /api/v1/sales/orders              create order (status=pending)
+GET  /api/v1/sales/orders/{id}         get by id
+POST /api/v1/sales/orders/{id}/complete  complete → update customer stats + Kafka
+
+GET  /api/v1/sales/customers           list (paginated)
+POST /api/v1/sales/customers           create
+GET  /api/v1/sales/customers/{id}      get by id
+
+GET  /api/v1/sales/suppliers           list (paginated)
+POST /api/v1/sales/suppliers           create
+```
+
+### Key design decisions
+- SalesOrderItems append-only — no updated_at column
+- Order number format: `ORD-{first8ofTenantId}-{epochMillis}` — unique per tenant
+- completeOrder: update customer stats (total_spent, order_count, last_order_at) atomically in same TX
+- Kafka publish uses whenComplete — fail-open: Kafka down ≠ order completion rejected
+- Order state machine: pending → completed (guard: rejects if already completed)
+- tenant_id enforced at repository layer on all queries
+- Materialized view `daily_sales_summary` for ML service aggregation queries
+
+### Schema: sales_db
+Tables: customers, suppliers, sales_orders, sales_order_items, daily_sales_summary (materialized view)
+
+### Kafka Events Published
+| Topic | Trigger |
+|---|---|
+| `sales.order.completed` | POST /api/v1/sales/orders/{id}/complete |
+
+### Open issues
+1. No service-level JWT validation (relies on api-gateway for auth)
+2. No consumer for `catalog.inventory.updated` event
+3. daily_sales_summary needs periodic REFRESH (manual or pg_cron)
+4. No supplier → purchase order workflow yet
+
+---
+
+## Next Steps
+
+### Integration service
+- [ ] KiotViet connector spike (highest priority per PROJECT_CONTEXT.md)
+
+### Enhancements
+- [ ] catalog-service: Category/Variant CRUD endpoints
+- [ ] sales-service: daily_sales_summary refresh job
+- [ ] sales-service: consumer for `catalog.inventory.updated`
 
 ---
 
@@ -156,8 +217,9 @@ cd business-services/catalog-service
 ```
 Read docs/handoffs/CURRENT_STATE.md first.
 Then read PROJECT_CONTEXT.md, .claude/CLAUDE.md.
-Gateway, auth-service, and catalog-service are COMPLETE as of 2026-05-18.
+Gateway, auth-service, catalog-service, and sales-service are COMPLETE as of 2026-05-18.
 All services use env vars from .env (no hardcoded credentials).
-Next: sales-service (orders, customers, suppliers) or catalog enhancements.
+sales-service requires -Dspring-boot.run.jvmArguments=-Duser.timezone=UTC on Windows.
+Next: integration-service (KiotViet connector) or catalog/sales enhancements.
 Do not re-implement completed services.
 ```
