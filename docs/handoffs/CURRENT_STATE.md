@@ -1,5 +1,5 @@
 # Implementation State — Insight Flow AI Backend
-Updated: 2026-05-18T00:00:00Z
+Updated: 2026-05-18T08:00:00Z
 
 ---
 
@@ -15,9 +15,10 @@ Updated: 2026-05-18T00:00:00Z
 | 3.6 GlobalExceptionHandler           | exception/GlobalExceptionHandler.java | `4c25322` |
 
 ### Swagger Aggregator — COMPLETE ✅
-- `SwaggerServiceProperties.java` — alias→serviceId mapping from YAML
-- `SwaggerDocsProxyController.java` — GET /v3/api-docs/{alias} → lb://service/v3/api-docs
-- `WebClientConfig.java` — immutable load-balanced WebClient
+- `SwaggerServiceProperties.java` — alias→serviceId mapping from YAML | `dc5ab83`
+- `SwaggerDocsProxyController.java` — GET /v3/api-docs/{alias} → lb://service/v3/api-docs | `dc5ab83`
+- `WebClientConfig.java` — immutable load-balanced WebClient | `dc5ab83`
+- Config fixes dev/prod (CORS path SCG 4.x, env var naming) | `11df016`
 - Dropdown: "Auth Service" + "Catalog Service" at http://localhost:8080/swagger-ui/index.html
 
 **Dev JWT secret (Base64)**: `aW5zaWdodGZsb3ctZGV2LTMyYnl0ZXMtc2VjcmV0ISE=`
@@ -98,14 +99,18 @@ Tables: categories, products, product_variants, locations, inventory_levels, inv
 
 ## Infrastructure — COMPLETE ✅
 
-| Service | Port | Status |
-|---------|------|--------|
-| docker-compose (Postgres, Redis, Kafka, ZK) | various | With healthchecks |
-| discovery-server (Eureka) | 8761 | Done |
-| config-server | 8888 | Done |
-| api-gateway | 8080 | Done |
-| auth-service | 8081 | Done |
-| catalog-service | 8082 | Done |
+| Service | Port | Status | Commit |
+|---------|------|--------|--------|
+| docker-compose (Postgres, Redis, Kafka, ZK) | various | Parameterized credentials, fixed healthchecks | `db7ec99` |
+| discovery-server (Eureka) | 8761 | Done | — |
+| config-server | 8888 | EUREKA_URL env var | `2303743` |
+| api-gateway | 8080 | Done + Swagger aggregator | `dc5ab83` |
+| auth-service | 8081 | Done + env vars standardized | `f0c72ce` |
+| catalog-service | 8082 | Done | `35481bb` |
+
+### Cross-cutting changes (2026-05-18)
+- `chore(root)`: `.env.example` template added, `.gitignore` whitelist | `fb7d124`
+- All services now read credentials from `.env` via env vars (no hardcoded localhost/passwords)
 
 ---
 
@@ -136,12 +141,23 @@ Tables: categories, products, product_variants, locations, inventory_levels, inv
 
 ---
 
+## Startup Notes
+
+Catalog-service requires 2 extra flags when starting via CLI (Windows timezone issue):
+```bash
+export $(grep -v '^#' .env | grep -v '^$' | xargs) && export KAFKA_BOOTSTRAP=$KAFKA_BOOTSTRAP_SERVERS
+cd business-services/catalog-service
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev \
+  -Dspring-boot.run.jvmArguments=-Duser.timezone=UTC
+```
+
 ## Resume Prompt
 
 ```
 Read docs/handoffs/CURRENT_STATE.md first.
 Then read PROJECT_CONTEXT.md, .claude/CLAUDE.md.
 Gateway, auth-service, and catalog-service are COMPLETE as of 2026-05-18.
-Next: sales-service or catalog-service enhancements (category/variant endpoints).
+All services use env vars from .env (no hardcoded credentials).
+Next: sales-service (orders, customers, suppliers) or catalog enhancements.
 Do not re-implement completed services.
 ```
