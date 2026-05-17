@@ -1,0 +1,69 @@
+package com.insightflow.sales.controller;
+
+import com.insightflow.sales.dto.request.CreateOrderRequest;
+import com.insightflow.sales.dto.response.SalesOrderResponse;
+import com.insightflow.sales.service.OrderService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/v1/sales/orders")
+@RequiredArgsConstructor
+@Tag(name = "Sales Orders", description = "Order management")
+public class OrderController {
+
+    private final OrderService orderService;
+
+    @GetMapping
+    @Operation(summary = "List orders", description = "Paginated order list for the tenant")
+    @ApiResponse(responseCode = "200", description = "Success")
+    public Page<SalesOrderResponse> listOrders(
+            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return orderService.getOrders(tenantId, pageable);
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create order", description = "Creates a new order in pending status")
+    @ApiResponse(responseCode = "201", description = "Order created")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    public SalesOrderResponse createOrder(
+            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @Valid @RequestBody CreateOrderRequest request) {
+        return orderService.createOrder(request, tenantId);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get order by ID")
+    @ApiResponse(responseCode = "200", description = "Success")
+    @ApiResponse(responseCode = "404", description = "Not found")
+    public SalesOrderResponse getOrder(
+            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id) {
+        return orderService.getOrderById(id, tenantId);
+    }
+
+    @PostMapping("/{id}/complete")
+    @Operation(summary = "Complete order",
+               description = "Transitions order from pending to completed. Publishes sales.order.completed to Kafka.")
+    @ApiResponse(responseCode = "200", description = "Order completed")
+    @ApiResponse(responseCode = "404", description = "Order not found")
+    @ApiResponse(responseCode = "422", description = "Order already completed or cancelled")
+    public SalesOrderResponse completeOrder(
+            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id) {
+        return orderService.completeOrder(id, tenantId);
+    }
+}
