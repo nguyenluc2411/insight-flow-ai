@@ -1,0 +1,102 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: catalog-service
+
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        initial-interval: 1000
+        max-interval: 2000
+        multiplier: 1.5
+        max-attempts: 6
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:insightflow}?currentSchema=${CATALOG_DB_SCHEMA:catalog_db}
+    username: ${POSTGRES_USER:insightflow}
+    password: ${POSTGRES_PASSWORD:insightflow}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: catalog-service-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: catalog_db
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: catalog_db
+    default-schema: catalog_db
+    create-schemas: true
+    baseline-on-migrate: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+
+# =============================================================================
+# Eureka
+# =============================================================================
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: "${spring.application.name}:${random.value}"
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+# =============================================================================
+# Actuator
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# =============================================================================
+# SpringDoc OpenAPI
+# =============================================================================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  show-actuator: false
+
+# =============================================================================
+# Logging
+# =============================================================================
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.insightflow.catalog: INFO

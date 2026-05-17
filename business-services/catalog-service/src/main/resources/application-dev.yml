@@ -1,0 +1,38 @@
+spring:
+  cloud:
+    config:
+      fail-fast: false
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:insightflow}?currentSchema=${CATALOG_DB_SCHEMA:catalog_db}
+    username: ${POSTGRES_USER:insightflow}
+    password: ${POSTGRES_PASSWORD:insightflow}
+
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.insightflow.catalog: DEBUG
+    org.flywaydb: DEBUG
+    org.hibernate.SQL: DEBUG
