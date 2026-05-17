@@ -18,7 +18,7 @@ spring:
   # (useful for local dev without full infra). Remove "optional:" in prod CI.
   # ---------------------------------------------------------------------------
   config:
-    import: "optional:configserver:http://localhost:8888"
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
 
   cloud:
     config:
@@ -37,35 +37,40 @@ spring:
     # enforced in code rather than YAML position (see filter/ package).
     # -------------------------------------------------------------------------
     gateway:
-      default-filters: []
 
-      # -----------------------------------------------------------------------
-      # Global CORS — applies to every route.
-      # NEVER use "*" for allowed-origins when allow-credentials is true
-      # (browsers reject the pre-flight response per CORS spec).
-      # -----------------------------------------------------------------------
-      globalcors:
-        cors-configurations:
-          "[/**]":
-            allowed-origins:
-              - "http://localhost:3000"
-            allowed-methods:
-              - GET
-              - POST
-              - PUT
-              - PATCH
-              - DELETE
-              - OPTIONS
-            allowed-headers:
-              - Authorization
-              - Content-Type
-              - X-Requested-With
-              - X-Correlation-Id
-            exposed-headers:
-              - X-Correlation-Id
-              - X-RateLimit-Remaining
-            allow-credentials: true
-            max-age: 3600
+      server:
+        webflux:
+          default-filters: []
+
+          # -----------------------------------------------------------------------
+          # Global CORS — applies to every route.
+          # NEVER use "*" for allowed-origins when allow-credentials is true
+          # (browsers reject the pre-flight response per CORS spec).
+          # -----------------------------------------------------------------------
+          globalcors:
+            cors-configurations:
+              "[/**]":
+                allowed-origins:
+                  - ${GATEWAY_CORS_ALLOWED_ORIGIN:http://localhost:3000}
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - PATCH
+                  - DELETE
+                  - OPTIONS
+                allowed-headers:
+                  - Authorization
+                  - Content-Type
+                  - X-Requested-With
+                  - X-Correlation-Id
+                exposed-headers:
+                  - X-Correlation-Id
+                  - X-RateLimit-Remaining
+                allow-credentials: true
+                max-age: 3600
+
+      # discovery locator removed: we rely on DiscoveryClient + proxy for Swagger aggregation
 
       # -----------------------------------------------------------------------
       # Route definition contract:
@@ -76,23 +81,36 @@ spring:
       # -----------------------------------------------------------------------
       routes:
 
+        # NOTE: /swagger-ui/**, /v3/api-docs/**, and /swagger/{serviceId}/v3/api-docs
+        # are served directly by the gateway process (springdoc + SwaggerDocsProxyController).
+        # They bypass gateway routing entirely — no route entries needed here.
+
         # ── Auth service — public endpoints (no JWT) ─────────────────────────
         # Covers login, tenant registration, and token refresh.
         # Rate limit: 5 req / 15 min / IP (loginRateLimiter — FixedWindow custom bean).
         - id: auth-service-public
           uri: lb://auth-service
           predicates:
-            - Path=/api/v1/auth/login,/api/v1/auth/register-tenant,/api/v1/auth/refresh
-            - Method=POST
+              - Path=/api/v1/auth/login,/api/v1/auth/register-tenant,/api/v1/auth/refresh
+              - Method=POST
           filters:
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@loginRateLimiter}"
                 key-resolver: "#{@ipKeyResolver}"
           metadata:
-            public: true
-            rateLimiter: loginRateLimiter
+                  public: true
+                  rateLimiter: loginRateLimiter
           order: 1
+#          filters:
+#            - name: RequestRateLimiter
+#              args:
+#                rate-limiter: "#{@loginRateLimiter}"
+#                key-resolver: "#{@ipKeyResolver}"
+#          metadata:
+#            public: true
+#            rateLimiter: loginRateLimiter
+#          order: 1
 
         # ── Auth service — protected endpoints (JWT required) ─────────────────
         # Covers password change, profile, admin user management, etc.
@@ -214,28 +232,22 @@ spring:
         # process itself — Spring Boot exposes them on port 8080 automatically.
         # No routing entries needed.
 
-  # ---------------------------------------------------------------------------
-  # Codec — 25 MB global limit.
-  # KiotViet batch sync payloads reach ~10 MB; Shopify bulk ops up to ~20 MB.
-  # Without this, DataBufferLimitException is thrown on large webhook bodies.
-  # ---------------------------------------------------------------------------
-  codec:
-    max-in-memory-size: 26214400
-
-  # ---------------------------------------------------------------------------
-  # Redis — backing store for RequestRateLimiter token-bucket state.
-  # State is shared across gateway replicas and survives restarts.
-  # ---------------------------------------------------------------------------
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      lettuce:
-        pool:
-          min-idle: 2
-          max-idle: 8
-          max-active: 16
-          max-wait: -1ms
+# =============================================================================
+# Springdoc — Swagger Aggregator
+# Gateway aggregates API docs from all downstream services.
+# Add new services under app.swagger.services + springdoc.swagger-ui.urls.
+# =============================================================================
+springdoc:
+  api-docs:
+    enabled: true                  # Bắt buộc — tắt là springdoc không register handler nào, kể cả swagger-config
+  swagger-ui:
+    enabled: true
+    disable-swagger-default-url: true
+    urls:
+      - name: "Auth Service"
+        url: /v3/api-docs/auth
+      - name: "Catalog Service"
+        url: /v3/api-docs/catalog
 
 # =============================================================================
 # Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
@@ -252,7 +264,7 @@ eureka:
     fetch-registry: true
     registry-fetch-interval-seconds: 5
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
 
 # =============================================================================
 # Resilience4j — Circuit breaker foundation.
@@ -283,9 +295,23 @@ resilience4j:
 # =============================================================================
 app:
   jwt:
-    secret: "PLACEHOLDER_OVERRIDE_IN_CONFIG_SERVER"
+    # Dev fallback — 32+ chars required for HS256. MUST be overridden via env in staging/prod.
+    secret: ${JWT_SECRET:insightflow-dev-secret-change-in-production!!}
     issuer: "insightflow-auth-service"
     clock-skew-seconds: 30
+
+  # ---------------------------------------------------------------------------
+  # Swagger aggregator — alias → serviceId mapping.
+  # alias: short path used in /v3/api-docs/{alias}
+  # service-id: Eureka-registered service name (load-balanced by WebClient)
+  # To add a service: append an entry here AND add to springdoc.swagger-ui.urls.
+  # ---------------------------------------------------------------------------
+  swagger:
+    services:
+      - alias: auth
+        service-id: auth-service
+      - alias: catalog
+        service-id: catalog-service
 
 # =============================================================================
 # Spring Boot Actuator
@@ -300,8 +326,6 @@ management:
   endpoint:
     health:
       show-details: when-authorized
-    gateway:
-      enabled: true
   health:
     redis:
       enabled: true
