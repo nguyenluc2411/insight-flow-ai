@@ -4,9 +4,9 @@ spring:
       fail-fast: false
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/insightflow?currentSchema=auth_db
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?currentSchema=${AUTH_DB_SCHEMA}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
 
   jpa:
     properties:
@@ -17,12 +17,12 @@ spring:
     out-of-order: false
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL}
 
 # =============================================================================
 # App — Dev JWT config.
@@ -32,7 +32,7 @@ eureka:
 # =============================================================================
 app:
   jwt:
-    secret: "aW5zaWdodGZsb3ctZGV2LTMyYnl0ZXMtc2VjcmV0ISE="
+    secret: ${JWT_SECRET}
     issuer: "insightflow-auth-service"
     expiration-minutes: 15
     refresh-expiration-days: 30

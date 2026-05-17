@@ -6,7 +6,7 @@ spring:
     name: auth-service
 
   config:
-    import: "optional:configserver:http://localhost:8888"
+    import: "optional:configserver:${CONFIG_SERVER_URL}"
 
   cloud:
     config:
@@ -18,9 +18,9 @@ spring:
         max-attempts: 6
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/insightflow?currentSchema=auth_db
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?currentSchema=${AUTH_DB_SCHEMA}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: auth-service-pool
@@ -47,7 +47,7 @@ spring:
     baseline-on-migrate: false
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -67,7 +67,7 @@ eureka:
     register-with-eureka: true
     fetch-registry: true
     service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+      defaultZone: ${EUREKA_URL}
 
 # =============================================================================
 # App — JWT + token config
@@ -76,7 +76,7 @@ eureka:
 # =============================================================================
 app:
   jwt:
-    secret: "PLACEHOLDER_OVERRIDE_IN_CONFIG_SERVER"
+    secret: ${JWT_SECRET}
     issuer: "insightflow-auth-service"
     expiration-minutes: 15
     refresh-expiration-days: 30
