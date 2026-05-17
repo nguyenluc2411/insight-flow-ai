@@ -4,17 +4,17 @@
 #
 # REQUIRED ENVIRONMENT VARIABLES — must be set before the gateway starts:
 #
-#   CONFIG_SERVER_URL      URL of the Spring Cloud Config Server
-#                          e.g. https://config.internal.insightflow.ai
-#   EUREKA_DEFAULT_ZONE    Eureka server URL
-#                          e.g. http://discovery.internal.insightflow.ai:8761/eureka/
-#   REDIS_HOST             Redis hostname (ElastiCache endpoint, etc.)
-#   REDIS_PORT             Redis port (typically 6380 for TLS-enabled ElastiCache)
-#   REDIS_PASSWORD         Redis AUTH password (mandatory in prod)
-#   JWT_SECRET             HS256 signing secret (min 32 chars, high entropy).
-#                          Must match auth-service JWT_SECRET exactly.
-#   CORS_ALLOWED_ORIGIN    Production frontend origin
-#                          e.g. https://app.insightflow.ai
+#   CONFIG_SERVER_URL              URL of the Spring Cloud Config Server
+#                                  e.g. https://config.internal.insightflow.ai
+#   EUREKA_URL                     Eureka server URL
+#                                  e.g. http://discovery.internal.insightflow.ai:8761/eureka/
+#   REDIS_HOST                     Redis hostname (ElastiCache endpoint, etc.)
+#   REDIS_PORT                     Redis port (typically 6380 for TLS-enabled ElastiCache)
+#   REDIS_PASSWORD                 Redis AUTH password (mandatory in prod)
+#   JWT_SECRET                     HS256 signing secret (min 32 chars, high entropy).
+#                                  Must match auth-service JWT_SECRET exactly.
+#   GATEWAY_CORS_ALLOWED_ORIGIN    Production frontend origin
+#                                  e.g. https://app.insightflow.ai
 # =============================================================================
 
 server:
@@ -29,38 +29,40 @@ server:
 spring:
   cloud:
     config:
-      uri: "${CONFIG_SERVER_URL}"
+      uri: ${CONFIG_SERVER_URL}
       fail-fast: true
 
     gateway:
-      globalcors:
-        cors-configurations:
-          "[/**]":
-            allowed-origins:
-              - "${CORS_ALLOWED_ORIGIN}"
-            allowed-methods:
-              - GET
-              - POST
-              - PUT
-              - PATCH
-              - DELETE
-              - OPTIONS
-            allowed-headers:
-              - Authorization
-              - Content-Type
-              - X-Requested-With
-              - X-Correlation-Id
-            exposed-headers:
-              - X-Correlation-Id
-              - X-RateLimit-Remaining
-            allow-credentials: true
-            max-age: 3600
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              "[/**]":
+                allowed-origins:
+                  - ${GATEWAY_CORS_ALLOWED_ORIGIN}
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - PATCH
+                  - DELETE
+                  - OPTIONS
+                allowed-headers:
+                  - Authorization
+                  - Content-Type
+                  - X-Requested-With
+                  - X-Correlation-Id
+                exposed-headers:
+                  - X-Correlation-Id
+                  - X-RateLimit-Remaining
+                allow-credentials: true
+                max-age: 3600
 
   data:
     redis:
-      host: "${REDIS_HOST}"
-      port: "${REDIS_PORT}"
-      password: "${REDIS_PASSWORD}"
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
       ssl:
         enabled: true
       lettuce:
@@ -76,14 +78,14 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: "${EUREKA_DEFAULT_ZONE}"
+      defaultZone: ${EUREKA_URL}
 
 # =============================================================================
 # Application — JWT secret from environment, never hardcoded
 # =============================================================================
 app:
   jwt:
-    secret: "${JWT_SECRET}"
+    secret: ${JWT_SECRET}
     issuer: "insightflow-auth-service"
     clock-skew-seconds: 30
 
