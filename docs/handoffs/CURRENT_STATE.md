@@ -1,5 +1,26 @@
 # Implementation State — Insight Flow AI Backend
-Updated: 2026-05-18T10:00:00Z
+Updated: 2026-05-18T20:25:00Z
+
+---
+
+## E2E Test Run — 2026-05-18 — PARTIAL PASS
+
+| Bước | Endpoint | HTTP Status | Pass/Fail | Ghi chú |
+|------|----------|-------------|-----------|---------|
+| 1 Eureka | /eureka/apps | - | **PASS** | 4 services UP: API-GATEWAY, AUTH-SERVICE, CATALOG-SERVICE, SALES-SERVICE |
+| 2 Register tenant | POST /api/v1/auth/register-tenant | 201 | **PASS** | JWT returned |
+| 3 Create product | POST /api/v1/catalog/products | 201 | **PASS** | productId=4b0ad681-... |
+| 4 Create location | POST /api/v1/catalog/locations | 201 | **PASS** | locationId=70a009ac-... |
+| 5 Create variant | POST /api/v1/catalog/products/{id}/variants | 500 | **FAIL** | Endpoint not implemented (known issue). Workaround: direct DB insert |
+| 6 Inventory movement | POST /api/v1/catalog/inventory/movements | 201 | **PASS** | 100 units restocked |
+| 7 Create order | POST /api/v1/sales/orders | 201 | **PASS** | orderId=5d0378df-... |
+| 8 Complete order | POST /api/v1/sales/orders/{id}/complete | 200 | **PASS** | status=completed |
+| 9 Kafka events | sales.order.completed topic | - | **PASS** | Event published with full payload |
+
+**Result: 8/9 PASS, 1/9 FAIL**
+**Known issue**: `POST /api/v1/catalog/products/{id}/variants` not implemented (catalog-service open issue #2)
+
+**Kafka topics confirmed**: auth.tenant.registered, catalog.inventory.updated, sales.order.completed
 
 ---
 
