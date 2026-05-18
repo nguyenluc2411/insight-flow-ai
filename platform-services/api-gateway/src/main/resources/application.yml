@@ -214,8 +214,9 @@ spring:
           order: 40
 
         # ── ML service ────────────────────────────────────────────────────────
+        # Python FastAPI — does NOT register with Eureka. Use direct HTTP URI.
         - id: ml-service
-          uri: lb://ml-service
+          uri: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
           predicates:
             - Path=/api/v1/ml/**
           filters:
@@ -226,7 +227,7 @@ spring:
           metadata:
             public: false
             rateLimiter: defaultRateLimiter
-          order: 50
+          order: 60
 
         # NOTE: /actuator/health and /v3/api-docs/** are served by the gateway
         # process itself — Spring Boot exposes them on port 8080 automatically.
@@ -250,6 +251,8 @@ springdoc:
         url: /v3/api-docs/catalog
       - name: "Sales Service"
         url: /v3/api-docs/sales
+      - name: "ML Service"
+        url: /v3/api-docs/ml
 
 # =============================================================================
 # Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
@@ -316,6 +319,9 @@ app:
         service-id: catalog-service
       - alias: sales
         service-id: sales-service
+      # ml-service is Python — not in Eureka. Use direct URL.
+      - alias: ml
+        url: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
 
 # =============================================================================
 # Spring Boot Actuator

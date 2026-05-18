@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+# Model artifacts directory at service root only (do NOT ignore app/models/ Python package)
+/models/
+*.pkl
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

@@ -21,4 +21,15 @@ public class WebClientConfig {
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
                 .build();
     }
+
+    /**
+     * Plain (non-load-balanced) WebClient for services that bypass Eureka
+     * (e.g. Python FastAPI services configured with a direct URL).
+     */
+    @Bean("directWebClient")
+    public WebClient directWebClient() {
+        return WebClient.builder()
+                .codecs(c -> c.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
+                .build();
+    }
 }
