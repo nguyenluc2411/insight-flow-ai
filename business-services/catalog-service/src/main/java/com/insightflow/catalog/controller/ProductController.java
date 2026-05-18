@@ -1,8 +1,10 @@
 package com.insightflow.catalog.controller;
 
 import com.insightflow.catalog.dto.request.CreateProductRequest;
+import com.insightflow.catalog.dto.request.CreateVariantRequest;
 import com.insightflow.catalog.dto.request.UpdateProductRequest;
 import com.insightflow.catalog.dto.response.ProductResponse;
+import com.insightflow.catalog.dto.response.VariantResponse;
 import com.insightflow.catalog.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -77,5 +79,18 @@ public class ProductController {
             @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
             @PathVariable UUID id) {
         productService.deleteProduct(id, tenantId);
+    }
+
+    @PostMapping("/{productId}/variants")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create product variant")
+    @ApiResponse(responseCode = "201", description = "Variant created")
+    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(responseCode = "409", description = "SKU already exists")
+    public VariantResponse createVariant(
+            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID productId,
+            @Valid @RequestBody CreateVariantRequest request) {
+        return productService.createVariant(productId, request, tenantId);
     }
 }
