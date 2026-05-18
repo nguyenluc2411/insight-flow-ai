@@ -496,35 +496,39 @@ integration-services/integration-service/
 
 \### Done ✅
 
-\- Backend monorepo Git initialized
+\- `discovery-server` (Eureka)
 
-\- Folder structure refactored (xóa event-streaming, testing, devops)
+\- `config-server` (Spring Cloud Config)
 
-\- `.gitignore` cleaned up
+\- `api-gateway` (filters + Swagger aggregator + JWT + rate limit + CORS)
 
-\- `discovery-server` (Eureka) running
+\- `auth-service` (JWT, multi-tenancy, RBAC)
 
-\- `config-server` running
+\- `catalog-service` (products, variants, inventory, Kafka producer)
 
-\- Docker Compose: Kafka, Redis, PostgreSQL up
+\- `sales-service` (orders, customers, suppliers, Kafka producer)
 
-\- `PROJECT\_CONTEXT.md`, `CLAUDE.md` ready
+\- `ml-service` (Python FastAPI, Prophet forecast, rule-based recommendation, Kafka consumer)
+
+\- Docker Compose: Kafka, Redis, PostgreSQL, Kafka UI, pgAdmin
+
+\- E2E test 9/9 PASS (auth → catalog → sales → Kafka → ml)
 
 
 
 \### In Progress 🔄
 
-\- `api-gateway`
+(trống)
 
 
 
 \### Next Up 📋
 
-\- `auth-service` (multi-tenancy foundation)
+\- `dashboard-bff` (BFF aggregate APIs cho frontend repo)
 
-\- `catalog-service` skeleton
+\- `notification-service` (Email/Zalo/in-app alerts)
 
-\- KiotViet connector spike
+\- `integration-service` (KiotViet connector — plugin-based)
 
 
 

@@ -115,3 +115,8 @@ htmlcov/
 .cursor/
 .copilot/
 .continue/
+
+# ============================
+# Claude Code per-machine settings
+# ============================
+.claude/settings.local.json
