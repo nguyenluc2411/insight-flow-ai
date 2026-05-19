@@ -15,7 +15,6 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import reactor.core.publisher.Mono;
 
-import java.util.Map;
 
 /**
  * Proxies GET /v3/api-docs/{alias} → downstream OpenAPI spec.
@@ -38,8 +37,9 @@ public class SwaggerDocsProxyController {
 
     private final WebClient lbWebClient;
     private final WebClient directWebClient;
-    private final Map<String, String> aliasToServiceId;
-    private final Map<String, String> aliasToDirectUrl;
+    // Read live from SwaggerServiceProperties on each request so that
+    // config changes (including new services) take effect without restart.
+    private final SwaggerServiceProperties swaggerProps;
 
     public SwaggerDocsProxyController(
             @Qualifier("lbWebClient") WebClient lbWebClient,
@@ -47,8 +47,7 @@ public class SwaggerDocsProxyController {
             SwaggerServiceProperties swaggerProps) {
         this.lbWebClient = lbWebClient;
         this.directWebClient = directWebClient;
-        this.aliasToServiceId = swaggerProps.aliasToServiceId();
-        this.aliasToDirectUrl = swaggerProps.aliasToDirectUrl();
+        this.swaggerProps = swaggerProps;
     }
 
     /**
@@ -56,14 +55,14 @@ public class SwaggerDocsProxyController {
      */
     @GetMapping("/{alias:[a-z]{2,20}}")
     public Mono<ResponseEntity<String>> proxyApiDocs(@PathVariable String alias) {
-        String directUrl = aliasToDirectUrl.get(alias);
+        String directUrl = swaggerProps.aliasToDirectUrl().get(alias);
         if (directUrl != null) {
             return proxyDirect(alias, directUrl);
         }
 
-        String serviceId = aliasToServiceId.get(alias);
+        String serviceId = swaggerProps.aliasToServiceId().get(alias);
         if (serviceId == null) {
-            log.debug("api-docs proxy: unknown alias '{}'", alias);
+            log.debug("api-docs proxy: unknown alias '{}' — known services: {}", alias, swaggerProps.aliasToServiceId().keySet());
             return Mono.just(ResponseEntity.notFound().build());
         }
         return proxyLoadBalanced(alias, serviceId);
