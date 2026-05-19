@@ -3,6 +3,7 @@ package com.insightflow.catalog.controller;
 import com.insightflow.catalog.dto.request.RecordMovementRequest;
 import com.insightflow.catalog.dto.response.InventoryLevelResponse;
 import com.insightflow.catalog.dto.response.InventoryMovementResponse;
+import com.insightflow.catalog.dto.response.InventorySummaryResponse;
 import com.insightflow.catalog.service.InventoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,6 +27,16 @@ import java.util.UUID;
 public class InventoryController {
 
     private final InventoryService inventoryService;
+
+    @GetMapping("/summary")
+    @Operation(
+            summary = "Inventory summary",
+            description = "Returns totalSKU (active variants), totalQuantity (sum on-hand), lowStockCount (positions at/below reorder threshold).")
+    @ApiResponse(responseCode = "200", description = "Summary")
+    public InventorySummaryResponse getSummary(
+            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId) {
+        return inventoryService.getSummary(tenantId);
+    }
 
     @GetMapping("/variants/{variantId}")
     @Operation(summary = "Get inventory levels by variant")

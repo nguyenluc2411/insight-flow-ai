@@ -5,6 +5,7 @@ import com.insightflow.catalog.dto.request.CreateVariantRequest;
 import com.insightflow.catalog.dto.request.UpdateProductRequest;
 import com.insightflow.catalog.dto.response.ProductResponse;
 import com.insightflow.catalog.dto.response.VariantResponse;
+import java.util.List;
 import com.insightflow.catalog.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -79,6 +80,16 @@ public class ProductController {
             @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
             @PathVariable UUID id) {
         productService.deleteProduct(id, tenantId);
+    }
+
+    @GetMapping("/{productId}/variants")
+    @Operation(summary = "List variants for a product")
+    @ApiResponse(responseCode = "200", description = "Variant list")
+    @ApiResponse(responseCode = "404", description = "Product not found")
+    public List<VariantResponse> getVariants(
+            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID productId) {
+        return productService.getVariantsByProduct(productId, tenantId);
     }
 
     @PostMapping("/{productId}/variants")

@@ -22,6 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -104,6 +105,17 @@ public class ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
         product.setStatus("inactive");
         productRepository.save(product);
+    }
+
+    @Transactional(readOnly = true)
+    public List<VariantResponse> getVariantsByProduct(UUID productId, UUID tenantId) {
+        // Verify product belongs to tenant before returning variants
+        productRepository.findByTenantIdAndId(tenantId, productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+        return variantRepository.findByTenantIdAndProductId(tenantId, productId)
+                .stream()
+                .map(variantMapper::toResponse)
+                .toList();
     }
 
     @Transactional

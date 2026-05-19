@@ -3,6 +3,7 @@ package com.insightflow.catalog.service;
 import com.insightflow.catalog.dto.request.RecordMovementRequest;
 import com.insightflow.catalog.dto.response.InventoryLevelResponse;
 import com.insightflow.catalog.dto.response.InventoryMovementResponse;
+import com.insightflow.catalog.dto.response.InventorySummaryResponse;
 import com.insightflow.catalog.entity.InventoryLevel;
 import com.insightflow.catalog.entity.InventoryMovement;
 import com.insightflow.catalog.entity.Location;
@@ -93,6 +94,14 @@ public class InventoryService {
         return movementRepository
                 .findByTenantIdAndVariantIdOrderByCreatedAtDesc(tenantId, variantId, pageable)
                 .map(inventoryMapper::toMovementResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public InventorySummaryResponse getSummary(UUID tenantId) {
+        long totalSKU      = variantRepository.countActiveByTenantId(tenantId);
+        long totalQuantity = levelRepository.sumQuantityOnHand(tenantId);
+        long lowStockCount = levelRepository.countLowStock(tenantId);
+        return new InventorySummaryResponse(totalSKU, totalQuantity, lowStockCount);
     }
 
     private void publishInventoryEvent(UUID tenantId, UUID variantId, UUID locationId,
