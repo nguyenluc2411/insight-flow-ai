@@ -1,7 +1,5 @@
 package com.insightflow.bff.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insightflow.bff.dto.downstream.*;
 import com.insightflow.bff.dto.response.*;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +41,7 @@ public class DashboardAggregationService {
                 .header("X-Tenant-Id", tenantHeader)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<PagedResponse<Map<String, Object>>>() {})
-                .map(p -> p.getPage() != null ? p.getPage().getTotalElements() : 0L)
+                .map(PagedResponse::totalCount)
                 .timeout(CALL_TIMEOUT)
                 .onErrorResume(ex -> {
                     log.warn("catalog-service unavailable for overview: {}", ex.getMessage());
@@ -61,7 +59,7 @@ public class DashboardAggregationService {
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<PagedResponse<SalesOrderItem>>() {})
                 .map(p -> {
-                    long count = p.getPage() != null ? p.getPage().getTotalElements() : 0L;
+                    long count = p.totalCount();
                     long revenue = p.getContent() == null ? 0L :
                             p.getContent().stream()
                                     .filter(o -> o.getTotalAmount() != null)
@@ -143,7 +141,7 @@ public class DashboardAggregationService {
         String tenantHeader = tenantId.toString();
 
         Mono<PagedResponse<CatalogProductItem>> products = catalogClient.get()
-                .uri("/api/v1/catalog/products?size=100")
+                .uri(uriBuilder -> uriBuilder.path("/api/v1/catalog/products").queryParam("size", "100").build())
                 .header("X-Tenant-Id", tenantHeader)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<PagedResponse<CatalogProductItem>>() {})
@@ -179,8 +177,7 @@ public class DashboardAggregationService {
                 () -> partial[0] = true
         );
 
-        long totalProducts = prodResult[0] != null && prodResult[0].getPage() != null
-                ? prodResult[0].getPage().getTotalElements() : 0L;
+        long totalProducts = prodResult[0] != null ? prodResult[0].totalCount() : 0L;
         long slowMovingCount = slowResult[0] != null ? slowResult[0].getTotal() : 0L;
         double pressurePct = totalProducts > 0 ? (slowMovingCount * 100.0 / totalProducts) : 0.0;
 
