@@ -1,5 +1,5 @@
 # Implementation State — Insight Flow AI Backend
-Updated: 2026-05-19T10:00:00Z
+Updated: 2026-05-19T13:15:00Z
 
 ---
 
@@ -153,9 +153,43 @@ Tables: categories, products, product_variants, locations, inventory_levels, inv
 
 ### catalog-service (short-term)
 - [ ] Add service-level JWT/tenant validation (currently relies on gateway)
-- [ ] Implement Category CRUD endpoints
-- [ ] Implement ProductVariant CRUD endpoints
+- [x] GET /products/{productId}/variants ✅ (phase C7.2)
+- [x] GET /categories ✅ (phase C7.2)
+- [x] GET /inventory/summary ✅ (phase C7.2)
+- [ ] POST/PUT/DELETE Category CRUD (if needed)
 - [ ] Consumer for `sales.order.completed` → adjust inventory
+
+---
+
+## Catalog Service — C7 Frontend Endpoints ✅ (2026-05-19)
+
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| C7.1 | Repos (JPQL GROUP BY, aggregate queries), DTOs (records) | `e6b020d` |
+| C7.2 | Services + Controllers for 3 new endpoints | `0e35d59` |
+
+### 3 new endpoints
+```
+GET /api/v1/catalog/products/{productId}/variants
+    → List<VariantResponse> — tenant-guarded, uses existing VariantMapper
+
+GET /api/v1/catalog/inventory/summary
+    → { totalSKU, totalQuantity, lowStockCount }
+    → 3 aggregate queries: countActiveByTenantId, sumQuantityOnHand, countLowStock
+    → lowStockCount = stock positions where quantityOnHand <= COALESCE(reorderPoint, 10)
+
+GET /api/v1/catalog/categories
+    → List<CategorySummaryItem> — single JPQL LEFT JOIN + GROUP BY, no N+1
+    → { id, name, productCount } — productCount = active products only
+```
+
+### Test results
+| Test | Result |
+|------|--------|
+| GET /categories (empty tenant) | `[]` 200 ✅ |
+| GET /inventory/summary (1 variant, 100 units) | `{totalSKU:1, totalQuantity:100, lowStockCount:0}` 200 ✅ |
+| GET /products/{id}/variants | variant array returned 200 ✅ |
+| Wrong tenant on variants | 404 tenant isolation ✅ |
 
 ---
 
