@@ -213,6 +213,21 @@ spring:
             rateLimiter: defaultRateLimiter
           order: 40
 
+        # ── Notification service ──────────────────────────────────────────────
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 50
+
         # ── ML service ────────────────────────────────────────────────────────
         # Python FastAPI — does NOT register with Eureka. Use direct HTTP URI.
         - id: ml-service
@@ -253,6 +268,10 @@ springdoc:
         url: /v3/api-docs/sales
       - name: "ML Service"
         url: /v3/api-docs/ml
+      - name: "Dashboard BFF"
+        url: /v3/api-docs/dashboard
+      - name: "Notification Service"
+        url: /v3/api-docs/notification
 
 # =============================================================================
 # Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
@@ -322,6 +341,10 @@ app:
       # ml-service is Python — not in Eureka. Use direct URL.
       - alias: ml
         url: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
+      - alias: dashboard
+        service-id: dashboard-bff
+      - alias: notification
+        service-id: notification-service
 
 # =============================================================================
 # Spring Boot Actuator
