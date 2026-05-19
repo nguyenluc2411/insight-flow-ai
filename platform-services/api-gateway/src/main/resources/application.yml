@@ -272,6 +272,8 @@ springdoc:
         url: /v3/api-docs/dashboard
       - name: "Notification Service"
         url: /v3/api-docs/notification
+      - name: "Integration Service"
+        url: /v3/api-docs/integration
 
 # =============================================================================
 # Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
@@ -345,6 +347,8 @@ app:
         service-id: dashboard-bff
       - alias: notification
         service-id: notification-service
+      - alias: integration
+        service-id: integration-service
 
 # =============================================================================
 # Spring Boot Actuator
