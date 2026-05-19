@@ -1,0 +1,152 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: integration-service
+
+  main:
+    web-application-type: servlet
+
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        initial-interval: 1000
+        max-interval: 2000
+        multiplier: 1.5
+        max-attempts: 6
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:insightflow}?currentSchema=integration_db
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: integration-service-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: integration_db
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: integration_db
+    default-schema: integration_db
+    create-schemas: true
+    baseline-on-migrate: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
+# =============================================================================
+# Eureka — MUST be at root level
+# =============================================================================
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: "${spring.application.name}:${random.value}"
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+# =============================================================================
+# Jasypt — credential encryption key
+# =============================================================================
+jasypt:
+  encryptor:
+    password: ${JASYPT_PASSWORD:dev-encrypt-key-change-in-prod!!}
+    algorithm: PBEWithMD5AndDES
+    iv-generator-classname: org.jasypt.iv.NoIvGenerator
+
+# =============================================================================
+# App-level integration config
+# =============================================================================
+app:
+  integration:
+    kiotviet:
+      token-url: ${KIOTVIET_TOKEN_URL:https://id.kiotviet.vn/connect/token}
+      api-base-url: ${KIOTVIET_API_BASE_URL:https://public.kiotapi.com}
+      client-id: ${KIOTVIET_CLIENT_ID:}
+      client-secret: ${KIOTVIET_CLIENT_SECRET:}
+    scheduled:
+      incremental-sync-delay-ms: 900000    # 15 minutes
+      full-reconciliation-cron: "0 0 2 * * *"  # 2 AM daily
+
+# =============================================================================
+# Resilience4j rate limiters — outbound calls to POS APIs
+# =============================================================================
+resilience4j:
+  ratelimiter:
+    instances:
+      kiotviet:
+        limit-for-period: 3
+        limit-refresh-period: 1s
+        timeout-duration: 10s
+      sapo:
+        limit-for-period: 5
+        limit-refresh-period: 1s
+        timeout-duration: 10s
+      haravan:
+        limit-for-period: 5
+        limit-refresh-period: 1s
+        timeout-duration: 10s
+
+# =============================================================================
+# SpringDoc / Swagger
+# =============================================================================
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+# =============================================================================
+# Actuator
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.insightflow.integration: INFO
