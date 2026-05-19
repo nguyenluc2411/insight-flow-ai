@@ -1,5 +1,5 @@
 # Implementation State — Insight Flow AI Backend
-Updated: 2026-05-18T22:30:00Z
+Updated: 2026-05-19T10:00:00Z
 
 ---
 
@@ -277,14 +277,50 @@ cd business-services/catalog-service
   -Dspring-boot.run.jvmArguments=-Duser.timezone=UTC
 ```
 
+---
+
+## Dashboard BFF — COMPLETE ✅ (2026-05-19)
+
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| B1 | Project skeleton (pom.xml, main class, application.yml, Dockerfile) | `479b998` |
+| B2 | WebClientConfig — 3 WebClient beans (catalog lb://, sales lb://, ml direct) | `479b998` |
+| B3 | DashboardAggregationService — Mono.zip parallel calls, graceful partial fallback | `479b998` |
+| B4 | DashboardController — 4 endpoints + GlobalExceptionHandler (RFC 7807) | `479b998` |
+| B5 | MlEventConsumer — Kafka listener for ml.forecast.generated + ml.recommendation.created | `479b998` |
+| B6 | Gateway: "Dashboard BFF" added to swagger urls + app.swagger.services | `479b998` |
+
+### Endpoints
+```
+GET /api/v1/dashboard/overview               → totalSKU, ordersToday, revenueToday, highPriorityAlerts, mlStatus
+GET /api/v1/dashboard/health-summary         → inventoryPressurePct, slowMovingSKUCount, categoryRisks
+GET /api/v1/dashboard/recommendations-summary → total, byAction, topActions, estimatedImpact
+GET /api/v1/dashboard/forecast-summary       → topProducts (30d forecast), overallConfidence
+```
+
+### Key design
+- `spring.main.web-application-type=servlet` — MVC primary, WebFlux only for WebClient
+- Mono.zip parallel calls with `partial=true` fallback if any downstream times out
+- Timeout: 5s connect / 10s read; 15s per aggregation total
+- Port 8090, registers with Eureka as `dashboard-bff`
+
+### Startup
+```bash
+cd engagement-services/dashboard-bff
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+---
+
 ## Resume Prompt
 
 ```
 Read docs/handoffs/CURRENT_STATE.md first.
 Then read PROJECT_CONTEXT.md, .claude/CLAUDE.md.
-Gateway, auth-service, catalog-service, and sales-service are COMPLETE as of 2026-05-18.
+Services COMPLETE: gateway, auth-service, catalog-service, sales-service, ml-service, dashboard-bff.
 All services use env vars from .env (no hardcoded credentials).
 sales-service requires -Dspring-boot.run.jvmArguments=-Duser.timezone=UTC on Windows.
-Next: integration-service (KiotViet connector) or catalog/sales enhancements.
+dashboard-bff port 8090, registers with Eureka, mvnw compile passes.
+Next: notification-service or integration-service (KiotViet connector).
 Do not re-implement completed services.
 ```
