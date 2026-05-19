@@ -514,6 +514,10 @@ integration-services/integration-service/
 
 \- E2E test 9/9 PASS (auth → catalog → sales → Kafka → ml)
 
+\- fix: catalog inventory lazy loading (@EntityGraph on findByTenantIdAndVariantId)
+
+\- fix: auth PUT /me endpoint implemented (update tenant profile settings)
+
 
 
 \### In Progress 🔄

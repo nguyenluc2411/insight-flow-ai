@@ -109,10 +109,10 @@ public class AuthService {
     }
 
     @Transactional
-    public UserInfo updateMe(UUID userId, UpdateProfileRequest request) {
+    public UserInfo updateMe(UUID userId, UUID tenantId, UpdateProfileRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthException("User not found"));
-        Tenant tenant = tenantRepository.findById(user.getTenantId())
+        Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new AuthException("Tenant not found"));
 
         Map<String, Object> settings = new HashMap<>(

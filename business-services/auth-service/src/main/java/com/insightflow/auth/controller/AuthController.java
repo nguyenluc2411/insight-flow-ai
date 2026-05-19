@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -81,15 +82,20 @@ public class AuthController {
     }
 
     @PutMapping("/me")
-    @Operation(summary = "Update tenant profile settings",
+    @Operation(summary = "Update current user profile settings",
                description = "Updates onboarding settings (location, categories, businessScale, platforms, profileComplete) stored in tenant settings JSON.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Profile updated"),
         @ApiResponse(responseCode = "401", description = "Missing or invalid token")
     })
-    public UserInfo updateMe(
+    public ResponseEntity<UserInfo> updateMe(
             @RequestHeader("X-User-Id") String userId,
-            @RequestBody UpdateProfileRequest request) {
-        return authService.updateMe(UUID.fromString(userId), request);
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        UserInfo userInfo = authService.updateMe(
+                UUID.fromString(userId),
+                UUID.fromString(tenantId),
+                request);
+        return ResponseEntity.ok(userInfo);
     }
 }
