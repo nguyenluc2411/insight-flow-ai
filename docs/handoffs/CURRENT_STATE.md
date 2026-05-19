@@ -1,5 +1,5 @@
 # Implementation State — Insight Flow AI Backend
-Updated: 2026-05-19T13:15:00Z
+Updated: 2026-05-19T14:00:00Z
 
 ---
 
@@ -346,15 +346,25 @@ cd engagement-services/dashboard-bff
 
 ---
 
+## notification-service — IN PROGRESS 🔄
+
+Path: `engagement-services/notification-service/`
+Port: 8091
+Status: Planned, not started
+
+---
+
 ## Resume Prompt
 
 ```
 Read docs/handoffs/CURRENT_STATE.md first.
 Then read PROJECT_CONTEXT.md, .claude/CLAUDE.md.
 Services COMPLETE: gateway, auth-service, catalog-service, sales-service, ml-service, dashboard-bff.
+catalog-service C7: 3 new endpoints (GET /variants, /categories, /inventory/summary) DONE.
+config-server fix: EUREKA_URL default fallback DONE.
+gateway fix: SwaggerDocsProxyController reads aliases dynamically DONE.
 All services use env vars from .env (no hardcoded credentials).
 sales-service requires -Dspring-boot.run.jvmArguments=-Duser.timezone=UTC on Windows.
-dashboard-bff port 8090, registers with Eureka, mvnw compile passes.
-Next: notification-service or integration-service (KiotViet connector).
+Next task: notification-service (engagement-services/notification-service/, port 8091).
 Do not re-implement completed services.
 ```
