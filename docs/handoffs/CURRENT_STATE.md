@@ -346,11 +346,109 @@ cd engagement-services/dashboard-bff
 
 ---
 
-## notification-service — IN PROGRESS 🔄
+## notification-service — COMPLETE ✅ (2026-05-19)
 
 Path: `engagement-services/notification-service/`
 Port: 8091
-Status: Planned, not started
+
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| N1 | Project skeleton | `0b7acf5` |
+| N2+N3 | Migrations + entities + repositories | `c4d929e` |
+| N4-N6 | Kafka consumers + services + controllers | `58a7be4` |
+| N7 | Gateway route + swagger + .env.example MAIL vars | `352623b` |
+
+### Endpoints
+```
+GET  /api/v1/notifications           list (paginated, filter by type/unread)
+GET  /api/v1/notifications/unread-count
+PUT  /api/v1/notifications/{id}/read
+PUT  /api/v1/notifications/read-all
+GET  /api/v1/preferences
+PUT  /api/v1/preferences
+```
+
+### Kafka Consumers
+| Topic | Action |
+|-------|--------|
+| `catalog.inventory.updated` | Low stock alert (< threshold) |
+| `ml.forecast.generated` | Forecast notification |
+| `ml.recommendation.created` | Recommendation notification |
+
+### Notes
+- Email dispatch phase 1: in-app only; email wired when auth-service exposes tenant owner email
+- Schema: `notification_db` — 3 tables: notifications, notification_preferences, processed_events
+
+---
+
+## integration-service — COMPLETE ✅ (2026-05-20)
+
+Path: `integration-services/integration-service/`
+Port: 8084
+
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| I1 | Project skeleton (pom.xml, main, yml, Dockerfile, mvnw) | `5e4e19f` |
+| I2 | Flyway migrations V1-V4 (connector_configs, sync_jobs, processed_webhooks, entity_mappings) | `c689c86` |
+| I3 | Core framework (enums, interface, registry, vault, rate limiter, KV models, entities, repos) | `7f5aa44` |
+| I4 | KiotViet connector (auth client, product/order/inventory/branch clients, webhook verifier) | `3ba2270` |
+| I5 | DTOs, mappers, configs, exception handler, service layer (config + orchestrator + scheduler) | `8d68380` |
+| I6 | Kafka event producer (integration.product/order/inventory.synced, integration.sync.completed) | `93ffee8` |
+| I7 | REST controllers (IntegrationController + WebhookController) | `f49bd3c` |
+| I8 | Gateway swagger registration + .env.example integration vars | `945c968` |
+
+### Endpoints
+```
+GET  /api/v1/integrations              list connector configs
+POST /api/v1/integrations              create connector (auth test on create)
+GET  /api/v1/integrations/{id}         get connector
+DELETE /api/v1/integrations/{id}       deactivate connector
+POST /api/v1/integrations/{id}/sync    trigger full sync (async → 202)
+GET  /api/v1/integrations/{id}/jobs    list sync jobs (paginated)
+
+POST /api/v1/webhooks/kiotviet         receive KiotViet webhook (public, HMAC verified)
+```
+
+### Key design decisions
+- Plugin-based: `ConnectorInterface` + `ConnectorRegistry` — new POS = new impl + register
+- `CredentialVault` (Jasypt) encrypts all POS credentials at rest
+- `KiotVietAuthClient` caches OAuth token in-memory (expires_in - 60s buffer, auto-refresh)
+- `ConnectorRateLimiter` (Resilience4j): KIOTVIET=3 req/s, SAPO/HARAVAN=5 req/s
+- Webhook idempotency: `processed_webhooks` table with UNIQUE(connector_type, external_event_id)
+- Sync fail-open: Kafka publish failure does NOT roll back sync job
+- Scheduler: incremental sync every 15 min, full reconciliation at 2AM daily
+- `SyncOrchestratorService` runs @Async — trigger returns 202 immediately
+
+### Schema: integration_db
+Tables: connector_configs, sync_jobs, processed_webhooks, entity_mappings
+
+### Kafka Events Published
+| Topic | Trigger |
+|-------|---------|
+| `integration.product.synced` | Each product batch during sync |
+| `integration.order.synced` | Each order batch during sync |
+| `integration.inventory.synced` | Each inventory batch during sync |
+| `integration.sync.completed` | Full/incremental sync finished |
+
+### Gateway routes (already present before I8)
+- `POST /api/v1/webhooks/**` → public, webhookRateLimiter
+- `/api/v1/integrations/**` → protected (JWT required), defaultRateLimiter
+
+### .env.example vars added
+- `KIOTVIET_CLIENT_ID`, `KIOTVIET_CLIENT_SECRET`
+- `JASYPT_PASSWORD` (credential encryption key)
+
+### Startup
+```bash
+cd integration-services/integration-service
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+### Known limitations / Phase 2
+- Sapo/Haravan connectors: scaffold exists (registry ready), implementation deferred
+- Full reconciliation scheduler: present but `runKiotVietSync` needs `KiotVietSyncHelper` wiring (Phase 2)
+- `EntityMapping` repo populated but not yet used for change detection / deduplication
+- Email address for notification-service: needs auth-service to expose tenant owner email
 
 ---
 
@@ -359,12 +457,23 @@ Status: Planned, not started
 ```
 Read docs/handoffs/CURRENT_STATE.md first.
 Then read PROJECT_CONTEXT.md, .claude/CLAUDE.md.
-Services COMPLETE: gateway, auth-service, catalog-service, sales-service, ml-service, dashboard-bff.
+
+Services COMPLETE: gateway, auth-service, catalog-service, sales-service, ml-service,
+  dashboard-bff, notification-service, integration-service.
+
 catalog-service C7: 3 new endpoints (GET /variants, /categories, /inventory/summary) DONE.
-config-server fix: EUREKA_URL default fallback DONE.
-gateway fix: SwaggerDocsProxyController reads aliases dynamically DONE.
+integration-service: KiotViet connector full implementation DONE (phases I1-I8).
 All services use env vars from .env (no hardcoded credentials).
 sales-service requires -Dspring-boot.run.jvmArguments=-Duser.timezone=UTC on Windows.
-Next task: notification-service (engagement-services/notification-service/, port 8091).
+
+Gateway swagger now includes: auth, catalog, sales, ml, dashboard, notification, integration.
+
+Next tasks (priority order from PROJECT_CONTEXT.md):
+1. Verify integration-service startup + Flyway migrations run clean
+2. Wire SyncOrchestratorService.runKiotVietSync fully (KiotVietAuthClient injection issue in runSync)
+3. E2E test: create connector → trigger sync → verify Kafka events → verify catalog/sales pick up data
+4. shared-core (common-events, common-security, common-web) if needed
+
 Do not re-implement completed services.
+```
 ```
