@@ -16,4 +16,11 @@ public class UserInfo {
     private UUID tenantId;
     private String tenantSlug;
     private List<String> roles;
+
+    // Tenant profile settings (onboarding completion)
+    private String location;
+    private List<String> categories;
+    private String businessScale;
+    private List<String> platforms;
+    private Boolean profileComplete;
 }

@@ -4,6 +4,7 @@ import com.insightflow.auth.dto.request.LoginRequest;
 import com.insightflow.auth.dto.request.LogoutRequest;
 import com.insightflow.auth.dto.request.RefreshRequest;
 import com.insightflow.auth.dto.request.RegisterTenantRequest;
+import com.insightflow.auth.dto.request.UpdateProfileRequest;
 import com.insightflow.auth.dto.response.AuthResponse;
 import com.insightflow.auth.dto.response.TenantRegistrationResult;
 import com.insightflow.auth.dto.response.UserInfo;
@@ -77,5 +78,18 @@ public class AuthController {
     })
     public UserInfo me(@RequestHeader("X-User-Id") String userId) {
         return authService.getMe(UUID.fromString(userId));
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "Update tenant profile settings",
+               description = "Updates onboarding settings (location, categories, businessScale, platforms, profileComplete) stored in tenant settings JSON.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Profile updated"),
+        @ApiResponse(responseCode = "401", description = "Missing or invalid token")
+    })
+    public UserInfo updateMe(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestBody UpdateProfileRequest request) {
+        return authService.updateMe(UUID.fromString(userId), request);
     }
 }

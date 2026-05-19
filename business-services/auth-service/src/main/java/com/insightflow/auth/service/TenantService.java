@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -117,8 +118,10 @@ public class TenantService {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private UserInfo toUserInfo(User user, Tenant tenant) {
         List<String> roleNames = user.getRoles().stream().map(Role::getName).toList();
+        Map<String, Object> s = tenant.getSettings() != null ? tenant.getSettings() : Map.of();
         return UserInfo.builder()
                 .id(user.getId())
                 .email(user.getEmail())
@@ -126,6 +129,11 @@ public class TenantService {
                 .tenantId(tenant.getId())
                 .tenantSlug(tenant.getSlug())
                 .roles(roleNames)
+                .location((String) s.get("location"))
+                .categories((List<String>) s.get("categories"))
+                .businessScale((String) s.get("businessScale"))
+                .platforms((List<String>) s.get("platforms"))
+                .profileComplete((Boolean) s.get("profileComplete"))
                 .build();
     }
 }
