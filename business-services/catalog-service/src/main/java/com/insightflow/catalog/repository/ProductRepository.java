@@ -14,6 +14,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     Page<Product> findByTenantId(UUID tenantId, Pageable pageable);
 
+    Page<Product> findByTenantIdAndStatus(UUID tenantId, String status, Pageable pageable);
+
     Optional<Product> findByTenantIdAndSkuRoot(UUID tenantId, String skuRoot);
 
     Optional<Product> findByTenantIdAndId(UUID tenantId, UUID id);

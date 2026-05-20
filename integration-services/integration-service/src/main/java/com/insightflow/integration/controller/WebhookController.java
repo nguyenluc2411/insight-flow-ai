@@ -36,10 +36,18 @@ public class WebhookController {
 
     @PostMapping("/kiotviet")
     @Operation(summary = "Receive KiotViet webhook",
-               description = "HMAC-SHA256 signature verified. Idempotent — duplicate events are ignored.")
+               description = "HMAC-SHA256 signature verified (X-KiotViet-Signature). Idempotent — duplicate events are ignored. Requires an active KiotViet connector to be configured for the tenant.")
     public ResponseEntity<Void> receiveKiotViet(
             @RequestHeader(value = "X-KiotViet-Signature", required = false) String signature,
             @RequestBody String payload) {
+
+        // Reject immediately if no active KiotViet connector is configured.
+        UUID tenantId = extractTenantId(payload);
+        ConnectorConfig config = findKiotVietConfig(tenantId);
+        if (config == null) {
+            log.warn("KiotViet webhook rejected: no active connector configured for tenantId={}", tenantId);
+            return ResponseEntity.status(404).build();
+        }
 
         String eventType = extractEventType(payload);
         String externalEventId = extractExternalEventId(payload);
@@ -52,11 +60,7 @@ public class WebhookController {
             return ResponseEntity.ok().build();
         }
 
-        // Find a KiotViet config to verify signature (use first active one if no tenant in payload)
-        UUID tenantId = extractTenantId(payload);
-        ConnectorConfig config = findKiotVietConfig(tenantId);
-
-        if (config != null && signature != null) {
+        if (signature != null) {
             String secret = config.getWebhookSecret();
             if (secret != null && !secret.isBlank()) {
                 boolean valid = kiotVietVerifier.verify(payload, signature, secret);

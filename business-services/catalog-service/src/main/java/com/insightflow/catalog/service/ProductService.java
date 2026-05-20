@@ -88,7 +88,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> getProducts(UUID tenantId, Pageable pageable) {
-        return productRepository.findByTenantId(tenantId, pageable)
+        return productRepository.findByTenantIdAndStatus(tenantId, "active", pageable)
                 .map(productMapper::toResponse);
     }
 

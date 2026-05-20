@@ -105,11 +105,15 @@ public class IntegrationController {
 
     @GetMapping("/{id}/jobs")
     @Operation(summary = "List sync jobs for a connector")
-    @ApiResponse(responseCode = "200", description = "Paginated list of sync jobs")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Paginated list of sync jobs"),
+            @ApiResponse(responseCode = "404", description = "Connector not found")
+    })
     public ResponseEntity<Page<SyncJobResponse>> getSyncJobs(
             @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
             @PathVariable UUID id,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+        configService.getConfig(id, tenantId);
         return ResponseEntity.ok(
                 orchestrator.getSyncJobs(id, tenantId, pageable)
                         .map(syncJobMapper::toResponse));

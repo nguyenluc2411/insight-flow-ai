@@ -5,6 +5,10 @@ import com.insightflow.notification.dto.response.PreferenceResponse;
 import com.insightflow.notification.service.PreferenceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -32,13 +36,27 @@ public class PreferenceController {
     }
 
     @PutMapping
-    @Operation(summary = "Upsert notification preference",
-               description = "Enable or disable a channel (EMAIL|IN_APP) for a given event type (LOW_STOCK|RECOMMENDATION|FORECAST).")
+    @Operation(
+        summary = "Upsert notification preference",
+        description = "Enable or disable a channel (EMAIL|IN_APP) for a given event type " +
+                      "(LOW_STOCK|RECOMMENDATION|FORECAST). Send a SINGLE JSON object, NOT an array."
+    )
     @ApiResponse(responseCode = "200", description = "Saved preference")
+    @RequestBody(
+        required = true,
+        content = @Content(
+            mediaType = "application/json",
+            schema = @Schema(implementation = UpsertPreferenceRequest.class),
+            examples = @ExampleObject(
+                name = "Enable low-stock in-app alert",
+                value = "{\"eventType\":\"LOW_STOCK\",\"channel\":\"IN_APP\",\"enabled\":true}"
+            )
+        )
+    )
     public ResponseEntity<PreferenceResponse> upsert(
             @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
             @RequestHeader(value = "X-User-Id", required = false) UUID userId,
-            @Valid @RequestBody UpsertPreferenceRequest request) {
+            @Valid @org.springframework.web.bind.annotation.RequestBody UpsertPreferenceRequest request) {
         return ResponseEntity.ok(preferenceService.upsert(tenantId, userId, request));
     }
 }
