@@ -3,8 +3,9 @@ package com.insightflow.sales.controller;
 import com.insightflow.sales.dto.request.CreateCustomerRequest;
 import com.insightflow.sales.dto.response.CustomerResponse;
 import com.insightflow.sales.service.CustomerService;
+import com.insightflow.security.CurrentUser;
+import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,9 +30,9 @@ public class CustomerController {
     @Operation(summary = "List customers")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<CustomerResponse> listCustomers(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PageableDefault(size = 20) Pageable pageable) {
-        return customerService.getCustomers(tenantId, pageable);
+        return customerService.getCustomers(user.tenantId(), pageable);
     }
 
     @PostMapping
@@ -40,9 +41,9 @@ public class CustomerController {
     @ApiResponse(responseCode = "201", description = "Customer created")
     @ApiResponse(responseCode = "409", description = "Phone already registered")
     public CustomerResponse createCustomer(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @Valid @RequestBody CreateCustomerRequest request) {
-        return customerService.createCustomer(request, tenantId);
+        return customerService.createCustomer(request, user.tenantId());
     }
 
     @GetMapping("/{id}")
@@ -50,8 +51,8 @@ public class CustomerController {
     @ApiResponse(responseCode = "200", description = "Success")
     @ApiResponse(responseCode = "404", description = "Not found")
     public CustomerResponse getCustomer(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID id) {
-        return customerService.getCustomerById(id, tenantId);
+        return customerService.getCustomerById(id, user.tenantId());
     }
 }

@@ -10,6 +10,8 @@ import com.insightflow.auth.dto.response.TenantRegistrationResult;
 import com.insightflow.auth.dto.response.UserInfo;
 import com.insightflow.auth.service.AuthService;
 import com.insightflow.auth.service.TenantService;
+import com.insightflow.security.CurrentUser;
+import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -19,8 +21,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -77,8 +77,8 @@ public class AuthController {
         @ApiResponse(responseCode = "200", description = "User info returned"),
         @ApiResponse(responseCode = "401", description = "Missing or invalid token")
     })
-    public UserInfo me(@RequestHeader("X-User-Id") String userId) {
-        return authService.getMe(UUID.fromString(userId));
+    public UserInfo me(@CurrentUser UserContext user) {
+        return authService.getMe(user.userId());
     }
 
     @PutMapping("/me")
@@ -89,13 +89,9 @@ public class AuthController {
         @ApiResponse(responseCode = "401", description = "Missing or invalid token")
     })
     public ResponseEntity<UserInfo> updateMe(
-            @RequestHeader("X-User-Id") String userId,
-            @RequestHeader("X-Tenant-Id") String tenantId,
+            @CurrentUser UserContext user,
             @Valid @RequestBody UpdateProfileRequest request) {
-        UserInfo userInfo = authService.updateMe(
-                UUID.fromString(userId),
-                UUID.fromString(tenantId),
-                request);
+        UserInfo userInfo = authService.updateMe(user.userId(), user.tenantId(), request);
         return ResponseEntity.ok(userInfo);
     }
 }

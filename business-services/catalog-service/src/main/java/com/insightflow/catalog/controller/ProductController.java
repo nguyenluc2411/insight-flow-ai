@@ -5,10 +5,10 @@ import com.insightflow.catalog.dto.request.CreateVariantRequest;
 import com.insightflow.catalog.dto.request.UpdateProductRequest;
 import com.insightflow.catalog.dto.response.ProductResponse;
 import com.insightflow.catalog.dto.response.VariantResponse;
-import java.util.List;
 import com.insightflow.catalog.service.ProductService;
+import com.insightflow.security.CurrentUser;
+import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -20,7 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/catalog/products")
@@ -34,9 +34,9 @@ public class ProductController {
     @Operation(summary = "List products", description = "Paginated product list for the tenant")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<ProductResponse> listProducts(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PageableDefault(size = 20) Pageable pageable) {
-        return productService.getProducts(tenantId, pageable);
+        return productService.getProducts(user.tenantId(), pageable);
     }
 
     @PostMapping
@@ -45,9 +45,9 @@ public class ProductController {
     @ApiResponse(responseCode = "201", description = "Product created")
     @ApiResponse(responseCode = "409", description = "SKU root already exists")
     public ProductResponse createProduct(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @Valid @RequestBody CreateProductRequest request) {
-        return productService.createProduct(request, tenantId);
+        return productService.createProduct(request, user.tenantId());
     }
 
     @GetMapping("/{id}")
@@ -55,9 +55,9 @@ public class ProductController {
     @ApiResponse(responseCode = "200", description = "Success")
     @ApiResponse(responseCode = "404", description = "Not found")
     public ProductResponse getProduct(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @PathVariable UUID id) {
-        return productService.getProductById(id, tenantId);
+            @CurrentUser UserContext user,
+            @PathVariable java.util.UUID id) {
+        return productService.getProductById(id, user.tenantId());
     }
 
     @PutMapping("/{id}")
@@ -65,10 +65,10 @@ public class ProductController {
     @ApiResponse(responseCode = "200", description = "Updated")
     @ApiResponse(responseCode = "404", description = "Not found")
     public ProductResponse updateProduct(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @PathVariable UUID id,
+            @CurrentUser UserContext user,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody UpdateProductRequest request) {
-        return productService.updateProduct(id, request, tenantId);
+        return productService.updateProduct(id, request, user.tenantId());
     }
 
     @DeleteMapping("/{id}")
@@ -77,9 +77,9 @@ public class ProductController {
     @ApiResponse(responseCode = "204", description = "Deleted")
     @ApiResponse(responseCode = "404", description = "Not found")
     public void deleteProduct(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @PathVariable UUID id) {
-        productService.deleteProduct(id, tenantId);
+            @CurrentUser UserContext user,
+            @PathVariable java.util.UUID id) {
+        productService.deleteProduct(id, user.tenantId());
     }
 
     @GetMapping("/{productId}/variants")
@@ -87,9 +87,9 @@ public class ProductController {
     @ApiResponse(responseCode = "200", description = "Variant list")
     @ApiResponse(responseCode = "404", description = "Product not found")
     public List<VariantResponse> getVariants(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @PathVariable UUID productId) {
-        return productService.getVariantsByProduct(productId, tenantId);
+            @CurrentUser UserContext user,
+            @PathVariable java.util.UUID productId) {
+        return productService.getVariantsByProduct(productId, user.tenantId());
     }
 
     @PostMapping("/{productId}/variants")
@@ -99,9 +99,9 @@ public class ProductController {
     @ApiResponse(responseCode = "404", description = "Product not found")
     @ApiResponse(responseCode = "409", description = "SKU already exists")
     public VariantResponse createVariant(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @PathVariable UUID productId,
+            @CurrentUser UserContext user,
+            @PathVariable java.util.UUID productId,
             @Valid @RequestBody CreateVariantRequest request) {
-        return productService.createVariant(productId, request, tenantId);
+        return productService.createVariant(productId, request, user.tenantId());
     }
 }

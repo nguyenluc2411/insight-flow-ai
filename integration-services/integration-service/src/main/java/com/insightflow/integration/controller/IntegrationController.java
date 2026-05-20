@@ -7,8 +7,9 @@ import com.insightflow.integration.entity.SyncJob;
 import com.insightflow.integration.mapper.SyncJobMapper;
 import com.insightflow.integration.service.ConnectorConfigService;
 import com.insightflow.integration.service.SyncOrchestratorService;
+import com.insightflow.security.CurrentUser;
+import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,9 +39,8 @@ public class IntegrationController {
     @GetMapping
     @Operation(summary = "List connector configs for the tenant")
     @ApiResponse(responseCode = "200", description = "List of connectors")
-    public ResponseEntity<List<ConnectorConfigResponse>> list(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId) {
-        return ResponseEntity.ok(configService.getConfigs(tenantId));
+    public ResponseEntity<List<ConnectorConfigResponse>> list(@CurrentUser UserContext user) {
+        return ResponseEntity.ok(configService.getConfigs(user.tenantId()));
     }
 
     @PostMapping
@@ -51,10 +51,10 @@ public class IntegrationController {
             @ApiResponse(responseCode = "409", description = "Connector type already exists")
     })
     public ResponseEntity<ConnectorConfigResponse> create(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @Valid @RequestBody CreateConnectorRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(configService.createConfig(tenantId, request));
+                .body(configService.createConfig(user.tenantId(), request));
     }
 
     @GetMapping("/{id}")
@@ -64,18 +64,18 @@ public class IntegrationController {
             @ApiResponse(responseCode = "404", description = "Not found")
     })
     public ResponseEntity<ConnectorConfigResponse> getById(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID id) {
-        return ResponseEntity.ok(configService.getConfig(id, tenantId));
+        return ResponseEntity.ok(configService.getConfig(id, user.tenantId()));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Deactivate connector config")
     @ApiResponse(responseCode = "204", description = "Deactivated")
     public ResponseEntity<Void> delete(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID id) {
-        configService.deleteConfig(id, tenantId);
+        configService.deleteConfig(id, user.tenantId());
         return ResponseEntity.noContent().build();
     }
 
@@ -87,13 +87,12 @@ public class IntegrationController {
             @ApiResponse(responseCode = "404", description = "Connector not found")
     })
     public ResponseEntity<Map<String, Object>> triggerSync(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID id) {
-        // Validate config exists for tenant
-        configService.getConfig(id, tenantId);
+        configService.getConfig(id, user.tenantId());
 
-        SyncJob job = orchestrator.createQueuedJob(tenantId, id, "FULL_RECONCILIATION");
-        orchestrator.triggerFullSync(id, tenantId);
+        SyncJob job = orchestrator.createQueuedJob(user.tenantId(), id, "FULL_RECONCILIATION");
+        orchestrator.triggerFullSync(id, user.tenantId());
 
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(Map.of(
@@ -110,12 +109,12 @@ public class IntegrationController {
             @ApiResponse(responseCode = "404", description = "Connector not found")
     })
     public ResponseEntity<Page<SyncJobResponse>> getSyncJobs(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID id,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        configService.getConfig(id, tenantId);
+        configService.getConfig(id, user.tenantId());
         return ResponseEntity.ok(
-                orchestrator.getSyncJobs(id, tenantId, pageable)
+                orchestrator.getSyncJobs(id, user.tenantId(), pageable)
                         .map(syncJobMapper::toResponse));
     }
 }

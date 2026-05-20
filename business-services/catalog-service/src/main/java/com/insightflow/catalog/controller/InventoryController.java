@@ -5,8 +5,9 @@ import com.insightflow.catalog.dto.response.InventoryLevelResponse;
 import com.insightflow.catalog.dto.response.InventoryMovementResponse;
 import com.insightflow.catalog.dto.response.InventorySummaryResponse;
 import com.insightflow.catalog.service.InventoryService;
+import com.insightflow.security.CurrentUser;
+import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -33,18 +34,17 @@ public class InventoryController {
             summary = "Inventory summary",
             description = "Returns totalSKU (active variants), totalQuantity (sum on-hand), lowStockCount (positions at/below reorder threshold).")
     @ApiResponse(responseCode = "200", description = "Summary")
-    public InventorySummaryResponse getSummary(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId) {
-        return inventoryService.getSummary(tenantId);
+    public InventorySummaryResponse getSummary(@CurrentUser UserContext user) {
+        return inventoryService.getSummary(user.tenantId());
     }
 
     @GetMapping("/variants/{variantId}")
     @Operation(summary = "Get inventory levels by variant")
     @ApiResponse(responseCode = "200", description = "Success")
     public List<InventoryLevelResponse> getLevelsByVariant(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID variantId) {
-        return inventoryService.getInventoryByVariant(variantId, tenantId);
+        return inventoryService.getInventoryByVariant(variantId, user.tenantId());
     }
 
     @PostMapping("/movements")
@@ -54,18 +54,18 @@ public class InventoryController {
     @ApiResponse(responseCode = "201", description = "Movement recorded")
     @ApiResponse(responseCode = "404", description = "Variant or location not found")
     public InventoryMovementResponse recordMovement(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @Valid @RequestBody RecordMovementRequest request) {
-        return inventoryService.recordMovement(request, tenantId);
+        return inventoryService.recordMovement(request, user.tenantId());
     }
 
     @GetMapping("/movements/{variantId}")
     @Operation(summary = "Get movement history by variant", description = "Ordered by createdAt DESC")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<InventoryMovementResponse> getMovementHistory(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID variantId,
             @PageableDefault(size = 50) Pageable pageable) {
-        return inventoryService.getMovementHistory(variantId, tenantId, pageable);
+        return inventoryService.getMovementHistory(variantId, user.tenantId(), pageable);
     }
 }

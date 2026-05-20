@@ -126,6 +126,15 @@
         </dependency>
 
         <!-- ============================================================
+             SHARED SECURITY — UserContext, @CurrentUser, UserContextFilter
+             ============================================================ -->
+        <dependency>
+            <groupId>com.insightflow</groupId>
+            <artifactId>common-security</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- ============================================================
              UTILITIES
              ============================================================ -->
         <dependency>

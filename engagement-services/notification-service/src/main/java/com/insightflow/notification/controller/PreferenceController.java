@@ -3,8 +3,9 @@ package com.insightflow.notification.controller;
 import com.insightflow.notification.dto.request.UpsertPreferenceRequest;
 import com.insightflow.notification.dto.response.PreferenceResponse;
 import com.insightflow.notification.service.PreferenceService;
+import com.insightflow.security.CurrentUser;
+import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -17,7 +18,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/notifications/preferences")
@@ -30,9 +30,8 @@ public class PreferenceController {
     @GetMapping
     @Operation(summary = "Get notification preferences for tenant")
     @ApiResponse(responseCode = "200", description = "Preference list")
-    public ResponseEntity<List<PreferenceResponse>> getPreferences(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId) {
-        return ResponseEntity.ok(preferenceService.getPreferences(tenantId));
+    public ResponseEntity<List<PreferenceResponse>> getPreferences(@CurrentUser UserContext user) {
+        return ResponseEntity.ok(preferenceService.getPreferences(user.tenantId()));
     }
 
     @PutMapping
@@ -54,9 +53,8 @@ public class PreferenceController {
         )
     )
     public ResponseEntity<PreferenceResponse> upsert(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @CurrentUser UserContext user,
             @Valid @org.springframework.web.bind.annotation.RequestBody UpsertPreferenceRequest request) {
-        return ResponseEntity.ok(preferenceService.upsert(tenantId, userId, request));
+        return ResponseEntity.ok(preferenceService.upsert(user.tenantId(), user.userId(), request));
     }
 }
