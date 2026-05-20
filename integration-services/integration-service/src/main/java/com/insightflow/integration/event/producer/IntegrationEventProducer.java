@@ -1,12 +1,19 @@
 package com.insightflow.integration.event.producer;
 
+import com.insightflow.common.events.integration.InventorySyncedEvent;
+import com.insightflow.common.events.integration.OrderSyncedEvent;
+import com.insightflow.common.events.integration.ProductSyncedEvent;
+import com.insightflow.common.events.integration.SyncCompletedEvent;
+import com.insightflow.integration.connector.kiotviet.model.KvInventory;
+import com.insightflow.integration.connector.kiotviet.model.KvOrder;
+import com.insightflow.integration.connector.kiotviet.model.KvProduct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -16,36 +23,113 @@ public class IntegrationEventProducer {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public void publishProductSynced(UUID tenantId, UUID connectorId, Object productData) {
-        publish("integration.product.synced", tenantId.toString(),
-                buildEvent("integration.product.synced", tenantId, connectorId, productData));
+    public void publishProductSynced(UUID tenantId, UUID connectorConfigId,
+                                     UUID syncJobId, String connectorType,
+                                     List<KvProduct> products) {
+        List<ProductSyncedEvent.SyncedProductPayload> payloads = products.stream()
+                .map(p -> ProductSyncedEvent.SyncedProductPayload.builder()
+                        .externalId(p.getId() != null ? p.getId().toString() : null)
+                        .name(p.getName())
+                        .sku(p.getCode())
+                        .price(p.getRetailPrice())
+                        .stockQuantity(0)
+                        .categoryName(p.getCategoryName())
+                        .build())
+                .toList();
+
+        ProductSyncedEvent event = ProductSyncedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .eventType("integration.product.synced")
+                .tenantId(tenantId.toString())
+                .occurredAt(Instant.now())
+                .connectorType(connectorType)
+                .connectorConfigId(connectorConfigId.toString())
+                .syncJobId(syncJobId.toString())
+                .products(payloads)
+                .build();
+
+        publish("integration.product.synced", tenantId.toString(), event);
     }
 
-    public void publishOrderSynced(UUID tenantId, UUID connectorId, Object orderData) {
-        publish("integration.order.synced", tenantId.toString(),
-                buildEvent("integration.order.synced", tenantId, connectorId, orderData));
+    public void publishOrderSynced(UUID tenantId, UUID connectorConfigId,
+                                   UUID syncJobId, String connectorType,
+                                   List<KvOrder> orders) {
+        List<OrderSyncedEvent.SyncedOrderPayload> payloads = orders.stream()
+                .map(o -> OrderSyncedEvent.SyncedOrderPayload.builder()
+                        .externalId(o.getId() != null ? o.getId().toString() : null)
+                        .orderCode(o.getCode())
+                        .customerName(o.getCustomer() != null ? o.getCustomer().getName() : null)
+                        .totalAmount(o.getTotal())
+                        .status(o.getStatus())
+                        .orderedAt(o.getPurchaseDate())
+                        .build())
+                .toList();
+
+        OrderSyncedEvent event = OrderSyncedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .eventType("integration.order.synced")
+                .tenantId(tenantId.toString())
+                .occurredAt(Instant.now())
+                .connectorType(connectorType)
+                .connectorConfigId(connectorConfigId.toString())
+                .syncJobId(syncJobId.toString())
+                .orders(payloads)
+                .build();
+
+        publish("integration.order.synced", tenantId.toString(), event);
     }
 
-    public void publishInventorySynced(UUID tenantId, UUID connectorId, Object inventoryData) {
-        publish("integration.inventory.synced", tenantId.toString(),
-                buildEvent("integration.inventory.synced", tenantId, connectorId, inventoryData));
+    public void publishInventorySynced(UUID tenantId, UUID connectorConfigId,
+                                       UUID syncJobId, String connectorType,
+                                       List<KvInventory> inventoryItems) {
+        List<InventorySyncedEvent.SyncedInventoryPayload> payloads = inventoryItems.stream()
+                .map(i -> InventorySyncedEvent.SyncedInventoryPayload.builder()
+                        .externalProductId(i.getProductId() != null ? i.getProductId().toString() : null)
+                        .sku(i.getProductCode())
+                        .branchId(i.getBranchId() != null ? i.getBranchId().toString() : null)
+                        .quantity(i.getOnHand() != null ? (int) i.getOnHand().doubleValue() : 0)
+                        .build())
+                .toList();
+
+        InventorySyncedEvent event = InventorySyncedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .eventType("integration.inventory.synced")
+                .tenantId(tenantId.toString())
+                .occurredAt(Instant.now())
+                .connectorType(connectorType)
+                .connectorConfigId(connectorConfigId.toString())
+                .syncJobId(syncJobId.toString())
+                .inventoryItems(payloads)
+                .build();
+
+        publish("integration.inventory.synced", tenantId.toString(), event);
     }
 
-    public void publishSyncCompleted(UUID tenantId, UUID connectorId,
-                                      String connectorType, String syncType,
-                                      int recordsSynced) {
-        Map<String, Object> payload = Map.of(
-                "connectorType", connectorType,
-                "syncType", syncType,
-                "connectorId", connectorId.toString(),
-                "recordsSynced", recordsSynced,
-                "syncedTo", Instant.now().toString()
-        );
-        publish("integration.sync.completed", tenantId.toString(),
-                buildEvent("integration.sync.completed", tenantId, connectorId, payload));
+    public void publishSyncCompleted(UUID tenantId, UUID connectorConfigId,
+                                     UUID syncJobId, String connectorType, String syncType,
+                                     String status, int totalProducts, int totalOrders,
+                                     int totalInventory, long durationMs, String errorMessage) {
+        SyncCompletedEvent event = SyncCompletedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .eventType("integration.sync.completed")
+                .tenantId(tenantId.toString())
+                .occurredAt(Instant.now())
+                .syncJobId(syncJobId.toString())
+                .connectorType(connectorType)
+                .connectorConfigId(connectorConfigId.toString())
+                .syncType(syncType)
+                .status(status)
+                .totalProducts(totalProducts)
+                .totalOrders(totalOrders)
+                .totalInventory(totalInventory)
+                .durationMs(durationMs)
+                .errorMessage(errorMessage)
+                .build();
+
+        publish("integration.sync.completed", tenantId.toString(), event);
     }
 
-    private void publish(String topic, String key, Map<String, Object> event) {
+    private void publish(String topic, String key, Object event) {
         kafkaTemplate.send(topic, key, event)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
@@ -57,17 +141,5 @@ public class IntegrationEventProducer {
                                 result.getRecordMetadata().offset());
                     }
                 });
-    }
-
-    private Map<String, Object> buildEvent(String eventType, UUID tenantId,
-                                            UUID integrationId, Object payload) {
-        return Map.of(
-                "eventId", UUID.randomUUID().toString(),
-                "eventType", eventType,
-                "tenantId", tenantId.toString(),
-                "integrationId", integrationId.toString(),
-                "occurredAt", Instant.now().toString(),
-                "payload", payload
-        );
     }
 }

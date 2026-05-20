@@ -14,8 +14,9 @@ import com.insightflow.integration.core.CredentialVault;
 import com.insightflow.integration.entity.ConnectorConfig;
 import com.insightflow.integration.entity.SyncJob;
 import com.insightflow.integration.event.producer.IntegrationEventProducer;
-import com.insightflow.integration.exception.ConnectorException;
-import com.insightflow.integration.exception.ResourceNotFoundException;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
 import com.insightflow.integration.repository.ConnectorConfigRepository;
 import com.insightflow.integration.repository.SyncJobRepository;
 import lombok.RequiredArgsConstructor;
@@ -94,20 +95,24 @@ public class SyncOrchestratorService {
         job.setStartedAt(Instant.now());
         job = syncJobRepository.save(job);
 
+        long startMs = System.currentTimeMillis();
+        int totalProducts = 0;
+        int totalOrders = 0;
+        int totalInventory = 0;
+
         try {
             Map<String, String> credentials = decryptCredentials(config);
             String clientId = credentials.get("clientId");
             String clientSecret = credentials.get("clientSecret");
             String retailerName = credentials.getOrDefault("retailerName", "");
             String token = kiotVietAuthClient.getAccessToken(clientId, clientSecret);
+            String connectorType = config.getConnectorType().name();
 
             KiotVietConnector connector = (KiotVietConnector) connectorRegistry.get(ConnectorType.KIOTVIET);
-            int totalSynced = 0;
 
             // Sync branches (locations)
             List<KvBranch> branches = connector.fetchBranches(token, retailerName);
             log.info("Synced {} branches for tenant={}", branches.size(), config.getTenantId());
-            totalSynced += branches.size();
 
             // Sync products (paginated)
             int productOffset = 0;
@@ -115,8 +120,9 @@ public class SyncOrchestratorService {
             do {
                 products = connector.fetchProducts(token, retailerName, productOffset, PAGE_SIZE);
                 if (!products.isEmpty()) {
-                    eventProducer.publishProductSynced(config.getTenantId(), config.getId(), products);
-                    totalSynced += products.size();
+                    eventProducer.publishProductSynced(config.getTenantId(), config.getId(),
+                            job.getId(), connectorType, products);
+                    totalProducts += products.size();
                 }
                 productOffset += products.size();
             } while (products.size() == PAGE_SIZE);
@@ -128,8 +134,9 @@ public class SyncOrchestratorService {
             do {
                 orders = connector.fetchOrders(token, retailerName, since, orderOffset, PAGE_SIZE);
                 if (!orders.isEmpty()) {
-                    eventProducer.publishOrderSynced(config.getTenantId(), config.getId(), orders);
-                    totalSynced += orders.size();
+                    eventProducer.publishOrderSynced(config.getTenantId(), config.getId(),
+                            job.getId(), connectorType, orders);
+                    totalOrders += orders.size();
                 }
                 orderOffset += orders.size();
             } while (orders.size() == PAGE_SIZE);
@@ -142,16 +149,20 @@ public class SyncOrchestratorService {
                 do {
                     inventory = connector.fetchInventory(token, retailerName, branch.getId(), invOffset, PAGE_SIZE);
                     if (!inventory.isEmpty()) {
-                        eventProducer.publishInventorySynced(config.getTenantId(), config.getId(), inventory);
-                        totalSynced += inventory.size();
+                        eventProducer.publishInventorySynced(config.getTenantId(), config.getId(),
+                                job.getId(), connectorType, inventory);
+                        totalInventory += inventory.size();
                     }
                     invOffset += inventory.size();
                 } while (inventory.size() == PAGE_SIZE);
             }
 
+            long durationMs = System.currentTimeMillis() - startMs;
+
             // Publish completion event
             eventProducer.publishSyncCompleted(config.getTenantId(), config.getId(),
-                    config.getConnectorType().name(), syncType, totalSynced);
+                    job.getId(), connectorType, syncType, "SUCCESS",
+                    totalProducts, totalOrders, totalInventory, durationMs, null);
 
             // Update config watermark
             config.setLastSyncAt(Instant.now());
@@ -160,16 +171,22 @@ public class SyncOrchestratorService {
 
             // Complete job
             job.setStatus("success");
-            job.setRecordsProcessed(totalSynced);
+            job.setRecordsProcessed(totalProducts + totalOrders + totalInventory);
             job.setCompletedAt(Instant.now());
             syncJobRepository.save(job);
 
-            log.info("Sync completed: config={} totalSynced={}", config.getId(), totalSynced);
+            log.info("Sync completed: config={} products={} orders={} inventory={}",
+                    config.getId(), totalProducts, totalOrders, totalInventory);
 
         } catch (Exception e) {
             log.error("Sync failed for config={}: {}", config.getId(), e.getMessage(), e);
             config.setLastError(e.getMessage());
             configRepository.save(config);
+
+            long durationMs = System.currentTimeMillis() - startMs;
+            eventProducer.publishSyncCompleted(config.getTenantId(), config.getId(),
+                    job.getId(), config.getConnectorType().name(), syncType, "FAILED",
+                    totalProducts, totalOrders, totalInventory, durationMs, e.getMessage());
 
             job.setStatus("failed");
             job.setCompletedAt(Instant.now());
@@ -183,7 +200,7 @@ public class SyncOrchestratorService {
             String json = credentialVault.decrypt(config.getCredentialsEncrypted());
             return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
-            throw new ConnectorException("Failed to decrypt credentials for config: " + config.getId(), e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Failed to decrypt credentials for config: " + config.getId());
         }
     }
 }

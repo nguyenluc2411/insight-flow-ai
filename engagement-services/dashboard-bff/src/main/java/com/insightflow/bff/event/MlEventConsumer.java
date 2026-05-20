@@ -1,5 +1,9 @@
 package com.insightflow.bff.event;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.insightflow.common.events.config.EventObjectMapper;
+import com.insightflow.common.events.ml.ForecastGeneratedEvent;
+import com.insightflow.common.events.ml.RecommendationCreatedEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -13,14 +17,22 @@ import org.springframework.stereotype.Component;
 @Component
 public class MlEventConsumer {
 
+    private final ObjectMapper objectMapper = EventObjectMapper.create();
+
     @KafkaListener(
             topics = "ml.forecast.generated",
             groupId = "dashboard-bff-ml-events",
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void onForecastGenerated(ConsumerRecord<String, String> record) {
-        log.info("New forecast available — tenant={} offset={} payload={}",
-                extractTenantId(record.value()), record.offset(), truncate(record.value()));
+        try {
+            ForecastGeneratedEvent event = objectMapper.readValue(record.value(), ForecastGeneratedEvent.class);
+            log.info("New forecast available — tenant={} variant={} horizon={}d confidence={} offset={}",
+                    event.getTenantId(), event.getVariantId(),
+                    event.getForecastHorizon(), event.getConfidence(), record.offset());
+        } catch (Exception ex) {
+            log.warn("Failed to parse ForecastGeneratedEvent offset={}: {}", record.offset(), ex.getMessage());
+        }
     }
 
     @KafkaListener(
@@ -29,23 +41,13 @@ public class MlEventConsumer {
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void onRecommendationCreated(ConsumerRecord<String, String> record) {
-        log.info("New recommendations available — tenant={} offset={} payload={}",
-                extractTenantId(record.value()), record.offset(), truncate(record.value()));
-    }
-
-    private String extractTenantId(String json) {
-        if (json == null) return "unknown";
-        int idx = json.indexOf("\"tenant_id\"");
-        if (idx < 0) idx = json.indexOf("\"tenantId\"");
-        if (idx < 0) return "unknown";
-        int colon = json.indexOf(":", idx);
-        int start = json.indexOf("\"", colon) + 1;
-        int end = json.indexOf("\"", start);
-        return (start > 0 && end > start) ? json.substring(start, end) : "unknown";
-    }
-
-    private String truncate(String s) {
-        if (s == null) return "";
-        return s.length() > 200 ? s.substring(0, 200) + "..." : s;
+        try {
+            RecommendationCreatedEvent event = objectMapper.readValue(record.value(), RecommendationCreatedEvent.class);
+            log.info("New recommendation — tenant={} variant={} action={} priority={} offset={}",
+                    event.getTenantId(), event.getVariantId(),
+                    event.getAction(), event.getPriority(), record.offset());
+        } catch (Exception ex) {
+            log.warn("Failed to parse RecommendationCreatedEvent offset={}: {}", record.offset(), ex.getMessage());
+        }
     }
 }

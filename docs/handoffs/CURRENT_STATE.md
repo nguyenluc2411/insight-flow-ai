@@ -641,3 +641,134 @@ NEXT: Hướng dẫn cách start đúng để test tiếp:
 - E2E flow: auth → catalog → sales → kafka → ml ✅ hoạt động hoàn toàn
 - Tests: 39/39 PASS (sau fix)
 - Kafka topics: auth.tenant.registered, catalog.inventory.updated, sales.order.completed đều có messages
+
+---
+
+## shared-core — COMPLETE ✅ (2026-05-20)
+
+Path: `shared-core/`
+
+| Module | Description |
+|--------|-------------|
+| `common-security` | `UserContext` (ThreadLocal holder), `@CurrentUser` annotation, `UserContextFilter` (reads 6 gateway headers → populates UserContext), `InternalHeaders` constants |
+| `common-events` | Kafka event DTOs: TenantRegisteredEvent, InventoryUpdatedEvent, OrderCompletedEvent, ForecastGeneratedEvent, RecommendationCreatedEvent, SyncCompletedEvent |
+| `common-web` | `GlobalExceptionHandler` (@RestControllerAdvice), RFC 7807 Problem Details, common error codes |
+
+---
+
+## api-gateway — Refactor COMPLETE ✅ (2026-05-20)
+
+Thay đổi so với gateway phase 3 ban đầu:
+- `TenantContextFilter` nay inject đủ **6 headers** xuống downstream:
+  `X-Tenant-Id`, `X-User-Id`, `X-Tenant-Slug`, `X-User-Roles`, `X-User-Permissions`, `X-Correlation-Id`
+- Route config: `RemoveRequestHeader=Authorization` — downstream services không nhận raw JWT
+- Swagger UI: SecurityScheme config hỗ trợ Bearer auth trực tiếp từ UI
+
+---
+
+## Services refactor — @CurrentUser — COMPLETE ✅ (2026-05-20)
+
+Tất cả controllers trong 6 services đã được refactor:
+- Trước: `@RequestHeader("X-Tenant-Id") UUID tenantId, @RequestHeader("X-User-Id") UUID userId, ...`
+- Sau: `@CurrentUser UserContext user` — clean, type-safe, không lặp lại header name
+
+Services đã refactor: auth-service, catalog-service, sales-service, dashboard-bff, integration-service, notification-service
+
+---
+
+## shared-core/common-web — COMPLETE ✅ (2026-05-20)
+
+Path: `shared-core/common-web/`
+
+| Class | Description |
+|-------|-------------|
+| `ErrorCode` | Enum 12 error codes, mỗi code có HTTP status + default message |
+| `ApiError` | RFC 7807 Problem Details response (type, title, status, detail, instance, correlationId, timestamp, errors[]) |
+| `FieldError` | Record cho validation error per field |
+| `BusinessException` | Base runtime exception với ErrorCode |
+| `ResourceNotFoundException` | 404 wrapper |
+| `ValidationException` | 400 wrapper với field errors |
+| `UnauthorizedException` | 401 wrapper |
+| `ForbiddenException` | 403 wrapper |
+| `GlobalExceptionHandler` | @RestControllerAdvice, xử lý 10 exception types, auto-configured |
+
+Auto-configuration: `WebAutoConfiguration` registered via `META-INF/spring/AutoConfiguration.imports`. Services chỉ cần add dependency, không cần `@Import`.
+
+Build: `common-web-1.0.0.jar` installed to local Maven repo — `./mvnw clean install` BUILD SUCCESS.
+
+---
+
+## shared-core/common-events — COMPLETE ✅ (2026-05-20)
+
+Path: `shared-core/common-events/`
+
+| Event DTO | Topic | Producer | Consumers |
+|-----------|-------|----------|-----------|
+| `TenantRegisteredEvent` | `auth.tenant.registered` | auth-service | audit (future) |
+| `InventoryUpdatedEvent` | `catalog.inventory.updated` | catalog-service | ml-service, notification-service |
+| `OrderCompletedEvent` | `sales.order.completed` | sales-service | catalog-service (planned), ml-service |
+| `ProductSyncedEvent` | `integration.product.synced` | integration-service | catalog-service (planned) |
+| `OrderSyncedEvent` | `integration.order.synced` | integration-service | sales-service (planned) |
+| `InventorySyncedEvent` | `integration.inventory.synced` | integration-service | catalog-service (planned) |
+| `SyncCompletedEvent` | `integration.sync.completed` | integration-service | catalog-service, sales-service (planned) |
+| `ForecastGeneratedEvent` | `ml.forecast.generated` | ml-service | dashboard-bff, notification-service |
+| `RecommendationCreatedEvent` | `ml.recommendation.created` | ml-service | dashboard-bff, notification-service |
+
+`EventObjectMapper` — pre-configured Jackson ObjectMapper (JavaTimeModule, no timestamps, FAIL_ON_UNKNOWN_PROPERTIES=false).
+
+Build: `common-events-1.0.0.jar` installed to local Maven repo — `./mvnw clean install` BUILD SUCCESS.
+
+---
+
+## Refactor: common-events migration — COMPLETE ✅ (2026-05-20)
+
+Tất cả services đã dùng chung event DTO từ `shared-core/common-events`:
+
+### Thay đổi common-events
+- Tất cả DTOs thêm `@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)` → wire format snake_case cho Python compatibility
+
+### Java producers (dùng common-events DTO khi publish)
+- `auth-service` → `TenantRegisteredEvent` (thay thế internal, set `planType`/`ownerEmail`/`ownerName`)
+- `catalog-service` → `InventoryUpdatedEvent` (thay thế record, thêm `productId`/`sku`, String IDs)
+- `sales-service` → `OrderCompletedEvent` (thay thế record, `OrderItemPayload` với `totalPrice`/`currency`)
+- `integration-service` → `ProductSyncedEvent`, `OrderSyncedEvent`, `InventorySyncedEvent`, `SyncCompletedEvent` (thay thế raw `Map<String, Object>`)
+
+### Java consumers (dùng common-events DTO khi deserialize)
+- `notification-service` → `InventoryUpdatedEvent`, `ForecastGeneratedEvent`, `RecommendationCreatedEvent`
+- `dashboard-bff` → `ForecastGeneratedEvent`, `RecommendationCreatedEvent`
+
+### Python (ml-service)
+- `app/events/schemas.py` — Pydantic models mirror Java DTOs (snake_case fields)
+- Consumer dùng `OrderCompletedEvent` và `InventoryUpdatedEvent` typed models thay vì raw dict
+
+### Payload classes nội bộ đã xóa
+- `auth-service/event/TenantRegisteredEvent.java`
+- `catalog-service/event/InventoryUpdatedEvent.java`
+- `sales-service/event/OrderCompletedEvent.java`
+- `notification-service/event/payload/InventoryUpdatedPayload.java`
+- `notification-service/event/payload/MlForecastPayload.java`
+- `notification-service/event/payload/MlRecommendationPayload.java`
+
+Build verification: `./mvnw clean compile` — tất cả 6 Java services PASS.
+Python: `from app.events.schemas import ...` — OK.
+
+---
+
+## Refactor: common-web migration — COMPLETE ✅ (2026-05-20)
+
+Tất cả 6 services đã migrate sang `shared-core/common-web`:
+
+| Service | GlobalExceptionHandler nội bộ | Custom exceptions migrate |
+|---------|-------------------------------|---------------------------|
+| auth-service | ✅ Xóa | `AuthException` → `UnauthorizedException`; `ConflictException` → `BusinessException(DUPLICATE_RESOURCE)` |
+| catalog-service | ✅ Xóa | `ResourceNotFoundException(r,id)` → `ResourceNotFoundException(msg)`; `DuplicateResourceException` → `BusinessException(DUPLICATE_RESOURCE)` |
+| sales-service | ✅ Xóa | `ResourceNotFoundException(r,id)` → `ResourceNotFoundException(msg)`; `DuplicateResourceException` → `BusinessException(DUPLICATE_RESOURCE)`; `OrderStateException` → `BusinessException(CONFLICT)` |
+| dashboard-bff | ✅ Xóa | Không có custom exception throw sites — fallback Mono.zip vẫn giữ nguyên |
+| notification-service | ✅ Xóa | `ResourceNotFoundException(r,id)` → `ResourceNotFoundException(msg)` |
+| integration-service | ✅ Xóa | `ResourceNotFoundException` → common-web; `ConnectorException` auth fail → `BusinessException(DOWNSTREAM_ERROR)`; credential errors → `BusinessException(INTERNAL_ERROR)` |
+
+Build verification: `./mvnw clean compile` — tất cả 6 services PASS, không lỗi.
+
+common-web auto-configure: services chỉ cần add dependency — không cần `@Import`.
+
+---

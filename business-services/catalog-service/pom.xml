@@ -131,6 +131,20 @@
             <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
 
+        <!-- Shared error handling -->
+        <dependency>
+            <groupId>com.insightflow</groupId>
+            <artifactId>common-web</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- Shared Kafka event DTOs -->
+        <dependency>
+            <groupId>com.insightflow</groupId>
+            <artifactId>common-events</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <!-- ============================================================
              TEST
              ============================================================ -->

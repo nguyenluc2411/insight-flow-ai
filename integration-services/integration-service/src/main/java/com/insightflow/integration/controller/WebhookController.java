@@ -6,7 +6,6 @@ import com.insightflow.integration.connector.kiotviet.KiotVietWebhookVerifier;
 import com.insightflow.integration.core.ConnectorType;
 import com.insightflow.integration.entity.ConnectorConfig;
 import com.insightflow.integration.entity.ProcessedWebhook;
-import com.insightflow.integration.event.producer.IntegrationEventProducer;
 import com.insightflow.integration.repository.ConnectorConfigRepository;
 import com.insightflow.integration.repository.ProcessedWebhookRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -31,7 +29,6 @@ public class WebhookController {
     private final KiotVietWebhookVerifier kiotVietVerifier;
     private final ConnectorConfigRepository configRepository;
     private final ProcessedWebhookRepository processedWebhookRepository;
-    private final IntegrationEventProducer eventProducer;
     private final ObjectMapper objectMapper;
 
     @PostMapping("/kiotviet")
@@ -89,18 +86,8 @@ public class WebhookController {
             log.error("Failed to persist webhook record: {}", e.getMessage());
         }
 
-        // Publish Kafka event
-        if (config != null) {
-            try {
-                eventProducer.publishProductSynced(config.getTenantId(), config.getId(),
-                        Map.of("source", "webhook", "eventType", eventType != null ? eventType : "unknown",
-                               "payload", payload));
-            } catch (Exception e) {
-                log.error("Failed to publish webhook event to Kafka: {}", e.getMessage());
-            }
-        }
-
-        log.info("KiotViet webhook processed: eventType={} externalId={}", eventType, externalEventId);
+        log.info("KiotViet webhook processed: eventType={} externalId={} tenant={}",
+                eventType, externalEventId, config.getTenantId());
         return ResponseEntity.ok().build();
     }
 

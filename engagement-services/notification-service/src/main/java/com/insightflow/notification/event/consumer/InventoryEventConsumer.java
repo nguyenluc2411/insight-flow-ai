@@ -1,7 +1,7 @@
 package com.insightflow.notification.event.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.insightflow.notification.event.payload.InventoryUpdatedPayload;
+import com.insightflow.common.events.catalog.InventoryUpdatedEvent;
 import com.insightflow.notification.repository.ProcessedEventRepository;
 import com.insightflow.notification.service.NotificationDispatchService;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
+
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -29,42 +31,41 @@ public class InventoryEventConsumer extends BaseEventConsumer {
 
     @KafkaListener(topics = "catalog.inventory.updated", containerFactory = "kafkaListenerContainerFactory")
     public void onInventoryUpdated(ConsumerRecord<String, String> record, Acknowledgment ack) {
-        process(record, InventoryUpdatedPayload.class, "catalog.inventory.updated", ack);
+        process(record, InventoryUpdatedEvent.class, "catalog.inventory.updated", ack);
     }
 
     @Override
     protected String extractEventId(Object payload) {
-        return payload instanceof InventoryUpdatedPayload p ? p.getEventId() : null;
+        return payload instanceof InventoryUpdatedEvent p ? p.getEventId() : null;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void handle(Object raw) {
-        InventoryUpdatedPayload p = (InventoryUpdatedPayload) raw;
+        InventoryUpdatedEvent p = (InventoryUpdatedEvent) raw;
 
         if (p.getTenantId() == null) {
             log.warn("InventoryUpdated event missing tenantId — skipping");
             return;
         }
 
-        if (p.getNewQuantityOnHand() > defaultLowStockThreshold) {
-            return; // Not low stock — nothing to notify
+        if (p.getQuantityOnHand() > defaultLowStockThreshold) {
+            return;
         }
 
         String title = "Low Stock Alert";
         String body = String.format(
                 "Variant %s is running low: %d units remaining.",
-                p.getVariantId(), p.getNewQuantityOnHand());
+                p.getVariantId(), p.getQuantityOnHand());
 
         log.info("Low stock detected tenant={} variant={} qty={}",
-                p.getTenantId(), p.getVariantId(), p.getNewQuantityOnHand());
+                p.getTenantId(), p.getVariantId(), p.getQuantityOnHand());
 
         dispatchService.dispatch(
-                p.getTenantId(), null,
+                UUID.fromString(p.getTenantId()), null,
                 "LOW_STOCK", title, body,
                 java.util.Map.of(
-                        "variantId", String.valueOf(p.getVariantId()),
-                        "newQuantityOnHand", p.getNewQuantityOnHand(),
+                        "variantId", p.getVariantId(),
+                        "quantityOnHand", p.getQuantityOnHand(),
                         "movementType", String.valueOf(p.getMovementType())
                 ));
     }
