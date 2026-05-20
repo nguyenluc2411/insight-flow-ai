@@ -15,4 +15,6 @@ public interface RecommendationAuditRepository extends JpaRepository<Recommendat
     Page<RecommendationAudit> findByProcessingStatus(ProcessingStatus processingStatus, Pageable pageable);
 
     Page<RecommendationAudit> findByEventId(UUID eventId, Pageable pageable);
+
+    boolean existsByEventId(UUID eventId);
 }

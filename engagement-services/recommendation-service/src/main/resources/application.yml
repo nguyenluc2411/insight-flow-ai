@@ -18,9 +18,10 @@ spring:
         max-attempts: 6
 
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:insightflow}?currentSchema=${RECOMMENDATION_DB_SCHEMA:recommendation_db}
-    username: ${POSTGRES_USER:insightflow}
-    password: ${POSTGRES_PASSWORD:insightflow}
+#    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:insightflow}?currentSchema=${RECOMMENDATION_DB_SCHEMA:recommendation_db}
+    url: jdbc:postgresql://localhost:5433/insightflow?currentSchema=recommendation_db
+    username: postgres
+    password: 12345
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: recommendation-service-pool
@@ -37,7 +38,8 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: recommendation_db
         format_sql: false
-
+        jdbc:
+          time_zone: UTC
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -51,13 +53,8 @@ spring:
     consumer:
       group-id: recommendation-service
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: com.insightflow.recommendation.event
-        spring.json.use.type.headers: false
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.add.type.headers: false
 

@@ -11,6 +11,7 @@ COPY target/recommendation-service-*.jar app.jar
 EXPOSE 8086
 
 ENTRYPOINT ["java", \
+  "-Duser.timezone=UTC", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=75.0", \
   "-Djava.security.egd=file:/dev/./urandom", \
