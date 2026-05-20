@@ -518,6 +518,16 @@ integration-services/integration-service/
 
 \- fix: auth PUT /me endpoint implemented (update tenant profile settings)
 
+\- fix: catalog GET /products filter status=active (soft delete không lộ trong list)
+
+\- fix: integration webhook reject 404 khi không có connector configured (security)
+
+\- fix: integration GET /jobs validate connector existence → 404
+
+\- fix: notification PUT /preferences OpenAPI schema + examples
+
+\- infra: MailHog thêm vào docker-compose.yml
+
 
 
 \### In Progress 🔄
@@ -528,11 +538,13 @@ integration-services/integration-service/
 
 \### Next Up 📋
 
-\- `dashboard-bff` (BFF aggregate APIs cho frontend repo)
+\- [ ] Refactor shared-core: UserContext, @CurrentUser, UserContextFilter, InternalHeaders
 
-\- `notification-service` (Email/Zalo/in-app alerts)
+\- [ ] Refactor Gateway: inject đủ 6 headers, RemoveRequestHeader=Authorization, Bearer auth Swagger
 
-\- `integration-service` (KiotViet connector — plugin-based)
+\- [ ] Refactor services: replace @RequestHeader bằng @CurrentUser (auth → catalog → sales → bff → integration → notification)
+
+\- [ ] Frontend repo: khởi tạo Next.js, pull OpenAPI specs, implement UI
 
 
 
