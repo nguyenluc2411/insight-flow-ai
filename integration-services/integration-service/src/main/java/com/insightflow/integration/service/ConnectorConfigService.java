@@ -9,8 +9,9 @@ import com.insightflow.integration.core.CredentialVault;
 import com.insightflow.integration.dto.request.CreateConnectorRequest;
 import com.insightflow.integration.dto.response.ConnectorConfigResponse;
 import com.insightflow.integration.entity.ConnectorConfig;
-import com.insightflow.integration.exception.ConnectorException;
-import com.insightflow.integration.exception.ResourceNotFoundException;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
 import com.insightflow.integration.mapper.ConnectorConfigMapper;
 import com.insightflow.integration.repository.ConnectorConfigRepository;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +45,7 @@ public class ConnectorConfigService {
         ConnectorInterface connector = connectorRegistry.get(req.getConnectorType());
         boolean authenticated = connector.authenticate(req.getCredentials());
         if (!authenticated) {
-            throw new ConnectorException(
+            throw new BusinessException(ErrorCode.DOWNSTREAM_ERROR,
                     "Authentication failed for connector type: " + req.getConnectorType() +
                     ". Check your credentials.");
         }
@@ -53,7 +54,7 @@ public class ConnectorConfigService {
         try {
             credentialsJson = objectMapper.writeValueAsString(req.getCredentials());
         } catch (JsonProcessingException e) {
-            throw new ConnectorException("Failed to serialize credentials", e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Failed to serialize credentials");
         }
 
         ConnectorConfig config = new ConnectorConfig();

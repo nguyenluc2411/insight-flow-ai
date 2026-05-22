@@ -10,7 +10,7 @@ import com.insightflow.auth.entity.RefreshToken;
 import com.insightflow.auth.entity.Role;
 import com.insightflow.auth.entity.Tenant;
 import com.insightflow.auth.entity.User;
-import com.insightflow.auth.exception.AuthException;
+import com.insightflow.common.web.exception.UnauthorizedException;
 import com.insightflow.auth.repository.RefreshTokenRepository;
 import com.insightflow.auth.repository.TenantRepository;
 import com.insightflow.auth.repository.UserRepository;
@@ -47,18 +47,18 @@ public class AuthService {
     @Transactional
     public AuthResponse login(LoginRequest request) {
         Tenant tenant = tenantRepository.findBySlug(request.getTenantSlug())
-                .orElseThrow(() -> new AuthException(INVALID_CREDENTIALS));
+                .orElseThrow(() -> new UnauthorizedException(INVALID_CREDENTIALS));
 
         User user = userRepository.findByTenantIdAndEmail(tenant.getId(),
                         request.getEmail().toLowerCase().strip())
-                .orElseThrow(() -> new AuthException(INVALID_CREDENTIALS));
+                .orElseThrow(() -> new UnauthorizedException(INVALID_CREDENTIALS));
 
         if (!passwordService.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new AuthException(INVALID_CREDENTIALS);
+            throw new UnauthorizedException(INVALID_CREDENTIALS);
         }
 
         if (!"active".equals(user.getStatus())) {
-            throw new AuthException(INVALID_CREDENTIALS);
+            throw new UnauthorizedException(INVALID_CREDENTIALS);
         }
 
         user.setLastLoginAt(Instant.now());
@@ -72,20 +72,20 @@ public class AuthService {
         String hash = tokenHashService.hash(request.getRefreshToken());
 
         RefreshToken stored = refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash)
-                .orElseThrow(() -> new AuthException("Invalid or expired refresh token"));
+                .orElseThrow(() -> new UnauthorizedException("Invalid or expired refresh token"));
 
         if (!stored.isActive()) {
-            throw new AuthException("Invalid or expired refresh token");
+            throw new UnauthorizedException("Invalid or expired refresh token");
         }
 
         stored.setRevokedAt(Instant.now());
         refreshTokenRepository.save(stored);
 
         User user = userRepository.findById(stored.getUserId())
-                .orElseThrow(() -> new AuthException("User not found"));
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
 
         Tenant tenant = tenantRepository.findById(user.getTenantId())
-                .orElseThrow(() -> new AuthException("Tenant not found"));
+                .orElseThrow(() -> new UnauthorizedException("Tenant not found"));
 
         return buildAuthResponse(user, tenant);
     }
@@ -102,18 +102,18 @@ public class AuthService {
 
     public UserInfo getMe(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AuthException("User not found"));
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
         Tenant tenant = tenantRepository.findById(user.getTenantId())
-                .orElseThrow(() -> new AuthException("Tenant not found"));
+                .orElseThrow(() -> new UnauthorizedException("Tenant not found"));
         return toUserInfo(user, tenant);
     }
 
     @Transactional
     public UserInfo updateMe(UUID userId, UUID tenantId, UpdateProfileRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AuthException("User not found"));
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
         Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new AuthException("Tenant not found"));
+                .orElseThrow(() -> new UnauthorizedException("Tenant not found"));
 
         Map<String, Object> settings = new HashMap<>(
                 tenant.getSettings() != null ? tenant.getSettings() : Map.of());

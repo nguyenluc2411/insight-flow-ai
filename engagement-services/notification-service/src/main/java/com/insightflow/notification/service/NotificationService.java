@@ -3,7 +3,7 @@ package com.insightflow.notification.service;
 import com.insightflow.notification.dto.response.NotificationResponse;
 import com.insightflow.notification.dto.response.UnreadCountResponse;
 import com.insightflow.notification.entity.Notification;
-import com.insightflow.notification.exception.ResourceNotFoundException;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
 import com.insightflow.notification.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -40,7 +40,7 @@ public class NotificationService {
     @Transactional
     public NotificationResponse markRead(UUID id, UUID tenantId) {
         Notification n = notificationRepository.findByIdAndTenantId(id, tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Notification", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found: " + id));
         n.setRead(true);
         return NotificationResponse.from(notificationRepository.save(n));
     }

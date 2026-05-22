@@ -496,37 +496,77 @@ integration-services/integration-service/
 
 \### Done ✅
 
-\- `discovery-server` (Eureka)
+
+
+\*\*Platform Services\*\*
+
+\- `discovery-server` (Eureka registry)
 
 \- `config-server` (Spring Cloud Config)
 
-\- `api-gateway` (filters + Swagger aggregator + JWT + rate limit + CORS)
+\- `api-gateway` (filters: CorrelationId, Logging, RateLimit, JWT validation, TenantContext; Swagger aggregator; 6-header inject; RemoveRequestHeader=Authorization; Bearer Swagger UI)
 
-\- `auth-service` (JWT, multi-tenancy, RBAC)
 
-\- `catalog-service` (products, variants, inventory, Kafka producer)
 
-\- `sales-service` (orders, customers, suppliers, Kafka producer)
+\*\*Business Services\*\*
 
-\- `ml-service` (Python FastAPI, Prophet forecast, rule-based recommendation, Kafka consumer)
+\- `auth-service` (tenant onboarding, login, JWT issuance/refresh/logout, RBAC, Flyway V1-V5)
 
-\- Docker Compose: Kafka, Redis, PostgreSQL, Kafka UI, pgAdmin
+\- `catalog-service` (products, variants, categories, locations, inventory movements/levels/summary, Kafka producer, soft delete, C7 frontend endpoints)
 
-\- E2E test 9/9 PASS (auth → catalog → sales → Kafka → ml)
+\- `sales-service` (orders, customers, suppliers, Kafka producer, order state machine, materialized view daily\_sales\_summary)
 
-\- fix: catalog inventory lazy loading (@EntityGraph on findByTenantIdAndVariantId)
 
-\- fix: auth PUT /me endpoint implemented (update tenant profile settings)
 
-\- fix: catalog GET /products filter status=active (soft delete không lộ trong list)
+\*\*Intelligence Services\*\*
 
-\- fix: integration webhook reject 404 khi không có connector configured (security)
+\- `ml-service` (Python FastAPI, Prophet forecast + cold-start fallback, rule-based recommendation, Kafka consumer, per-tenant model storage)
 
-\- fix: integration GET /jobs validate connector existence → 404
 
-\- fix: notification PUT /preferences OpenAPI schema + examples
 
-\- infra: MailHog thêm vào docker-compose.yml
+\*\*Integration Services\*\*
+
+\- `integration-service` (plugin framework, KiotViet connector full, HMAC webhook, Jasypt credential vault, Resilience4j rate limiter, scheduled sync, Kafka producer)
+
+
+
+\*\*Engagement Services\*\*
+
+\- `dashboard-bff` (4 aggregate endpoints, parallel Mono.zip, Kafka consumer ml events, WebClient lb://)
+
+\- `notification-service` (in-app notifications, preferences, Kafka consumer 3 topics, email wired pending auth email endpoint)
+
+
+
+\*\*Shared Core\*\*
+
+\- `common-security` (UserContext, @CurrentUser, UserContextFilter, InternalHeaders)
+
+\- `common-events` (Kafka event DTOs for all topics)
+
+\- `common-web` (GlobalExceptionHandler, RFC 7807 Problem Details)
+
+
+
+\*\*Infrastructure\*\*
+
+\- Docker Compose: Postgres (5433), Redis (6379), Kafka (9092), Zookeeper, Kafka UI (8085), pgAdmin (5050), MailHog (1025/8025)
+
+\- `.env` / `.env.example` pattern — no hardcoded credentials
+
+\- All services read config via Spring Cloud Config + env vars
+
+
+
+\*\*Cross-cutting\*\*
+
+\- Refactor: @CurrentUser thay @RequestHeader trên 6 services (auth, catalog, sales, bff, integration, notification)
+
+\- Refactor: Gateway inject 6 headers, RemoveRequestHeader=Authorization, Bearer Swagger UI
+
+\- E2E test: 9/9 PASS (auth → catalog → sales → Kafka → ml), 39/39 unit tests PASS
+
+\- Bug fixes: soft delete filter, webhook 404 security, integration jobs 404, notification OpenAPI
 
 
 
@@ -538,13 +578,21 @@ integration-services/integration-service/
 
 \### Next Up 📋
 
-\- [ ] Refactor shared-core: UserContext, @CurrentUser, UserContextFilter, InternalHeaders
+\- [ ] observability: Prometheus scrape config, Grafana dashboards (inventory health, order volume, ML accuracy), Loki log aggregation
 
-\- [ ] Refactor Gateway: inject đủ 6 headers, RemoveRequestHeader=Authorization, Bearer auth Swagger
+\- [ ] catalog-service: Category/Variant full CRUD endpoints
 
-\- [ ] Refactor services: replace @RequestHeader bằng @CurrentUser (auth → catalog → sales → bff → integration → notification)
+\- [ ] catalog-service: Consumer cho `sales.order.completed` → auto-deduct inventory
 
-\- [ ] Frontend repo: khởi tạo Next.js, pull OpenAPI specs, implement UI
+\- [ ] sales-service: `daily\_sales\_summary` REFRESH job (pg\_cron hoặc Spring scheduler)
+
+\- [ ] integration-service: Sapo connector implementation (framework đã có)
+
+\- [ ] integration-service: Haravan connector implementation
+
+\- [ ] Service-level JWT/tenant validation (hiện rely on gateway only)
+
+\- [ ] Frontend repo: khởi tạo Next.js, pull OpenAPI specs từ `api-contracts/`, implement UI
 
 
 

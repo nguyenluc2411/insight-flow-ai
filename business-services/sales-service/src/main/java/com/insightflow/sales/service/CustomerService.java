@@ -3,8 +3,9 @@ package com.insightflow.sales.service;
 import com.insightflow.sales.dto.request.CreateCustomerRequest;
 import com.insightflow.sales.dto.response.CustomerResponse;
 import com.insightflow.sales.entity.Customer;
-import com.insightflow.sales.exception.DuplicateResourceException;
-import com.insightflow.sales.exception.ResourceNotFoundException;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
 import com.insightflow.sales.mapper.CustomerMapper;
 import com.insightflow.sales.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,7 @@ public class CustomerService {
     public CustomerResponse createCustomer(CreateCustomerRequest request, UUID tenantId) {
         if (StringUtils.hasText(request.getPhone())
                 && customerRepository.findByTenantIdAndPhone(tenantId, request.getPhone()).isPresent()) {
-            throw new DuplicateResourceException("Customer with phone already exists: " + request.getPhone());
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Customer with phone already exists: " + request.getPhone());
         }
 
         Customer customer = new Customer();
@@ -54,13 +55,13 @@ public class CustomerService {
     public CustomerResponse getCustomerById(UUID id, UUID tenantId) {
         return customerRepository.findByTenantIdAndId(tenantId, id)
                 .map(customerMapper::toResponse)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + id));
     }
 
     @Transactional
     public void updateRfmSegment(UUID customerId, String segment, UUID tenantId) {
         Customer customer = customerRepository.findByTenantIdAndId(tenantId, customerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", customerId));
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerId));
         customer.setRfmSegment(segment);
         customerRepository.save(customer);
     }

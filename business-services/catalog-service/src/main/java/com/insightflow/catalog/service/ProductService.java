@@ -8,8 +8,9 @@ import com.insightflow.catalog.dto.response.VariantResponse;
 import com.insightflow.catalog.entity.Category;
 import com.insightflow.catalog.entity.Product;
 import com.insightflow.catalog.entity.ProductVariant;
-import com.insightflow.catalog.exception.DuplicateResourceException;
-import com.insightflow.catalog.exception.ResourceNotFoundException;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
 import com.insightflow.catalog.mapper.ProductMapper;
 import com.insightflow.catalog.mapper.VariantMapper;
 import com.insightflow.catalog.repository.CategoryRepository;
@@ -39,7 +40,7 @@ public class ProductService {
     @Transactional
     public ProductResponse createProduct(CreateProductRequest request, UUID tenantId) {
         if (productRepository.findByTenantIdAndSkuRoot(tenantId, request.getSkuRoot()).isPresent()) {
-            throw new DuplicateResourceException("Product with skuRoot already exists: " + request.getSkuRoot());
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Product with skuRoot already exists: " + request.getSkuRoot());
         }
 
         Product product = new Product();
@@ -55,7 +56,7 @@ public class ProductService {
 
         if (request.getCategoryId() != null) {
             Category category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + request.getCategoryId()));
             product.setCategory(category);
         }
 
@@ -67,7 +68,7 @@ public class ProductService {
     @Transactional
     public ProductResponse updateProduct(UUID id, UpdateProductRequest request, UUID tenantId) {
         Product product = productRepository.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
 
         if (request.getName() != null)        product.setName(request.getName());
         if (request.getDescription() != null) product.setDescription(request.getDescription());
@@ -79,7 +80,7 @@ public class ProductService {
 
         if (request.getCategoryId() != null) {
             Category category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + request.getCategoryId()));
             product.setCategory(category);
         }
 
@@ -96,13 +97,13 @@ public class ProductService {
     public ProductResponse getProductById(UUID id, UUID tenantId) {
         return productRepository.findByTenantIdAndId(tenantId, id)
                 .map(productMapper::toResponse)
-                .orElseThrow(() -> new ResourceNotFoundException("Product", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
     }
 
     @Transactional
     public void deleteProduct(UUID id, UUID tenantId) {
         Product product = productRepository.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
         product.setStatus("inactive");
         productRepository.save(product);
     }
@@ -111,7 +112,7 @@ public class ProductService {
     public List<VariantResponse> getVariantsByProduct(UUID productId, UUID tenantId) {
         // Verify product belongs to tenant before returning variants
         productRepository.findByTenantIdAndId(tenantId, productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
         return variantRepository.findByTenantIdAndProductId(tenantId, productId)
                 .stream()
                 .map(variantMapper::toResponse)
@@ -121,10 +122,10 @@ public class ProductService {
     @Transactional
     public VariantResponse createVariant(UUID productId, CreateVariantRequest request, UUID tenantId) {
         Product product = productRepository.findByTenantIdAndId(tenantId, productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
 
         if (variantRepository.findByTenantIdAndSku(tenantId, request.getSku()).isPresent()) {
-            throw new DuplicateResourceException("Variant with SKU already exists: " + request.getSku());
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Variant with SKU already exists: " + request.getSku());
         }
 
         ProductVariant variant = new ProductVariant();
