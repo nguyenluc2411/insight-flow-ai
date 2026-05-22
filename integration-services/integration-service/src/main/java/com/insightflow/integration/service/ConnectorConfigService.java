@@ -38,7 +38,7 @@ public class ConnectorConfigService {
     @Transactional
     public ConnectorConfigResponse createConfig(UUID tenantId, CreateConnectorRequest req) {
         if (repository.existsByTenantIdAndConnectorType(tenantId, req.getConnectorType())) {
-            throw new IllegalArgumentException(
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE,
                     "Connector of type " + req.getConnectorType() + " already exists for this tenant");
         }
 

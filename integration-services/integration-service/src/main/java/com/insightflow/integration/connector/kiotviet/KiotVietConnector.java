@@ -4,6 +4,8 @@ import com.insightflow.integration.connector.kiotviet.model.KvBranch;
 import com.insightflow.integration.connector.kiotviet.model.KvInventory;
 import com.insightflow.integration.connector.kiotviet.model.KvOrder;
 import com.insightflow.integration.connector.kiotviet.model.KvProduct;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
 import com.insightflow.integration.core.ConnectorInterface;
 import com.insightflow.integration.core.ConnectorRateLimiter;
 import com.insightflow.integration.core.ConnectorType;
@@ -130,7 +132,8 @@ public class KiotVietConnector implements ConnectorInterface {
             return branches;
         } catch (WebClientResponseException e) {
             log.error("KiotViet branches API error: status={}", e.getStatusCode());
-            throw new RuntimeException("KiotViet branches fetch failed: " + e.getStatusCode(), e);
+            throw new BusinessException(ErrorCode.DOWNSTREAM_ERROR,
+                    "KiotViet branches fetch failed: " + e.getStatusCode());
         }
     }
 
