@@ -2,6 +2,8 @@ package com.insightflow.integration.connector.kiotviet;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
 import com.insightflow.integration.connector.kiotviet.model.KvInventory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,7 +61,8 @@ public class KiotVietInventoryClient {
 
         } catch (WebClientResponseException e) {
             log.error("KiotViet inventory API error: status={}", e.getStatusCode());
-            throw new RuntimeException("KiotViet inventory fetch failed: " + e.getStatusCode(), e);
+            throw new BusinessException(ErrorCode.DOWNSTREAM_ERROR,
+                    "KiotViet inventory fetch failed: " + e.getStatusCode());
         }
     }
 }
