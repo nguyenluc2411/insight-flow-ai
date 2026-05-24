@@ -1,0 +1,773 @@
+openapi: "3.1.0"
+info:
+  title: Sales Service API
+  description: |
+    Order management, customer profiles, and supplier management for
+    Insight Flow AI multi-tenant fashion retail.
+
+    ## Endpoints Overview
+    - **Orders**: Create and manage sales orders with line items
+    - **Customers**: Customer profile management with RFM segmentation
+    - **Suppliers**: Supplier directory management
+
+    ## Tenant Isolation
+    All endpoints require `X-Tenant-Id` set by the API Gateway after JWT validation.
+    Every query is scoped to the tenant.
+
+    ## Kafka Events Published
+    - `sales.order.completed` — emitted when an order transitions to `completed` status
+      (consumed by ml-service to update training data)
+  version: "1.0.0"
+  contact:
+    name: Insight Flow AI
+    email: dev@insightflow.ai
+
+servers:
+  - url: http://localhost:8080/api/v1/sales
+    description: Via API Gateway (dev)
+  - url: http://localhost:8083/api/v1/sales
+    description: Direct (dev)
+
+paths:
+  # -----------------------------------------------------------------------
+  # Orders
+  # -----------------------------------------------------------------------
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List orders (paginated)
+      description: Returns paginated sales orders for the tenant, ordered by `createdAt` DESC by default.
+      tags: [Sales Orders]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: Paginated order list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedOrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createOrder
+      summary: Create order
+      description: Creates a new sales order in `pending` status. At least one line item is required.
+      tags: [Sales Orders]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orders/{id}:
+    get:
+      operationId: getOrderById
+      summary: Get order by ID
+      tags: [Sales Orders]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Order detail with line items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orders/{id}/complete:
+    post:
+      operationId: completeOrder
+      summary: Complete order
+      description: |
+        Transitions the order from `pending` to `completed`.
+        Publishes `sales.order.completed` event to Kafka after state change.
+        Returns `422` if the order is already `completed` or `cancelled`.
+      tags: [Sales Orders]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Order completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Order is already completed or cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Customers
+  # -----------------------------------------------------------------------
+  /customers:
+    get:
+      operationId: listCustomers
+      summary: List customers (paginated)
+      description: Returns paginated customer list. Includes RFM segment and purchase metrics.
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: Paginated customer list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCustomerResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createCustomer
+      summary: Create customer
+      description: Creates a new customer profile. `phone` must be unique within the tenant.
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        '201':
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /customers/{id}:
+    get:
+      operationId: getCustomerById
+      summary: Get customer by ID
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Customer detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Suppliers
+  # -----------------------------------------------------------------------
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      summary: List suppliers (paginated)
+      tags: [Suppliers]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: Paginated supplier list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSupplierResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createSupplier
+      summary: Create supplier
+      tags: [Suppliers]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSupplierRequest'
+      responses:
+        '201':
+          description: Supplier created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    TenantIdHeader:
+      in: header
+      name: X-Tenant-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Tenant UUID — injected by API Gateway after JWT validation
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UserIdHeader:
+      in: header
+      name: X-User-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Authenticated user UUID — injected by API Gateway
+      example: "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Resource UUID
+      example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+      description: Zero-based page number
+
+    SizeParam:
+      in: query
+      name: size
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      description: Items per page (default 20, max 100)
+
+    SortParam:
+      in: query
+      name: sort
+      schema:
+        type: string
+        example: "createdAt,desc"
+      description: "Sort expression: `field,direction` (e.g. `createdAt,desc`)"
+
+  schemas:
+    # --- Requests ---
+    CreateOrderRequest:
+      type: object
+      required: [items]
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Fulfillment location; null for online/unspecified
+          example: "d4e5f6a7-b8c9-0123-defa-234567890123"
+        customerId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional linked customer profile
+          example: "f6a7b8c9-d0e1-2345-fabc-456789012345"
+        channel:
+          type: string
+          maxLength: 30
+          default: "pos"
+          enum: [pos, online, kiotviet, sapo, haravan]
+          example: "pos"
+        paymentMethod:
+          type: string
+          maxLength: 30
+          nullable: true
+          enum: [cash, card, transfer, momo, zalopay]
+          example: "cash"
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItemRequest'
+
+    OrderItemRequest:
+      type: object
+      required: [variantId, quantity, unitPrice]
+      properties:
+        variantId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        unitPrice:
+          type: string
+          format: decimal
+          description: Actual selling price for this line item
+          example: "199000.00"
+        unitCost:
+          type: string
+          format: decimal
+          nullable: true
+          description: Cost price at time of sale (for margin calculation)
+          example: "85000.00"
+        discountAmount:
+          type: string
+          format: decimal
+          nullable: true
+          description: Per-item discount amount
+          example: "10000.00"
+
+    CreateCustomerRequest:
+      type: object
+      description: All fields are optional — customers can be anonymous.
+      properties:
+        phone:
+          type: string
+          maxLength: 20
+          nullable: true
+          example: "0912345678"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          nullable: true
+          example: "customer@example.com"
+        fullName:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Nguyen Van A"
+        gender:
+          type: string
+          maxLength: 20
+          nullable: true
+          enum: [male, female, other]
+          example: "male"
+
+    CreateSupplierRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: "Fashion Textile Co."
+        contactName:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Tran Thi B"
+        phone:
+          type: string
+          maxLength: 20
+          nullable: true
+          example: "0287654321"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          nullable: true
+          example: "supplier@textileco.vn"
+        address:
+          type: string
+          nullable: true
+          example: "456 Industrial Zone, Binh Duong"
+
+    # --- Responses ---
+    SalesOrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        tenantId:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+          description: Human-readable order reference number
+          example: "ORD-20250524-0042"
+        locationId:
+          type: string
+          format: uuid
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+          nullable: true
+        channel:
+          type: string
+          example: "pos"
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+          example: "pending"
+        subtotal:
+          type: string
+          format: decimal
+          example: "398000.00"
+        discountAmount:
+          type: string
+          format: decimal
+          example: "0.00"
+        taxAmount:
+          type: string
+          format: decimal
+          example: "0.00"
+        shippingAmount:
+          type: string
+          format: decimal
+          example: "0.00"
+        totalAmount:
+          type: string
+          format: decimal
+          example: "398000.00"
+        paymentMethod:
+          type: string
+          nullable: true
+          example: "cash"
+        orderedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-05-24T09:30:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T09:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T09:30:00Z"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemResponse'
+
+    OrderItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          example: 2
+        unitPrice:
+          type: string
+          format: decimal
+          example: "199000.00"
+        unitCost:
+          type: string
+          format: decimal
+          nullable: true
+          example: "85000.00"
+        discountAmount:
+          type: string
+          format: decimal
+          nullable: true
+          example: "0.00"
+        lineTotal:
+          type: string
+          format: decimal
+          description: (unitPrice - discountAmount) * quantity
+          example: "398000.00"
+
+    CustomerResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "f6a7b8c9-d0e1-2345-fabc-456789012345"
+        tenantId:
+          type: string
+          format: uuid
+        phone:
+          type: string
+          nullable: true
+          example: "0912345678"
+        email:
+          type: string
+          format: email
+          nullable: true
+        fullName:
+          type: string
+          nullable: true
+          example: "Nguyen Van A"
+        gender:
+          type: string
+          nullable: true
+          example: "male"
+        birthDate:
+          type: string
+          format: date
+          nullable: true
+          example: "1990-03-15"
+        rfmSegment:
+          type: string
+          nullable: true
+          description: RFM segmentation label (e.g. champion, loyal, at_risk)
+          example: "loyal"
+        totalSpent:
+          type: string
+          format: decimal
+          description: Cumulative spend by this customer
+          example: "2500000.00"
+        orderCount:
+          type: integer
+          example: 12
+        lastOrderAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-05-10T14:00:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-15T08:00:00Z"
+
+    SupplierResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "g7h8i9j0-k1l2-3456-ghij-567890123456"
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Fashion Textile Co."
+        contactName:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+          example: "0287654321"
+        email:
+          type: string
+          format: email
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive]
+          example: "active"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-03-01T08:00:00Z"
+
+    # --- Paginated wrappers ---
+    PagedOrderResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/SalesOrderResponse'
+        page:
+          $ref: '#/components/schemas/PageMeta'
+
+    PagedCustomerResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerResponse'
+        page:
+          $ref: '#/components/schemas/PageMeta'
+
+    PagedSupplierResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupplierResponse'
+        page:
+          $ref: '#/components/schemas/PageMeta'
+
+    PageMeta:
+      type: object
+      properties:
+        number:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          example: 87
+        totalPages:
+          type: integer
+          example: 5
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://insightflow.ai/errors/not-found"
+        title:
+          type: string
+          example: "Resource Not Found"
+        status:
+          type: integer
+          example: 404
+        detail:
+          type: string
+          example: "Order with id abc-123 not found"
+        instance:
+          type: string
+          format: uri
+          example: "/api/v1/sales/orders/abc-123"
+        correlationId:
+          type: string
+          example: "xyz-789"
+        timestamp:
+          type: string
+          format: date-time
+        errors:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Conflict:
+      description: Resource already exists (e.g. duplicate phone number)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Missing or invalid authentication headers
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
