@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import UUID
 
 from confluent_kafka import Consumer, KafkaError, KafkaException
@@ -106,13 +107,16 @@ class KafkaEventConsumer:
             occurred_at = event.occurred_at.replace(tzinfo=timezone.utc) \
                 if event.occurred_at.tzinfo is None else event.occurred_at
 
+            saved = 0
             for item in event.items:
+                # Dedup per (event_id, variant_id) — one order can have multiple variants
                 exists = session.query(SalesData.id).filter(
-                    SalesData.event_id == UUID(event.event_id)
+                    SalesData.event_id == UUID(event.event_id),
+                    SalesData.variant_id == UUID(item.variant_id),
                 ).first()
                 if exists:
-                    logger.debug("Skipping duplicate event_id=%s", event.event_id)
-                    return
+                    logger.debug("Skipping duplicate event_id=%s variant=%s", event.event_id, item.variant_id)
+                    continue
                 session.add(SalesData(
                     event_id=UUID(event.event_id),
                     tenant_id=UUID(event.tenant_id),
@@ -122,8 +126,10 @@ class KafkaEventConsumer:
                     order_id=UUID(event.order_id) if event.order_id else None,
                     occurred_at=occurred_at,
                 ))
-            session.commit()
-            self._check_training_readiness(event.tenant_id)
+                saved += 1
+            if saved > 0:
+                session.commit()
+                self._check_training_readiness(event.tenant_id)
         except Exception:  # noqa: BLE001
             logger.error("DB error handling sales.order.completed", exc_info=True)
             session.rollback()
@@ -175,8 +181,22 @@ class KafkaEventConsumer:
             count = session.query(SalesData).filter(
                 SalesData.tenant_id == UUID(tenant_id)
             ).count()
-            if count >= settings.MIN_DATA_POINTS:
-                logger.info("Tenant %s ready to train (%d data points)", tenant_id, count)
+            if count < settings.MIN_DATA_POINTS:
+                return
+
+            # Auto-trigger first-time training when no model exists yet for this tenant
+            tenant_model_dir = Path(settings.MODEL_STORAGE_PATH) / tenant_id
+            has_model = tenant_model_dir.exists() and any(tenant_model_dir.rglob("*.pkl"))
+            if not has_model:
+                logger.info(
+                    "Tenant %s crossed threshold (%d points) — auto-triggering first training",
+                    tenant_id, count,
+                )
+                # Late import avoids circular dependency at module load time
+                from app.api.training import start_training_background  # noqa: PLC0415
+                start_training_background(UUID(tenant_id))
+            else:
+                logger.debug("Tenant %s has %d data points and existing models", tenant_id, count)
         except Exception:  # noqa: BLE001
             logger.warning("Could not check training readiness", exc_info=True)
         finally:

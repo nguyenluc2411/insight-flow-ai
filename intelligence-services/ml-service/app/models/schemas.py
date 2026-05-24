@@ -77,6 +77,18 @@ class RefreshJobResponse(BaseModel):
         populate_by_name = True
 
 
+class TrainJobResponse(BaseModel):
+    job_id: UUID = Field(..., alias="jobId")
+    status: Literal["PENDING", "RUNNING", "SUCCESS", "FAILED"]
+    variants_trained: int | None = Field(default=None, alias="variantsTrained")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+    data_points: int | None = Field(default=None, alias="dataPoints")
+
+    class Config:
+        populate_by_name = True
+        from_attributes = True
+
+
 # --- Health ---
 
 class HealthResponse(BaseModel):

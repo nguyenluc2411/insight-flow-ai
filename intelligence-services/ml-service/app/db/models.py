@@ -77,10 +77,15 @@ class TrainingJob(Base):
 class SalesData(Base):
     """Local sales data accumulated from Kafka consumer for forecast training."""
     __tablename__ = "sales_data"
-    __table_args__ = ({"schema": SCHEMA},)
+    __table_args__ = (
+        # One row per (event, variant) — an order can contain multiple variant items.
+        # unique=True on event_id alone would block saving items 2..N of the same order.
+        UniqueConstraint("event_id", "variant_id", name="uq_sales_data_event_variant"),
+        {"schema": SCHEMA},
+    )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    event_id = Column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
+    event_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     variant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     quantity = Column(Integer, nullable=False)

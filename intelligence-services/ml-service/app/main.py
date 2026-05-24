@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pythonjsonlogger import jsonlogger
 from sqlalchemy import text
 
-from app.api import forecast, recommendation
+from app.api import forecast, recommendation, training
 from app.config import settings
 from app.db.database import engine, init_db
 from app.events.consumer import kafka_consumer
@@ -75,6 +75,7 @@ app.add_middleware(
 
 app.include_router(forecast.router)
 app.include_router(recommendation.router)
+app.include_router(training.router)
 
 
 @app.get("/api/v1/ml/health", response_model=HealthResponse, tags=["Health"])
