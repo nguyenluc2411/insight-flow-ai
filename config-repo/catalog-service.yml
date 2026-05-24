@@ -1,0 +1,13 @@
+# =============================================================================
+# catalog-service.yml — Config-server overrides for catalog-service
+# Port: 8082
+# =============================================================================
+
+spring:
+  jpa:
+    properties:
+      hibernate:
+        default_schema: catalog_db
+  flyway:
+    schemas: catalog_db
+    default-schema: catalog_db

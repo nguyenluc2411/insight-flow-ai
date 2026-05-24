@@ -1,0 +1,45 @@
+# =============================================================================
+# integration-service.yml — Config-server overrides for integration-service
+# Port: 8084
+# =============================================================================
+
+spring:
+  jpa:
+    properties:
+      hibernate:
+        default_schema: integration_db
+  flyway:
+    schemas: integration_db
+    default-schema: integration_db
+
+jasypt:
+  encryptor:
+    algorithm: PBEWithMD5AndDES
+    iv-generator-classname: org.jasypt.iv.NoIvGenerator
+    # password: injected via JASYPT_PASSWORD env var — never commit plaintext
+
+app:
+  integration:
+    kiotviet:
+      token-url: https://id.kiotviet.vn/connect/token
+      api-base-url: https://public.kiotapi.com
+      # client-id / client-secret: injected via KIOTVIET_CLIENT_ID / KIOTVIET_CLIENT_SECRET env vars
+    scheduled:
+      incremental-sync-delay-ms: 900000    # 15 minutes
+      full-reconciliation-cron: "0 0 2 * * *"  # 2 AM daily
+
+resilience4j:
+  ratelimiter:
+    instances:
+      kiotviet:
+        limit-for-period: 3
+        limit-refresh-period: 1s
+        timeout-duration: 10s
+      sapo:
+        limit-for-period: 5
+        limit-refresh-period: 1s
+        timeout-duration: 10s
+      haravan:
+        limit-for-period: 5
+        limit-refresh-period: 1s
+        timeout-duration: 10s

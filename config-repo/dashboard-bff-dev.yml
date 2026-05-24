@@ -1,0 +1,8 @@
+# =============================================================================
+# dashboard-bff-dev.yml — Dev profile overrides for dashboard-bff
+# =============================================================================
+
+logging:
+  level:
+    com.insightflow.bff: DEBUG
+    org.springframework.web.reactive.function.client: DEBUG

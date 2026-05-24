@@ -1,0 +1,20 @@
+# =============================================================================
+# application-dev.yml — Dev profile overrides for ALL services
+# Active when spring.profiles.active=dev
+# =============================================================================
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.insightflow: DEBUG
+    org.flywaydb: DEBUG
+    org.hibernate.SQL: DEBUG
