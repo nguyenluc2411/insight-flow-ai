@@ -772,3 +772,133 @@ Build verification: `./mvnw clean compile` — tất cả 6 services PASS, khôn
 common-web auto-configure: services chỉ cần add dependency — không cần `@Import`.
 
 ---
+
+## config-repo — COMPLETE ✅ (2026-05-24)
+
+Path: `config-repo/` (root level)
+
+16 files được tạo:
+
+| File | Mục đích |
+|------|---------|
+| `application.yml` | Shared: Jackson config, logging pattern (correlationId), actuator |
+| `application-dev.yml` | Dev: actuator full, DEBUG logging tất cả services |
+| `api-gateway.yml` / `-dev.yml` | JWT issuer, swagger services list |
+| `auth-service.yml` / `-dev.yml` | JWT config, Flyway/JPA schema auth_db |
+| `catalog-service.yml` / `-dev.yml` | Flyway/JPA schema catalog_db |
+| `sales-service.yml` / `-dev.yml` | Flyway/JPA schema sales_db |
+| `integration-service.yml` / `-dev.yml` | Jasypt, KiotViet URLs, sync schedule, rate limiters |
+| `notification-service.yml` / `-dev.yml` | Mail SMTP config, Flyway schema notification_db |
+| `dashboard-bff.yml` / `-dev.yml` | Downstream URLs (lb://), timeouts |
+
+Config-server cập nhật: thêm `optional:file:${CONFIG_REPO_PATH:../../config-repo}` vào search-locations.
+`.env.example` thêm `CONFIG_REPO_PATH=D:/SU26/EXE201/insight-flow-ai/config-repo`.
+
+---
+
+## ml-service: Training Bug Fix — COMPLETE ✅ (2026-05-24)
+
+### Bug fixes
+
+**BUG: Multi-item order chỉ lưu 1 item**
+- `app/db/models.py`: `SalesData.event_id` đổi từ `unique=True` → `UniqueConstraint("event_id", "variant_id")`
+- `app/events/consumer.py`: dedup check giờ filter `(event_id, variant_id)` per item, đổi `return` → `continue`
+
+### Feature: Training trigger endpoint
+
+Thêm `app/api/training.py`:
+
+| Endpoint | Method | Mô tả |
+|---------|--------|-------|
+| `POST /api/v1/ml/train` | 202 | Trigger Prophet training cho tất cả variants của tenant. Cần ≥ 30 data points. |
+| `GET /api/v1/ml/train/{job_id}` | 200 | Poll trạng thái training job (PENDING/RUNNING/SUCCESS/FAILED) |
+
+Hàm `start_training_background(tenant_id)` — dùng bởi cả API endpoint lẫn Kafka consumer.
+
+`app/events/consumer.py` `_check_training_readiness()` — auto-trigger training lần đầu khi:
+1. Tenant tích lũy đủ 30 data points
+2. Chưa có model file nào trên disk
+
+Build: `python -c "from app.main import app"` — OK.
+
+---
+
+## api-contracts — COMPLETE ✅ (2026-05-25)
+
+Path: `api-contracts/`
+
+| File | Lines | Endpoints |
+|------|-------|----------|
+| `auth-service.yaml` | 293 | 5 (register, login, refresh, logout, me) |
+| `catalog-service.yaml` | 1074 | 14 (products, variants, categories, locations, inventory) |
+| `sales-service.yaml` | 773 | 9 (orders, customers, suppliers) |
+| `dashboard-bff.yaml` | 554 | 4 (overview, health-summary, recommendations-summary, forecast-summary) |
+| `notification-service.yaml` | 485 | 6 (list, unread-count, mark-read, mark-all-read, preferences) |
+| `integration-service.yaml` | 594 | 7 (connectors CRUD, trigger-sync, list-jobs, webhook) |
+| `ml-service.yaml` | 598 | 6 (forecast, batch-forecast, recommendations, refresh, train, train-status) |
+
+Format: OpenAPI 3.1.0, servers via gateway + direct, ProblemDetail (RFC 7807), pagination schema chung.
+
+---
+
+## catalog-service: Kafka Consumer — COMPLETE ✅ (2026-05-25)
+
+File mới: `business-services/catalog-service/src/main/java/com/insightflow/catalog/event/OrderCompletedConsumer.java`
+
+### Logic
+- Lắng nghe `sales.order.completed` (group: `catalog-service-events`)
+- Mỗi order item → deduct inventory với `movementType=SALE`, `quantityChange=-quantity`
+- **Idempotency**: kiểm tra `(tenantId, referenceType="ORDER", referenceId=orderId, variantId)` trước khi deduct
+- **Location selection**: chọn location có `quantityOnHand` cao nhất cho variant đó (greedy, tránh negative stock)
+- Fail-open per item: lỗi 1 item không block các item khác hoặc ack
+
+### Files thay đổi
+| File | Thay đổi |
+|------|---------|
+| `application.yml` | Thêm Kafka consumer config (group-id, deserializers, manual ack) |
+| `KafkaConfig.java` | Thêm `NewTopic` bean cho `sales.order.completed` |
+| `InventoryMovementRepository.java` | Thêm `existsByTenantIdAndReferenceTypeAndReferenceIdAndVariantId()` |
+| `OrderCompletedConsumer.java` | NEW: consumer class |
+
+Build: `./mvnw compile` → BUILD SUCCESS ✅
+
+### Kafka event flow hoàn chỉnh
+```
+sales-service → sales.order.completed → catalog-service (deduct inventory)
+                                      → ml-service (accumulate SalesData)
+catalog-service → catalog.inventory.updated → ml-service (update InventorySnapshot)
+                                            → notification-service (low stock alert)
+```
+
+---
+
+## Resume Prompt (cập nhật 2026-05-25)
+
+```
+Read docs/handoffs/CURRENT_STATE.md first.
+Then read PROJECT_CONTEXT.md, .claude/CLAUDE.md.
+
+=== TRẠNG THÁI HIỆN TẠI (2026-05-25) ===
+
+HOÀN THÀNH (code xong, build pass):
+- 10/10 services: gateway, auth, catalog, sales, ml-service, bff, notification, integration
+- shared-core: common-security, common-events, common-web
+- config-repo: 16 files cho tất cả services
+- api-contracts: 7 YAML specs (auth + 6 mới)
+- catalog Kafka consumer: auto-deduct inventory từ sales.order.completed
+- ml-service: training endpoint + multi-item order bug fix
+
+CÒN LẠI (theo thứ tự ưu tiên):
+1. sales-service: @Scheduled refresh daily_sales_summary (materialized view)
+2. Variant full CRUD: PUT /variants/{id}, DELETE /variants/{id}, GET /variants/{id}
+3. scripts/: build-all.ps1, run-local.ps1, export-openapi.ps1
+4. observability/: Prometheus scrape config, Grafana dashboards, Loki config
+5. Service-level JWT/tenant validation
+6. integration-service: Sapo connector, Haravan connector (Phase 2)
+7. Frontend repo: Next.js, TypeScript client từ api-contracts/
+
+E2E test lần cuối: 2026-05-20, 9/9 PASS
+Chưa test: ml-service training endpoint, catalog Kafka consumer, config-repo serving
+```
+
+---

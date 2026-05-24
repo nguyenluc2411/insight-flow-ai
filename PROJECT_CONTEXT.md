@@ -578,21 +578,31 @@ integration-services/integration-service/
 
 \### Next Up 📋
 
+\- [ ] sales-service: `daily\_sales\_summary` REFRESH job (pg\_cron hoặc Spring scheduler)
+
+\- [ ] catalog-service: Variant full CRUD (PUT/DELETE/GET by id)
+
+\- [ ] scripts/: build-all.ps1, run-local.ps1, export-openapi.ps1
+
 \- [ ] observability: Prometheus scrape config, Grafana dashboards (inventory health, order volume, ML accuracy), Loki log aggregation
 
-\- [ ] catalog-service: Category/Variant full CRUD endpoints
-
-\- [ ] catalog-service: Consumer cho `sales.order.completed` → auto-deduct inventory
-
-\- [ ] sales-service: `daily\_sales\_summary` REFRESH job (pg\_cron hoặc Spring scheduler)
+\- [ ] Service-level JWT/tenant validation (hiện rely on gateway only)
 
 \- [ ] integration-service: Sapo connector implementation (framework đã có)
 
 \- [ ] integration-service: Haravan connector implementation
 
-\- [ ] Service-level JWT/tenant validation (hiện rely on gateway only)
-
 \- [ ] Frontend repo: khởi tạo Next.js, pull OpenAPI specs từ `api-contracts/`, implement UI
+
+\### Recently Done ✅ (2026-05-24/25)
+
+\- [x] config-repo: 16 config files cho tất cả services + config-server wired
+
+\- [x] api-contracts: 7 OpenAPI 3.1 YAML specs (tất cả services)
+
+\- [x] ml-service: training trigger endpoint (POST /train, GET /train/{id}) + multi-item order bug fix
+
+\- [x] catalog-service: Kafka consumer `sales.order.completed` → auto-deduct inventory
 
 
 
