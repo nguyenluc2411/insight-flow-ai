@@ -15,4 +15,12 @@ public class KafkaConfig {
                 .replicas(1)
                 .build();
     }
+
+    @Bean
+    public NewTopic orderCompletedTopic() {
+        return TopicBuilder.name("sales.order.completed")
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
 }
