@@ -221,7 +221,8 @@ Responsibilities:
 Before implementation, MUST READ:
 
 1. docs/notification-service/notification_service_markdown_docs_structure.md
-2. Identify inside the document:
+2. docs/notification-service/notification-service-master-plan.md
+3. Identify inside the document:
 business analysis section
 event flow section
 database design section

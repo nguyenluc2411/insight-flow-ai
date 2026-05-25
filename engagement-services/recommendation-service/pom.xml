@@ -11,9 +11,9 @@
     </parent>
 
     <groupId>com.insightflow</groupId>
-    <artifactId>notification-service</artifactId>
+    <artifactId>recommendation-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>notification-service</name>
+    <name>recommendation-service</name>
     <description>Recommendation Service — engagement layer business intelligence</description>
 
     <properties>
