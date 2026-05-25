@@ -64,8 +64,6 @@ spring:
 
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
-      properties:
-        spring.json.trusted.packages: "*"
 
     listener:
       ack-mode: manual
