@@ -6,14 +6,13 @@ import com.insightflow.notification.enums.NotificationChannel;
 import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
 import com.insightflow.notification.mapper.NotificationKafkaMapper;
 import com.insightflow.notification.mapper.NotificationMapper;
-import com.insightflow.notification.mapper.NotificationWebSocketMapper;
 import com.insightflow.notification.producer.KafkaEventPublisher;
 import com.insightflow.notification.repository.NotificationRepository;
 import com.insightflow.notification.service.aggregation.AggregationService;
 import com.insightflow.notification.service.email.EmailNotificationService;
 import com.insightflow.notification.service.interfaces.NotificationChannelRouter;
 import com.insightflow.notification.service.interfaces.ProcessedEventService;
-import com.insightflow.notification.websocket.RedisWebSocketPublisher;
+import com.insightflow.notification.service.websocket.RealtimeNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,8 +32,7 @@ public class NotificationOrchestrator {
     private final NotificationRepository notificationRepository;
     private final NotificationChannelRouter channelRouter;
     private final EmailNotificationService emailService;
-    private final RedisWebSocketPublisher wsPublisher;
-    private final NotificationWebSocketMapper webSocketMapper;
+    private final RealtimeNotificationService realtimeNotificationService;
     private final KafkaEventPublisher kafkaPublisher;
     private final NotificationKafkaMapper kafkaMapper;
 
@@ -84,7 +82,7 @@ public class NotificationOrchestrator {
                         emailService.sendEmail(saved);
                         break;
                     case WEBSOCKET:
-                        wsPublisher.publish(webSocketMapper.toPayload(saved));
+                        realtimeNotificationService.pushNotification(saved);
                         break;
                     default:
                         log.warn("Unsupported channel {} for notification {}", ch, saved.getId());
