@@ -3,6 +3,7 @@ package com.insightflow.catalog.controller;
 import com.insightflow.catalog.dto.request.CreateProductRequest;
 import com.insightflow.catalog.dto.request.CreateVariantRequest;
 import com.insightflow.catalog.dto.request.UpdateProductRequest;
+import com.insightflow.catalog.dto.request.UpdateVariantRequest;
 import com.insightflow.catalog.dto.response.ProductResponse;
 import com.insightflow.catalog.dto.response.VariantResponse;
 import com.insightflow.catalog.service.ProductService;
@@ -103,5 +104,40 @@ public class ProductController {
             @PathVariable java.util.UUID productId,
             @Valid @RequestBody CreateVariantRequest request) {
         return productService.createVariant(productId, request, user.tenantId());
+    }
+
+    @GetMapping("/{productId}/variants/{variantId}")
+    @Operation(summary = "Get variant by ID")
+    @ApiResponse(responseCode = "200", description = "Success")
+    @ApiResponse(responseCode = "404", description = "Product or variant not found")
+    public VariantResponse getVariant(
+            @CurrentUser UserContext user,
+            @PathVariable java.util.UUID productId,
+            @PathVariable java.util.UUID variantId) {
+        return productService.getVariantById(productId, variantId, user.tenantId());
+    }
+
+    @PutMapping("/{productId}/variants/{variantId}")
+    @Operation(summary = "Update product variant", description = "Patch semantics — only provided fields are updated. SKU cannot be changed.")
+    @ApiResponse(responseCode = "200", description = "Updated")
+    @ApiResponse(responseCode = "404", description = "Product or variant not found")
+    public VariantResponse updateVariant(
+            @CurrentUser UserContext user,
+            @PathVariable java.util.UUID productId,
+            @PathVariable java.util.UUID variantId,
+            @Valid @RequestBody UpdateVariantRequest request) {
+        return productService.updateVariant(productId, variantId, request, user.tenantId());
+    }
+
+    @DeleteMapping("/{productId}/variants/{variantId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Soft-delete product variant", description = "Sets variant status to inactive")
+    @ApiResponse(responseCode = "204", description = "Deleted")
+    @ApiResponse(responseCode = "404", description = "Product or variant not found")
+    public void deleteVariant(
+            @CurrentUser UserContext user,
+            @PathVariable java.util.UUID productId,
+            @PathVariable java.util.UUID variantId) {
+        productService.deleteVariant(productId, variantId, user.tenantId());
     }
 }

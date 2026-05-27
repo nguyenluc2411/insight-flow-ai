@@ -3,6 +3,7 @@ package com.insightflow.catalog.service;
 import com.insightflow.catalog.dto.request.CreateProductRequest;
 import com.insightflow.catalog.dto.request.CreateVariantRequest;
 import com.insightflow.catalog.dto.request.UpdateProductRequest;
+import com.insightflow.catalog.dto.request.UpdateVariantRequest;
 import com.insightflow.catalog.dto.response.ProductResponse;
 import com.insightflow.catalog.dto.response.VariantResponse;
 import com.insightflow.catalog.entity.Category;
@@ -117,6 +118,49 @@ public class ProductService {
                 .stream()
                 .map(variantMapper::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public VariantResponse getVariantById(UUID productId, UUID variantId, UUID tenantId) {
+        productRepository.findByTenantIdAndId(tenantId, productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+        return variantRepository.findByTenantIdAndId(tenantId, variantId)
+                .map(variantMapper::toResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Variant not found: " + variantId));
+    }
+
+    @Transactional
+    public VariantResponse updateVariant(UUID productId, UUID variantId, UpdateVariantRequest request, UUID tenantId) {
+        productRepository.findByTenantIdAndId(tenantId, productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+
+        ProductVariant variant = variantRepository.findByTenantIdAndId(tenantId, variantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Variant not found: " + variantId));
+
+        if (request.getBarcode() != null)        variant.setBarcode(request.getBarcode());
+        if (request.getSize() != null)           variant.setSize(request.getSize());
+        if (request.getColor() != null)          variant.setColor(request.getColor());
+        if (request.getColorHex() != null)       variant.setColorHex(request.getColorHex());
+        if (request.getCostPrice() != null)      variant.setCostPrice(request.getCostPrice());
+        if (request.getSellingPrice() != null)   variant.setSellingPrice(request.getSellingPrice());
+        if (request.getCompareAtPrice() != null) variant.setCompareAtPrice(request.getCompareAtPrice());
+        if (request.getStatus() != null)         variant.setStatus(request.getStatus());
+
+        log.debug("Updated variant id={} productId={} tenantId={}", variantId, productId, tenantId);
+        return variantMapper.toResponse(variantRepository.save(variant));
+    }
+
+    @Transactional
+    public void deleteVariant(UUID productId, UUID variantId, UUID tenantId) {
+        productRepository.findByTenantIdAndId(tenantId, productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+
+        ProductVariant variant = variantRepository.findByTenantIdAndId(tenantId, variantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Variant not found: " + variantId));
+
+        variant.setStatus("inactive");
+        variantRepository.save(variant);
+        log.debug("Soft-deleted variant id={} productId={} tenantId={}", variantId, productId, tenantId);
     }
 
     @Transactional
