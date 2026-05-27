@@ -66,4 +66,38 @@ public class KafkaTopicConfig {
                 .replicas(DEFAULT_REPLICAS)
                 .build();
     }
+
+    // Outgoing lifecycle topics
+    @Bean
+    public NewTopic notificationsSentTopic() {
+        return TopicBuilder.name("notifications.outgoing.sent")
+                .partitions(DEFAULT_PARTITIONS)
+                .replicas(DEFAULT_REPLICAS)
+                .build();
+    }
+
+    @Bean
+    public NewTopic notificationsFailedTopic() {
+        return TopicBuilder.name("notifications.outgoing.failed")
+                .partitions(DEFAULT_PARTITIONS)
+                .replicas(DEFAULT_REPLICAS)
+                .build();
+    }
+
+    @Bean
+    public NewTopic notificationsRetryTopic() {
+        return TopicBuilder.name("notifications.outgoing.retry")
+                .partitions(DEFAULT_PARTITIONS)
+                .replicas(DEFAULT_REPLICAS)
+                .build();
+    }
+
+    @Bean
+    public NewTopic notificationsBroadcastTopic() {
+        return TopicBuilder.name("notifications.outgoing.broadcast")
+                .partitions(DEFAULT_PARTITIONS)
+                .replicas(DEFAULT_REPLICAS)
+                .build();
+    }
 }
+
