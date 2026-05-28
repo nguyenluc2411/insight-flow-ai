@@ -60,6 +60,14 @@
         </dependency>
 
         <!-- ============================================================
+             MAIL — JavaMailSender for password reset emails
+             ============================================================ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- ============================================================
              DATA — JPA + Postgres + Flyway
              ============================================================ -->
         <dependency>
