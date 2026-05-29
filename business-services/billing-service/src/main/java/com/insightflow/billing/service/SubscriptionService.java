@@ -205,6 +205,62 @@ public class SubscriptionService {
         return toSubscriptionResponse(saved);
     }
 
+    /**
+     * Auto-creates a 30-day TRIAL subscription (Advanced-level features + limits)
+     * when a tenant registers. Idempotent — does nothing if the tenant already has
+     * a current subscription, so redelivered Kafka events are safe.
+     */
+    @Transactional
+    public void createTrialSubscription(UUID tenantId) {
+        if (subscriptionRepository.findActiveOrTrialByTenantId(tenantId).isPresent()) {
+            log.info("Tenant [{}] already has a subscription — skipping auto-trial", tenantId);
+            return;
+        }
+
+        BillingPackage trialPkg = packageRepository.findByCode("TRIAL")
+                .orElseThrow(() -> new ResourceNotFoundException("TRIAL package not found"));
+        Plan trialPlan = planRepository.findByPackageIdAndBillingCycle(trialPkg.getId(), "TRIAL")
+                .orElseThrow(() -> new ResourceNotFoundException("TRIAL plan not found"));
+
+        List<String> featureCodes = packageService.getFeatureCodesForPackage(trialPkg.getId());
+        Map<String, Object> limitsSnapshot = buildLimitsSnapshot(trialPkg.getId());
+
+        LocalDate startDate = LocalDate.now();
+        LocalDate endDate = calculateEndDate(startDate, trialPlan.getBillingCycle(), trialPlan.getTrialDays());
+
+        TenantSubscription trial = TenantSubscription.builder()
+                .tenantId(tenantId)
+                .planId(trialPlan.getId())
+                .priceAtSubscription(0)
+                .featuresAtSubscription(featureCodes)
+                .limitsAtSubscription(limitsSnapshot)
+                .planVersion(trialPkg.getVersion())
+                .status("TRIAL")
+                .startDate(startDate)
+                .endDate(endDate)
+                .autoRenew(false)
+                .build();
+
+        TenantSubscription saved = subscriptionRepository.save(trial);
+
+        billingHistoryService.recordEvent(tenantId, saved.getId(), "TRIAL_STARTED",
+                null, "TRIAL", 0, "Auto 30-day trial on tenant registration");
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("tenantId", tenantId.toString());
+        payload.put("subscriptionId", saved.getId().toString());
+        payload.put("status", "TRIAL");
+        payload.put("endDate", endDate.toString());
+        outboxRepository.save(OutboxEvent.builder()
+                .aggregateId(tenantId)
+                .eventType("subscription.created")
+                .payload(payload)
+                .build());
+
+        entitlementService.evictCache(tenantId);
+        log.info("Auto-created 30-day TRIAL for tenant [{}] ending {}", tenantId, endDate);
+    }
+
     private Map<String, Object> buildLimitsSnapshot(UUID packageId) {
         return planLimitRepository.findByPackageId(packageId)
                 .map(limit -> {

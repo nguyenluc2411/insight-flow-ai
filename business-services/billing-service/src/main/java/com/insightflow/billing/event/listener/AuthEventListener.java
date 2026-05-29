@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insightflow.billing.entity.TenantUserCount;
 import com.insightflow.billing.repository.TenantUserCountRepository;
+import com.insightflow.billing.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -20,7 +21,23 @@ import java.util.UUID;
 public class AuthEventListener {
 
     private final TenantUserCountRepository tenantUserCountRepository;
+    private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
+
+    @KafkaListener(topics = "auth.tenant.registered", groupId = "billing-service-events")
+    public void onTenantRegistered(ConsumerRecord<String, String> record, Acknowledgment ack) {
+        try {
+            JsonNode payload = objectMapper.readTree(record.value());
+            // TenantRegisteredEvent uses snake_case serialization (tenant_id).
+            JsonNode idNode = payload.hasNonNull("tenant_id") ? payload.get("tenant_id") : payload.get("tenantId");
+            UUID tenantId = UUID.fromString(idNode.asText());
+            subscriptionService.createTrialSubscription(tenantId);
+        } catch (Exception e) {
+            log.error("Failed to process auth.tenant.registered event: {}", e.getMessage());
+        } finally {
+            ack.acknowledge();
+        }
+    }
 
     @KafkaListener(topics = "auth.user.created", groupId = "billing-service-events")
     @Transactional
