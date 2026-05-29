@@ -5,11 +5,14 @@ import com.insightflow.billing.dto.response.RateLimitResponse;
 import com.insightflow.billing.entity.TenantUsage;
 import com.insightflow.billing.security.ServiceJwtValidator;
 import com.insightflow.billing.service.EntitlementService;
+import com.insightflow.billing.dto.response.UpgradeRequestResponse;
 import com.insightflow.billing.service.PlanLimitService;
 import com.insightflow.billing.service.SubscriptionLifecycleService;
 import com.insightflow.billing.service.SubscriptionService;
+import com.insightflow.billing.service.UpgradeRequestService;
 import com.insightflow.billing.service.UsageTrackingService;
 
+import java.util.List;
 import java.util.Map;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,6 +35,7 @@ public class InternalController {
     private final SubscriptionService subscriptionService;
     private final UsageTrackingService usageTrackingService;
     private final SubscriptionLifecycleService lifecycleService;
+    private final UpgradeRequestService upgradeRequestService;
 
     @GetMapping("/tenants/{tenantId}/limits")
     @Operation(summary = "Get rate limits for a tenant (service-to-service)")
@@ -49,6 +53,34 @@ public class InternalController {
             @RequestHeader("Authorization") String authHeader) {
         jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
         return ResponseEntity.ok(planLimitService.checkAndConsumeApiCall(tenantId));
+    }
+
+    @GetMapping("/upgrade-requests")
+    @Operation(summary = "List upgrade requests by status (admin/ops, service JWT)")
+    public ResponseEntity<List<UpgradeRequestResponse>> listUpgradeRequests(
+            @RequestParam(defaultValue = "PENDING") String status,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(upgradeRequestService.listByStatus(status));
+    }
+
+    @PostMapping("/upgrade-requests/{requestId}/approve")
+    @Operation(summary = "Approve an upgrade request and switch the tenant's plan (admin/ops)")
+    public ResponseEntity<UpgradeRequestResponse> approveUpgradeRequest(
+            @PathVariable UUID requestId,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(upgradeRequestService.approve(requestId));
+    }
+
+    @PostMapping("/upgrade-requests/{requestId}/reject")
+    @Operation(summary = "Reject an upgrade request (admin/ops)")
+    public ResponseEntity<UpgradeRequestResponse> rejectUpgradeRequest(
+            @PathVariable UUID requestId,
+            @RequestParam(required = false) String reason,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(upgradeRequestService.reject(requestId, reason));
     }
 
     @PostMapping("/subscriptions/expire-trials")

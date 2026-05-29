@@ -1,9 +1,12 @@
 package com.insightflow.billing.controller;
 
+import com.insightflow.billing.dto.request.CreateUpgradeRequestRequest;
 import com.insightflow.billing.dto.request.DowngradeRequest;
 import com.insightflow.billing.dto.request.UpgradeRequest;
 import com.insightflow.billing.dto.response.SubscriptionResponse;
+import com.insightflow.billing.dto.response.UpgradeRequestResponse;
 import com.insightflow.billing.service.SubscriptionService;
+import com.insightflow.billing.service.UpgradeRequestService;
 import com.insightflow.security.CurrentUser;
 import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +26,16 @@ import java.util.UUID;
 public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
+    private final UpgradeRequestService upgradeRequestService;
+
+    @PostMapping("/upgrade-request")
+    @Operation(summary = "Submit a manual upgrade request (admin approves it — no payment in MVP)")
+    @ApiResponse(responseCode = "200", description = "Upgrade request created (PENDING)")
+    public ResponseEntity<UpgradeRequestResponse> requestUpgrade(@CurrentUser UserContext user,
+                                                                 @Valid @RequestBody CreateUpgradeRequestRequest req) {
+        return ResponseEntity.ok(
+                upgradeRequestService.createRequest(user.tenantId(), req.getPackageCode(), req.getBillingCycle()));
+    }
 
     @GetMapping("/current")
     @Operation(summary = "Get current active subscription")
