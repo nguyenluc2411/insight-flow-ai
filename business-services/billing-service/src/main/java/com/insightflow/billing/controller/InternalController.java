@@ -6,11 +6,16 @@ import com.insightflow.billing.entity.TenantUsage;
 import com.insightflow.billing.security.ServiceJwtValidator;
 import com.insightflow.billing.service.EntitlementService;
 import com.insightflow.billing.dto.response.UpgradeRequestResponse;
+import com.insightflow.billing.entity.BillingHistory;
+import com.insightflow.billing.service.BillingHistoryService;
 import com.insightflow.billing.service.PlanLimitService;
 import com.insightflow.billing.service.SubscriptionLifecycleService;
 import com.insightflow.billing.service.SubscriptionService;
 import com.insightflow.billing.service.UpgradeRequestService;
 import com.insightflow.billing.service.UsageTrackingService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.Map;
@@ -36,6 +41,7 @@ public class InternalController {
     private final UsageTrackingService usageTrackingService;
     private final SubscriptionLifecycleService lifecycleService;
     private final UpgradeRequestService upgradeRequestService;
+    private final BillingHistoryService billingHistoryService;
 
     @GetMapping("/tenants/{tenantId}/limits")
     @Operation(summary = "Get rate limits for a tenant (service-to-service)")
@@ -53,6 +59,18 @@ public class InternalController {
             @RequestHeader("Authorization") String authHeader) {
         jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
         return ResponseEntity.ok(planLimitService.checkAndConsumeApiCall(tenantId));
+    }
+
+    @GetMapping("/tenants/{tenantId}/billing-history")
+    @Operation(summary = "Cross-tenant billing history lookup (admin/ops, service JWT)")
+    public ResponseEntity<Page<BillingHistory>> getTenantBillingHistory(
+            @PathVariable UUID tenantId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(billingHistoryService.getHistory(
+                tenantId, PageRequest.of(page, size, Sort.by("createdAt").descending())));
     }
 
     @GetMapping("/upgrade-requests")
