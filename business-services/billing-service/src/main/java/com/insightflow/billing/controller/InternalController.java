@@ -1,0 +1,67 @@
+package com.insightflow.billing.controller;
+
+import com.insightflow.billing.dto.response.InternalSubscriptionResponse;
+import com.insightflow.billing.dto.response.RateLimitResponse;
+import com.insightflow.billing.entity.TenantUsage;
+import com.insightflow.billing.security.ServiceJwtValidator;
+import com.insightflow.billing.service.EntitlementService;
+import com.insightflow.billing.service.PlanLimitService;
+import com.insightflow.billing.service.SubscriptionService;
+import com.insightflow.billing.service.UsageTrackingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/v1/internal")
+@RequiredArgsConstructor
+@Tag(name = "Internal", description = "Service-to-service internal endpoints (requires service JWT)")
+public class InternalController {
+
+    private final ServiceJwtValidator jwtValidator;
+    private final PlanLimitService planLimitService;
+    private final EntitlementService entitlementService;
+    private final SubscriptionService subscriptionService;
+    private final UsageTrackingService usageTrackingService;
+
+    @GetMapping("/tenants/{tenantId}/limits")
+    @Operation(summary = "Get rate limits for a tenant (service-to-service)")
+    public ResponseEntity<RateLimitResponse> getLimits(
+            @PathVariable UUID tenantId,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(planLimitService.getRateLimitResponse(tenantId));
+    }
+
+    @GetMapping("/tenants/{tenantId}/features")
+    @Operation(summary = "Get feature codes for a tenant (service-to-service)")
+    public ResponseEntity<List<String>> getFeatures(
+            @PathVariable UUID tenantId,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(entitlementService.getFeatureCodes(tenantId));
+    }
+
+    @GetMapping("/tenants/{tenantId}/subscription")
+    @Operation(summary = "Get subscription details for a tenant (service-to-service)")
+    public ResponseEntity<InternalSubscriptionResponse> getSubscription(
+            @PathVariable UUID tenantId,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(subscriptionService.getInternalSubscription(tenantId));
+    }
+
+    @GetMapping("/tenants/{tenantId}/usage")
+    @Operation(summary = "Get today's usage for a tenant (service-to-service)")
+    public ResponseEntity<TenantUsage> getUsage(
+            @PathVariable UUID tenantId,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(usageTrackingService.getTodayUsage(tenantId));
+    }
+}

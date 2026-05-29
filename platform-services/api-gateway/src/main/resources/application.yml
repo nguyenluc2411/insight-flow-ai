@@ -209,6 +209,39 @@ spring:
             rateLimiter: defaultRateLimiter
           order: 40
 
+        # ── Billing service — public package/feature listing (no JWT) ────────
+        - id: billing-service-public
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/v1/billing/packages/**,/api/v1/billing/features
+            - Method=GET
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: defaultRateLimiter
+          order: 45
+
+        # ── Billing service — protected user + internal endpoints ─────────────
+        - id: billing-service-protected
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/v1/billing/**,/api/v1/internal/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 46
+
         # ── Notification service ──────────────────────────────────────────────
         - id: notification-service
           uri: lb://notification-service
@@ -272,6 +305,8 @@ springdoc:
         url: /v3/api-docs/notification
       - name: "Integration Service"
         url: /v3/api-docs/integration
+      - name: "Billing Service"
+        url: /v3/api-docs/billing
 
 # =============================================================================
 # Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
@@ -347,6 +382,8 @@ app:
         service-id: notification-service
       - alias: integration
         service-id: integration-service
+      - alias: billing
+        service-id: billing-service
 
 # =============================================================================
 # Spring Boot Actuator
