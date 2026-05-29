@@ -10,3 +10,4 @@ CREATE DATABASE insightflow_sales;
 CREATE DATABASE insightflow_integration;
 CREATE DATABASE insightflow_notification;
 CREATE DATABASE insightflow_ml;
+CREATE DATABASE insightflow_billing;

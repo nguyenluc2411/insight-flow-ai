@@ -102,7 +102,7 @@ Dự án chia làm 2 repo riêng biệt:
 
 | Messaging | Apache Kafka |
 
-| Database | PostgreSQL 16 (database-per-service: 6 databases) |
+| Database | PostgreSQL 16 (database-per-service: 7 databases) |
 
 | Cache | Redis 7 |
 
@@ -159,6 +159,8 @@ Dự án chia làm 2 repo riêng biệt:
 \- `catalog-service` - Products, variants, locations, inventory levels (gộp product/inventory/warehouse)
 
 \- `sales-service` - Orders, order items, customers, suppliers (gộp supplier vì nhỏ)
+
+\- `billing-service` - Gói/subscription, plan limits, usage, manual upgrade, outbox (port 8086)
 
 
 
@@ -362,7 +364,7 @@ insight-flow-ai/
 
 \- Mỗi service có 1 PostgreSQL database riêng (database-per-service pattern)
 
-\- 6 databases: `insightflow\_auth`, `insightflow\_catalog`, `insightflow\_sales`, `insightflow\_integration`, `insightflow\_notification`, `insightflow\_ml`
+\- 7 databases: `insightflow\_auth`, `insightflow\_catalog`, `insightflow\_sales`, `insightflow\_integration`, `insightflow\_notification`, `insightflow\_ml`, `insightflow\_billing`
 
 \- Khởi tạo tự động qua `infrastructure/postgres/init.sql` khi Docker container start lần đầu
 
@@ -582,21 +584,49 @@ integration-services/integration-service/
 
 \### Next Up 📋
 
-\- [ ] sales-service: `daily\_sales\_summary` REFRESH job (pg\_cron hoặc Spring scheduler)
-
-\- [ ] catalog-service: Variant full CRUD (PUT/DELETE/GET by id)
-
-\- [ ] scripts/: build-all.ps1, run-local.ps1, export-openapi.ps1
-
-\- [ ] observability: Prometheus scrape config, Grafana dashboards (inventory health, order volume, ML accuracy), Loki log aggregation
-
-\- [ ] Service-level JWT/tenant validation (hiện rely on gateway only)
-
 \- [ ] integration-service: Sapo connector implementation (framework đã có)
 
 \- [ ] integration-service: Haravan connector implementation
 
-\- [ ] Frontend repo: khởi tạo Next.js, pull OpenAPI specs từ `api-contracts/`, implement UI
+\- [ ] observability: Grafana dashboards (inventory health, order volume, ML accuracy), Loki log aggregation
+
+\- [ ] Service-level authz (permission + tenant\_id check) — hiện rely on gateway only
+
+\- [ ] market-analytics API cho trang `/market` (FE hiện đang mock data)
+
+\- [ ] billing: payment gateway (VNPay/MoMo) + admin approve UI — defer Phase 2
+
+\- [ ] B7 pipeline: test với KiotViet sandbox thật (mới test bằng synthetic events)
+
+\### Recently Done ✅ (2026-05-30)
+
+\*\*billing-service (MỚI)\*\*
+
+\- [x] Gói: Free / Trial / Basic (199k) / Advanced (499k) / Pro (699k); Trial 30 ngày mở mức Advanced, hết hạn auto-downgrade về Free
+
+\- [x] Outbox Pattern (DB + Kafka atomic), Service JWT cho `/api/v1/internal/*`, snapshot features+limits tại thời điểm subscribe
+
+\- [x] Auto-tạo Trial khi `auth.tenant.registered`; scheduled job hết hạn Trial → Free
+
+\- [x] Manual upgrade: user gửi `upgrade-request` → ops duyệt qua internal API (chưa tích hợp thanh toán — MVP)
+
+\- [x] Gateway: enforce quota API/ngày theo gói (gọi billing đồng bộ, trả 429 khi vượt; fail-open nếu billing lỗi)
+
+\*\*POS → Catalog → ML pipeline (B7)\*\*
+
+\- [x] integration `integration.product.synced` → catalog upsert Product/Variant + lưu `external\_ids`; order-synced thêm line-items; auto full-sync 365 ngày khi connect
+
+\- [x] catalog resolve SKU → variant\_id, publish `catalog.order.normalized`; ml-service consume → `sales_data` (occurred\_at = ngày mua POS) → forecast chạy được trong trial. E2E pass bằng synthetic events.
+
+\*\*auth\*\*
+
+\- [x] forgot-password / reset-password (token hash, hết hạn, single-use; email qua MailHog dev)
+
+\- [x] Vá leak cross-tenant billing-history (chuyển sang internal/service JWT)
+
+\*\*Frontend (repo riêng `insight-flow-frontend`, đã có remote)\*\*
+
+\- [x] Wire billing UI (gói/subscription/usage/upgrade-request); locked-feature UX (hiện full menu + khóa); ẩn Free/Trial khỏi thẻ gói; settings tab-nav; section `#pricing` ở landing; forgot/reset password UI
 
 \### Recently Done ✅ (2026-05-27)
 
