@@ -4,7 +4,7 @@ spring:
       fail-fast: false
 
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:insightflow}?currentSchema=${CATALOG_DB_SCHEMA:catalog_db}
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${CATALOG_DB_NAME:insightflow_catalog}
     username: ${POSTGRES_USER:insightflow}
     password: ${POSTGRES_PASSWORD:insightflow}
 

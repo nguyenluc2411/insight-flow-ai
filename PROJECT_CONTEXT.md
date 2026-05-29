@@ -102,7 +102,7 @@ Dự án chia làm 2 repo riêng biệt:
 
 | Messaging | Apache Kafka |
 
-| Database | PostgreSQL 16 (DB-per-service via schema) |
+| Database | PostgreSQL 16 (database-per-service: 6 databases) |
 
 | Cache | Redis 7 |
 
@@ -360,11 +360,15 @@ insight-flow-ai/
 
 
 
-\- Mỗi service 1 schema PostgreSQL riêng (không phải DB instance riêng cho MVP)
+\- Mỗi service có 1 PostgreSQL database riêng (database-per-service pattern)
 
-\- Naming convention: `{service\_name}\_db` schema, ví dụ `auth\_db`, `catalog\_db`
+\- 6 databases: `insightflow\_auth`, `insightflow\_catalog`, `insightflow\_sales`, `insightflow\_integration`, `insightflow\_notification`, `insightflow\_ml`
 
-\- Migration: Flyway cho mỗi service
+\- Khởi tạo tự động qua `infrastructure/postgres/init.sql` khi Docker container start lần đầu
+
+\- Mỗi DB dùng schema riêng cùng tên: `auth\_db`, `catalog\_db`, etc. (Flyway tự tạo schema)
+
+\- Migration: Flyway cho mỗi service (chạy trong database riêng, KHÔNG cross-database)
 
 \- Mọi bảng nghiệp vụ có: `id UUID`, `tenant\_id UUID`, `created\_at`, `updated\_at`
 
@@ -593,6 +597,20 @@ integration-services/integration-service/
 \- [ ] integration-service: Haravan connector implementation
 
 \- [ ] Frontend repo: khởi tạo Next.js, pull OpenAPI specs từ `api-contracts/`, implement UI
+
+\### Recently Done ✅ (2026-05-27)
+
+\- [x] Database-per-service: tách 6 databases riêng (`insightflow\_auth/catalog/sales/integration/notification/ml`)
+
+\- [x] infrastructure/postgres/init.sql: tự động tạo 6 databases khi Docker start
+
+\- [x] docker-compose.yml: mount init.sql vào PostgreSQL container
+
+\- [x] Tất cả service application.yml: đổi từ `POSTGRES\_DB` chung → service-specific `*\_DB\_NAME`
+
+\- [x] .env + .env.example: cập nhật với per-service DB name vars
+
+
 
 \### Recently Done ✅ (2026-05-24/25)
 
