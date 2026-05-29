@@ -23,4 +23,14 @@ public class KafkaConfig {
                 .replicas(1)
                 .build();
     }
+
+    // Pre-create so consumers (ml-service) discover it at startup rather than
+    // waiting for a metadata refresh after first publish.
+    @Bean
+    public NewTopic orderNormalizedTopic() {
+        return TopicBuilder.name("catalog.order.normalized")
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
 }
