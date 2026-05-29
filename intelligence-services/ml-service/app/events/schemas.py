@@ -36,6 +36,21 @@ class OrderCompletedEvent(BaseEvent):
     items: List[OrderItemPayload]
 
 
+class NormalizedLine(BaseModel):
+    variant_id: str
+    sku: Optional[str] = None
+    quantity: int
+    unit_price: Optional[Decimal] = None
+
+
+class CatalogOrderNormalizedEvent(BaseEvent):
+    connector_type: Optional[str] = None
+    external_order_id: Optional[str] = None
+    order_code: Optional[str] = None
+    ordered_at: Optional[datetime] = None
+    items: List[NormalizedLine]
+
+
 class InventoryUpdatedEvent(BaseEvent):
     variant_id: str
     location_id: str
