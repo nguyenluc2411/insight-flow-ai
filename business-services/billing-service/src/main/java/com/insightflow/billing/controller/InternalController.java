@@ -38,6 +38,15 @@ public class InternalController {
         return ResponseEntity.ok(planLimitService.getRateLimitResponse(tenantId));
     }
 
+    @PostMapping("/tenants/{tenantId}/usage/check")
+    @Operation(summary = "Count one API call and check the daily quota (service-to-service)")
+    public ResponseEntity<RateLimitResponse> checkAndConsume(
+            @PathVariable UUID tenantId,
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        return ResponseEntity.ok(planLimitService.checkAndConsumeApiCall(tenantId));
+    }
+
     @GetMapping("/tenants/{tenantId}/features")
     @Operation(summary = "Get feature codes for a tenant (service-to-service)")
     public ResponseEntity<List<String>> getFeatures(

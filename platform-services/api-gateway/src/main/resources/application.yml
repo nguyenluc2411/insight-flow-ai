@@ -359,6 +359,11 @@ app:
     issuer: "insightflow-auth-service"
     clock-skew-seconds: 30
 
+  # Service-to-service JWT for calling billing-service internal endpoints.
+  # MUST match billing-service's app.service-jwt.secret exactly.
+  service-jwt:
+    secret: ${SERVICE_JWT_SECRET:insightflow-service-jwt-secret-change-in-prod!!}
+
   # ---------------------------------------------------------------------------
   # Swagger aggregator — alias → serviceId mapping.
   # alias: short path used in /v3/api-docs/{alias}

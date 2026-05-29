@@ -26,6 +26,7 @@ public class PlanLimitService {
     private final TenantSubscriptionRepository subscriptionRepository;
     private final TenantUsageRepository usageRepository;
     private final PlanLimitRepository planLimitRepository;
+    private final UsageTrackingService usageTrackingService;
 
     public RateLimitResponse getRateLimitResponse(UUID tenantId) {
         TenantSubscription subscription = subscriptionRepository.findActiveOrTrialByTenantId(tenantId)
@@ -58,6 +59,48 @@ public class PlanLimitService {
                 .remaining(remaining)
                 .limit(maxApiCallsPerDay)
                 .rateLimitPerMinute(rateLimitPerMinute)
+                .build();
+    }
+
+    /**
+     * Atomically counts one API call against the tenant's daily quota and reports
+     * whether the call is allowed. Called synchronously by the gateway rate-limit
+     * filter on every authenticated request.
+     *
+     * The over-limit request is rejected WITHOUT being counted, so the counter
+     * never exceeds the quota.
+     */
+    @Transactional
+    public RateLimitResponse checkAndConsumeApiCall(UUID tenantId) {
+        TenantSubscription subscription = subscriptionRepository.findActiveOrTrialByTenantId(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("No active subscription found for tenant: " + tenantId));
+
+        Map<String, Object> limitsSnapshot = subscription.getLimitsAtSubscription();
+        int maxApiCallsPerDay = getIntLimit(limitsSnapshot, "max_api_calls_per_day");
+        int rateLimitPerMinute = getIntLimit(limitsSnapshot, "api_rate_limit_per_minute");
+
+        // Unlimited plan — still count for analytics, never reject.
+        if (maxApiCallsPerDay == -1) {
+            usageTrackingService.incrementApiCalls(tenantId);
+            return RateLimitResponse.builder()
+                    .allowed(true).remaining(-1).limit(-1).rateLimitPerMinute(rateLimitPerMinute)
+                    .build();
+        }
+
+        TenantUsage usage = usageRepository.findByTenantIdAndUsageDate(tenantId, LocalDate.now())
+                .orElse(null);
+        int usedToday = (usage != null && usage.getApiCallsCount() != null) ? usage.getApiCallsCount() : 0;
+
+        if (usedToday >= maxApiCallsPerDay) {
+            return RateLimitResponse.builder()
+                    .allowed(false).remaining(0).limit(maxApiCallsPerDay).rateLimitPerMinute(rateLimitPerMinute)
+                    .build();
+        }
+
+        usageTrackingService.incrementApiCalls(tenantId);
+        int remaining = Math.max(0, maxApiCallsPerDay - (usedToday + 1));
+        return RateLimitResponse.builder()
+                .allowed(true).remaining(remaining).limit(maxApiCallsPerDay).rateLimitPerMinute(rateLimitPerMinute)
                 .build();
     }
 
