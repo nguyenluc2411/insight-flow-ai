@@ -8,6 +8,9 @@ USER appuser
 
 COPY target/catalog-service-*.jar app.jar
 
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD wget -qO /dev/null http://localhost:8082/actuator/health || exit 1
+
 EXPOSE 8082
 
 ENTRYPOINT ["java", \

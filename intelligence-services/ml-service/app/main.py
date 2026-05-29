@@ -5,11 +5,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pythonjsonlogger import jsonlogger
 from sqlalchemy import text
 
-from app.api import forecast, recommendation
+from app.api import forecast, recommendation, training
 from app.config import settings
 from app.db.database import engine, init_db
 from app.events.consumer import kafka_consumer
@@ -65,16 +64,10 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app.include_router(forecast.router)
 app.include_router(recommendation.router)
+app.include_router(training.router)
 
 
 @app.get("/api/v1/ml/health", response_model=HealthResponse, tags=["Health"])

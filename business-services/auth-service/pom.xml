@@ -53,6 +53,19 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ============================================================
+             MAIL — JavaMailSender for password reset emails
+             ============================================================ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
 
         <!-- ============================================================
              DATA — JPA + Postgres + Flyway
@@ -126,6 +139,15 @@
         </dependency>
 
         <!-- ============================================================
+             SHARED SECURITY — UserContext, @CurrentUser, UserContextFilter
+             ============================================================ -->
+        <dependency>
+            <groupId>com.insightflow</groupId>
+            <artifactId>common-security</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- ============================================================
              UTILITIES
              ============================================================ -->
         <dependency>
@@ -137,6 +159,20 @@
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
             <version>${mapstruct.version}</version>
+        </dependency>
+
+        <!-- Shared error handling -->
+        <dependency>
+            <groupId>com.insightflow</groupId>
+            <artifactId>common-web</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- Shared Kafka event DTOs -->
+        <dependency>
+            <groupId>com.insightflow</groupId>
+            <artifactId>common-events</artifactId>
+            <version>1.0.0</version>
         </dependency>
 
         <!-- ============================================================

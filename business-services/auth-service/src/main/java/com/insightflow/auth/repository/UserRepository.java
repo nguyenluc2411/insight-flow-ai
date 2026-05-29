@@ -13,4 +13,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByTenantIdAndEmail(UUID tenantId, String email);
 
     boolean existsByTenantIdAndEmail(UUID tenantId, String email);
+
+    // Cross-tenant email lookup — used ONLY for password reset flow
+    Optional<User> findByEmail(String email);
 }

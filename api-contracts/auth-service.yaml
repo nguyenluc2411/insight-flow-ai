@@ -12,6 +12,11 @@ info:
     - Access tokens expire in **15 minutes** (HS256, verified by api-gateway)
     - Refresh tokens expire in **30 days** (stored as SHA-256 hash)
 
+    ## Password Reset Flow
+    1. `POST /forgot-password` — accepts email, always returns 202 (prevents enumeration)
+    2. User receives email with link containing a single-use token (1-hour TTL)
+    3. `POST /reset-password` — accepts token + newPassword, invalidates all refresh tokens
+
     ## JWT Claim Structure
     ```json
     {
@@ -117,6 +122,60 @@ paths:
         '204':
           description: Token revoked
 
+  /forgot-password:
+    post:
+      operationId: forgotPassword
+      summary: Request password reset email
+      description: |
+        Always returns 202 regardless of whether the email is registered.
+        This prevents user enumeration attacks.
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '202':
+          description: Reset email sent (if account exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /reset-password:
+    post:
+      operationId: resetPassword
+      summary: Reset password using token from email
+      description: |
+        Consumes the single-use reset token, updates the user's password,
+        and revokes all existing refresh tokens (forces re-login on all devices).
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Invalid or expired reset token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
   /me:
     get:
       operationId: getCurrentUser
@@ -139,9 +198,66 @@ paths:
                 $ref: '#/components/schemas/UserInfo'
         '401':
           $ref: '#/components/responses/AuthError'
+    put:
+      operationId: updateCurrentUser
+      summary: Update current user's shop profile settings
+      tags: [Authentication]
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Set by api-gateway TenantContextFilter after JWT validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthError'
 
 components:
   schemas:
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: "owner@test.com"
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          description: Single-use reset token received via email
+        newPassword:
+          type: string
+          minLength: 8
+          writeOnly: true
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "If that email is registered, a reset link has been sent."
+
     RegisterTenantRequest:
       type: object
       required: [tenantName, slug, ownerEmail, ownerPassword, ownerFullName]
@@ -215,6 +331,34 @@ components:
             tenant:
               $ref: '#/components/schemas/TenantInfo'
 
+    UpdateProfileRequest:
+      type: object
+      properties:
+        location:
+          type: string
+          description: Region of operation (e.g. "HCM", "HN")
+          example: "HCM"
+        categories:
+          type: array
+          items:
+            type: string
+          description: Fashion business categories
+          example: ["Thời trang Nữ", "Streetwear"]
+        businessScale:
+          type: string
+          description: Business scale identifier (e.g. "SMALL", "MEDIUM", "LARGE")
+          example: "SMALL"
+        platforms:
+          type: array
+          items:
+            type: string
+          description: Sales channels (e.g. ["SHOPEE", "TIKTOK"])
+          example: ["SHOPEE"]
+        profileComplete:
+          type: boolean
+          description: Mark onboarding as complete
+          example: true
+
     UserInfo:
       type: object
       properties:
@@ -235,6 +379,30 @@ components:
           type: array
           items:
             type: string
+        location:
+          type: string
+          description: Region of operation
+          example: "HCM"
+        categories:
+          type: array
+          items:
+            type: string
+          description: Fashion business categories
+          example: ["Thời trang Nữ"]
+        businessScale:
+          type: string
+          description: Business scale identifier
+          example: "SMALL"
+        platforms:
+          type: array
+          items:
+            type: string
+          description: Sales channels
+          example: ["SHOPEE"]
+        profileComplete:
+          type: boolean
+          description: Whether the user has completed onboarding
+          example: true
 
     TenantInfo:
       type: object

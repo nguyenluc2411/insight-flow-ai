@@ -1,0 +1,66 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: insight-flow-ai
+
+scrape_configs:
+
+  # ── Platform ──────────────────────────────────────────────────────────────
+  - job_name: discovery-server
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['discovery-server:8761']
+
+  - job_name: config-server
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['config-server:8888']
+
+  - job_name: api-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['api-gateway:8080']
+
+  # ── Business ──────────────────────────────────────────────────────────────
+  - job_name: auth-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['auth-service:8081']
+
+  - job_name: catalog-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['catalog-service:8082']
+
+  - job_name: sales-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['sales-service:8083']
+
+  # ── Integration & Engagement ───────────────────────────────────────────────
+  - job_name: integration-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['integration-service:8084']
+
+  - job_name: dashboard-bff
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['dashboard-bff:8090']
+
+  - job_name: notification-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['notification-service:8091']
+
+  # ── Intelligence ───────────────────────────────────────────────────────────
+  - job_name: ml-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['ml-service:8000']
+
+  # ── Prometheus self-monitoring ─────────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

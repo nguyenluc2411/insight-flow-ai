@@ -3,12 +3,13 @@ package com.insightflow.catalog.service;
 import com.insightflow.catalog.dto.request.RecordMovementRequest;
 import com.insightflow.catalog.dto.response.InventoryLevelResponse;
 import com.insightflow.catalog.dto.response.InventoryMovementResponse;
+import com.insightflow.catalog.dto.response.InventorySummaryResponse;
 import com.insightflow.catalog.entity.InventoryLevel;
 import com.insightflow.catalog.entity.InventoryMovement;
 import com.insightflow.catalog.entity.Location;
 import com.insightflow.catalog.entity.ProductVariant;
-import com.insightflow.catalog.event.InventoryUpdatedEvent;
-import com.insightflow.catalog.exception.ResourceNotFoundException;
+import com.insightflow.common.events.catalog.InventoryUpdatedEvent;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
 import com.insightflow.catalog.mapper.InventoryMapper;
 import com.insightflow.catalog.repository.InventoryLevelRepository;
 import com.insightflow.catalog.repository.InventoryMovementRepository;
@@ -48,10 +49,10 @@ public class InventoryService {
     @Transactional
     public InventoryMovementResponse recordMovement(RecordMovementRequest request, UUID tenantId) {
         ProductVariant variant = variantRepository.findByTenantIdAndId(tenantId, request.getVariantId())
-                .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", request.getVariantId()));
+                .orElseThrow(() -> new ResourceNotFoundException("ProductVariant not found: " + request.getVariantId()));
 
         Location location = locationRepository.findByTenantIdAndId(tenantId, request.getLocationId())
-                .orElseThrow(() -> new ResourceNotFoundException("Location", request.getLocationId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Location not found: " + request.getLocationId()));
 
         // Upsert inventory level
         InventoryLevel level = levelRepository
@@ -80,9 +81,10 @@ public class InventoryService {
         InventoryMovement saved = movementRepository.save(movement);
 
         // Publish Kafka event — non-blocking, fail-open
-        publishInventoryEvent(tenantId, variant.getId(), location.getId(),
+        publishInventoryEvent(tenantId, variant, location.getId(),
                 request.getMovementType(), request.getQuantityChange(),
-                savedLevel.getQuantityOnHand());
+                savedLevel.getQuantityOnHand(), request.getReferenceType(),
+                request.getReferenceId());
 
         return inventoryMapper.toMovementResponse(saved);
     }
@@ -95,28 +97,41 @@ public class InventoryService {
                 .map(inventoryMapper::toMovementResponse);
     }
 
-    private void publishInventoryEvent(UUID tenantId, UUID variantId, UUID locationId,
-                                       String movementType, int quantityChange, int newQty) {
+    @Transactional(readOnly = true)
+    public InventorySummaryResponse getSummary(UUID tenantId) {
+        long totalSKU      = variantRepository.countActiveByTenantId(tenantId);
+        long totalQuantity = levelRepository.sumQuantityOnHand(tenantId);
+        long lowStockCount = levelRepository.countLowStock(tenantId);
+        return new InventorySummaryResponse(totalSKU, totalQuantity, lowStockCount);
+    }
+
+    private void publishInventoryEvent(UUID tenantId, ProductVariant variant, UUID locationId,
+                                       String movementType, int quantityChange, int quantityOnHand,
+                                       String referenceType, UUID referenceId) {
         InventoryUpdatedEvent event = InventoryUpdatedEvent.builder()
-                .eventId(UUID.randomUUID())
-                .eventType(InventoryUpdatedEvent.TYPE)
-                .tenantId(tenantId)
-                .variantId(variantId)
-                .locationId(locationId)
+                .eventId(UUID.randomUUID().toString())
+                .eventType("catalog.inventory.updated")
+                .tenantId(tenantId.toString())
+                .variantId(variant.getId().toString())
+                .locationId(locationId.toString())
                 .movementType(movementType)
                 .quantityChange(quantityChange)
-                .newQuantityOnHand(newQty)
+                .quantityOnHand(quantityOnHand)
+                .productId(variant.getProduct().getId().toString())
+                .sku(variant.getSku())
+                .referenceType(referenceType)
+                .referenceId(referenceId != null ? referenceId.toString() : null)
                 .occurredAt(Instant.now())
                 .build();
 
-        kafkaTemplate.send(InventoryUpdatedEvent.TOPIC, tenantId.toString(), event)
+        kafkaTemplate.send("catalog.inventory.updated", tenantId.toString(), event)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Failed to publish InventoryUpdatedEvent variantId={}: {}",
-                                variantId, ex.getMessage());
+                                variant.getId(), ex.getMessage());
                     } else {
                         log.debug("Published InventoryUpdatedEvent variantId={} offset={}",
-                                variantId, result.getRecordMetadata().offset());
+                                variant.getId(), result.getRecordMetadata().offset());
                     }
                 });
     }

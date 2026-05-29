@@ -36,7 +36,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     static final String JWT_CLAIMS_ATTR = "jwt.claims";
 
-    private static final int ORDER = 100;
+    // Must be < 1 so it runs BEFORE route GatewayFilters (e.g. RemoveRequestHeader at order=1).
+    private static final int ORDER = -10;
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtValidator jwtValidator;

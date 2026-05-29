@@ -3,8 +3,9 @@ package com.insightflow.sales.controller;
 import com.insightflow.sales.dto.request.CreateOrderRequest;
 import com.insightflow.sales.dto.response.SalesOrderResponse;
 import com.insightflow.sales.service.OrderService;
+import com.insightflow.security.CurrentUser;
+import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,9 +30,9 @@ public class OrderController {
     @Operation(summary = "List orders", description = "Paginated order list for the tenant")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<SalesOrderResponse> listOrders(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PageableDefault(size = 20) Pageable pageable) {
-        return orderService.getOrders(tenantId, pageable);
+        return orderService.getOrders(user.tenantId(), pageable);
     }
 
     @PostMapping
@@ -40,9 +41,9 @@ public class OrderController {
     @ApiResponse(responseCode = "201", description = "Order created")
     @ApiResponse(responseCode = "404", description = "Customer not found")
     public SalesOrderResponse createOrder(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @Valid @RequestBody CreateOrderRequest request) {
-        return orderService.createOrder(request, tenantId);
+        return orderService.createOrder(request, user.tenantId());
     }
 
     @GetMapping("/{id}")
@@ -50,9 +51,9 @@ public class OrderController {
     @ApiResponse(responseCode = "200", description = "Success")
     @ApiResponse(responseCode = "404", description = "Not found")
     public SalesOrderResponse getOrder(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID id) {
-        return orderService.getOrderById(id, tenantId);
+        return orderService.getOrderById(id, user.tenantId());
     }
 
     @PostMapping("/{id}/complete")
@@ -62,8 +63,8 @@ public class OrderController {
     @ApiResponse(responseCode = "404", description = "Order not found")
     @ApiResponse(responseCode = "422", description = "Order already completed or cancelled")
     public SalesOrderResponse completeOrder(
-            @Parameter(hidden = true) @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @CurrentUser UserContext user,
             @PathVariable UUID id) {
-        return orderService.completeOrder(id, tenantId);
+        return orderService.completeOrder(id, user.tenantId());
     }
 }

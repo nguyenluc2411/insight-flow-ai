@@ -91,26 +91,18 @@ spring:
         - id: auth-service-public
           uri: lb://auth-service
           predicates:
-              - Path=/api/v1/auth/login,/api/v1/auth/register-tenant,/api/v1/auth/refresh
+              - Path=/api/v1/auth/login,/api/v1/auth/register-tenant,/api/v1/auth/refresh,/api/v1/auth/forgot-password,/api/v1/auth/reset-password
               - Method=POST
           filters:
+            - RemoveRequestHeader=Authorization
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@loginRateLimiter}"
                 key-resolver: "#{@ipKeyResolver}"
           metadata:
-                  public: true
-                  rateLimiter: loginRateLimiter
+            public: true
+            rateLimiter: loginRateLimiter
           order: 1
-#          filters:
-#            - name: RequestRateLimiter
-#              args:
-#                rate-limiter: "#{@loginRateLimiter}"
-#                key-resolver: "#{@ipKeyResolver}"
-#          metadata:
-#            public: true
-#            rateLimiter: loginRateLimiter
-#          order: 1
 
         # ── Auth service — protected endpoints (JWT required) ─────────────────
         # Covers password change, profile, admin user management, etc.
@@ -119,6 +111,7 @@ spring:
           predicates:
             - Path=/api/v1/auth/**
           filters:
+            - RemoveRequestHeader=Authorization
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@defaultRateLimiter}"
@@ -134,6 +127,7 @@ spring:
           predicates:
             - Path=/api/v1/catalog/**
           filters:
+            - RemoveRequestHeader=Authorization
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@defaultRateLimiter}"
@@ -149,6 +143,7 @@ spring:
           predicates:
             - Path=/api/v1/sales/**
           filters:
+            - RemoveRequestHeader=Authorization
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@defaultRateLimiter}"
@@ -160,12 +155,10 @@ spring:
 
         # ── Integration service — POS webhooks (PUBLIC, POST only) ────────────
         # POS platforms authenticate via HMAC payload signature verified inside
-        # integration-service. Gateway MUST forward these headers unmodified:
+        # integration-service. Gateway MUST forward POS signature headers unmodified:
         #   X-KiotViet-Signature, X-Sapo-Signature,
         #   X-Shopify-Hmac-Sha256, X-Haravan-Signature
-        # DO NOT add RemoveRequestHeader or any header-manipulation filter here.
-        # CorrelationIdFilter (order -100) generates X-Correlation-Id for all routes.
-        # Rate limit: ~600 req/min burst (replenishRate=10, burstCapacity=30).
+        # RemoveRequestHeader=Authorization is safe here — webhook callers don't send JWT.
         # This route MUST appear before integration-service-protected (more specific).
         - id: integration-service-webhooks
           uri: lb://integration-service
@@ -173,6 +166,7 @@ spring:
             - Path=/api/v1/webhooks/**
             - Method=POST
           filters:
+            - RemoveRequestHeader=Authorization
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@webhookRateLimiter}"
@@ -189,6 +183,7 @@ spring:
           predicates:
             - Path=/api/v1/integrations/**
           filters:
+            - RemoveRequestHeader=Authorization
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@defaultRateLimiter}"
@@ -204,6 +199,7 @@ spring:
           predicates:
             - Path=/api/v1/dashboard/**
           filters:
+            - RemoveRequestHeader=Authorization
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@defaultRateLimiter}"
@@ -213,6 +209,55 @@ spring:
             rateLimiter: defaultRateLimiter
           order: 40
 
+        # ── Billing service — public package/feature listing (no JWT) ────────
+        - id: billing-service-public
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/v1/billing/packages/**,/api/v1/billing/features
+            - Method=GET
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: defaultRateLimiter
+          order: 45
+
+        # ── Billing service — protected user + internal endpoints ─────────────
+        - id: billing-service-protected
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/v1/billing/**,/api/v1/internal/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 46
+
+        # ── Notification service ──────────────────────────────────────────────
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 50
+
         # ── ML service ────────────────────────────────────────────────────────
         # Python FastAPI — does NOT register with Eureka. Use direct HTTP URI.
         - id: ml-service
@@ -220,6 +265,7 @@ spring:
           predicates:
             - Path=/api/v1/ml/**
           filters:
+            - RemoveRequestHeader=Authorization
             - name: RequestRateLimiter
               args:
                 rate-limiter: "#{@defaultRateLimiter}"
@@ -253,6 +299,14 @@ springdoc:
         url: /v3/api-docs/sales
       - name: "ML Service"
         url: /v3/api-docs/ml
+      - name: "Dashboard BFF"
+        url: /v3/api-docs/dashboard
+      - name: "Notification Service"
+        url: /v3/api-docs/notification
+      - name: "Integration Service"
+        url: /v3/api-docs/integration
+      - name: "Billing Service"
+        url: /v3/api-docs/billing
 
 # =============================================================================
 # Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
@@ -305,6 +359,11 @@ app:
     issuer: "insightflow-auth-service"
     clock-skew-seconds: 30
 
+  # Service-to-service JWT for calling billing-service internal endpoints.
+  # MUST match billing-service's app.service-jwt.secret exactly.
+  service-jwt:
+    secret: ${SERVICE_JWT_SECRET:insightflow-service-jwt-secret-change-in-prod!!}
+
   # ---------------------------------------------------------------------------
   # Swagger aggregator — alias → serviceId mapping.
   # alias: short path used in /v3/api-docs/{alias}
@@ -322,6 +381,14 @@ app:
       # ml-service is Python — not in Eureka. Use direct URL.
       - alias: ml
         url: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
+      - alias: dashboard
+        service-id: dashboard-bff
+      - alias: notification
+        service-id: notification-service
+      - alias: integration
+        service-id: integration-service
+      - alias: billing
+        service-id: billing-service
 
 # =============================================================================
 # Spring Boot Actuator
@@ -332,7 +399,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,gateway
+        include: health,info,metrics,gateway,prometheus
   endpoint:
     health:
       show-details: when-authorized

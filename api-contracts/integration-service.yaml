@@ -1,0 +1,594 @@
+openapi: "3.1.0"
+info:
+  title: Integration Service API
+  description: |
+    POS connector management and incoming webhook endpoints for Insight Flow AI.
+
+    ## Two Endpoint Groups
+
+    ### Protected: `/api/v1/integrations/**`
+    Authenticated endpoints for managing POS connector configurations and triggering syncs.
+    Require `X-Tenant-Id` and `X-User-Id` injected by the API Gateway after JWT validation.
+
+    ### Public: `/api/v1/webhooks/**`
+    Unauthenticated endpoints that receive real-time events from external POS systems.
+    - **No JWT required** — these are called directly by POS platforms
+    - Authentication uses **HMAC-SHA256 signature** in a vendor-specific header
+    - The `tenantId` is extracted from the JSON payload body
+    - Endpoint is idempotent — duplicate events identified by `externalEventId` are silently ignored
+
+    ## Supported Connectors
+    | Type | Status |
+    |---|---|
+    | `KIOTVIET` | Active |
+    | `SAPO` | Planned |
+    | `HARAVAN` | Planned |
+
+    ## Sync Types
+    | Type | Description |
+    |---|---|
+    | `FULL_RECONCILIATION` | Full data pull for all entities |
+    | `INCREMENTAL` | Delta sync since last run |
+    | `WEBHOOK` | Real-time event-driven sync |
+
+    ## Kafka Events Published
+    Integration events are published to downstream services after sync completes.
+  version: "1.0.0"
+  contact:
+    name: Insight Flow AI
+    email: dev@insightflow.ai
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Via API Gateway (dev)
+  - url: http://localhost:8084/api/v1
+    description: Direct (dev)
+
+paths:
+  # -----------------------------------------------------------------------
+  # Connector Management (Protected)
+  # -----------------------------------------------------------------------
+  /integrations:
+    get:
+      operationId: listConnectors
+      summary: List connector configs for the tenant
+      description: Returns all POS connector configurations (active and inactive) for the authenticated tenant.
+      tags: [Integrations]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: List of connector configs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConnectorConfigResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createConnector
+      summary: Create a new POS connector
+      description: |
+        Creates and validates a new POS connector configuration.
+        The service verifies credentials by attempting to authenticate with the POS API.
+        Only one connector of each `connectorType` is allowed per tenant.
+
+        **Credentials format per connector type:**
+        - `KIOTVIET`: `{ "clientId": "...", "clientSecret": "...", "retailer": "shop-name" }`
+      tags: [Integrations]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConnectorRequest'
+            example:
+              connectorType: "KIOTVIET"
+              name: "My KiotViet Store"
+              credentials:
+                clientId: "kv_client_123"
+                clientSecret: "kv_secret_abc"
+                retailer: "myshop"
+              config:
+                syncProducts: true
+                syncOrders: true
+      responses:
+        '201':
+          description: Connector created and credentials verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorConfigResponse'
+        '400':
+          description: Validation error or credential authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /integrations/{id}:
+    get:
+      operationId: getConnectorById
+      summary: Get connector config by ID
+      tags: [Integrations]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Connector config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorConfigResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      operationId: deleteConnector
+      summary: Deactivate connector config
+      description: Sets the connector status to inactive. Does not physically remove the record.
+      tags: [Integrations]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204':
+          description: Connector deactivated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /integrations/{id}/sync:
+    post:
+      operationId: triggerSync
+      summary: Trigger manual full sync
+      description: |
+        Queues a `FULL_RECONCILIATION` sync job for the connector. Returns immediately with a job ID.
+        Poll `GET /integrations/{id}/jobs` to track sync progress.
+        This operation is asynchronous.
+      tags: [Integrations]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '202':
+          description: Sync job queued — returns job ID for polling
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerSyncResult'
+              example:
+                jobId: "e5f6a7b8-c9d0-1234-efab-345678901234"
+                status: "queued"
+                message: "Full sync triggered asynchronously"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /integrations/{id}/jobs:
+    get:
+      operationId: listSyncJobs
+      summary: List sync jobs for a connector
+      description: Returns paginated sync job history for the connector, ordered by `createdAt` DESC.
+      tags: [Integrations]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          description: Paginated sync job list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSyncJobResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Webhooks (Public — no JWT, HMAC signature auth)
+  # -----------------------------------------------------------------------
+  /webhooks/kiotviet:
+    post:
+      operationId: receiveKiotVietWebhook
+      summary: Receive KiotViet webhook
+      description: |
+        **PUBLIC endpoint — no JWT authentication required.**
+
+        Receives real-time event notifications from KiotViet POS platform.
+
+        ## Authentication
+        Signature verification uses HMAC-SHA256 with the `webhookSecret` stored per connector.
+        The signature is passed in the `X-KiotViet-Signature` header.
+        If the header is absent or the connector has no `webhookSecret` configured, the signature check is skipped.
+
+        ## Idempotency
+        Duplicate events (same `Id`/`id` in payload) are silently ignored — safe to retry.
+
+        ## Tenant Resolution
+        The `tenantId` is extracted from the JSON payload body field `tenantId`.
+        If no active KiotViet connector is found for the extracted tenant, returns `404`.
+
+        ## Payload Format (KiotViet sends)
+        ```json
+        {
+          "Id": "evt-12345",
+          "Type": "order.complete",
+          "tenantId": "550e8400-e29b-41d4-a716-446655440000",
+          "Notifications": [...]
+        }
+        ```
+      tags: [Webhooks]
+      security: []
+      parameters:
+        - in: header
+          name: X-KiotViet-Signature
+          required: false
+          schema:
+            type: string
+          description: |
+            HMAC-SHA256 signature of the raw request body, hex-encoded.
+            Computed using the `webhookSecret` configured for the tenant's KiotViet connector.
+          example: "sha256=abc123def456..."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KiotVietWebhookPayload'
+      responses:
+        '200':
+          description: Webhook received and processed (including duplicate — idempotent)
+        '401':
+          description: HMAC signature verification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: No active KiotViet connector found for the tenant in payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    TenantIdHeader:
+      in: header
+      name: X-Tenant-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Tenant UUID — injected by API Gateway after JWT validation
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UserIdHeader:
+      in: header
+      name: X-User-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Authenticated user UUID — injected by API Gateway
+      example: "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Resource UUID
+      example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+      description: Zero-based page number
+
+    SizeParam:
+      in: query
+      name: size
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      description: Items per page (default 20, max 100)
+
+  schemas:
+    # --- Requests ---
+    CreateConnectorRequest:
+      type: object
+      required: [connectorType, name, credentials]
+      properties:
+        connectorType:
+          type: string
+          enum: [KIOTVIET, SAPO, HARAVAN]
+          description: POS platform type
+          example: "KIOTVIET"
+        name:
+          type: string
+          description: Human-readable connector label
+          example: "My KiotViet Store"
+        credentials:
+          type: object
+          description: |
+            POS-specific credentials (stored encrypted).
+            KIOTVIET: `{ "clientId", "clientSecret", "retailer" }`
+          additionalProperties:
+            type: string
+          example:
+            clientId: "kv_client_123"
+            clientSecret: "kv_secret_abc"
+            retailer: "myshop"
+        config:
+          type: object
+          nullable: true
+          description: Optional connector-specific configuration flags
+          additionalProperties: true
+          example:
+            syncProducts: true
+            syncOrders: true
+
+    KiotVietWebhookPayload:
+      type: object
+      description: Payload sent by KiotViet platform on events
+      properties:
+        Id:
+          type: string
+          description: External event ID for idempotency
+          example: "evt-12345"
+        Type:
+          type: string
+          description: Event type from KiotViet
+          example: "order.complete"
+        tenantId:
+          type: string
+          format: uuid
+          description: Insight Flow tenant ID embedded in webhook payload by KiotViet configuration
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        Notifications:
+          type: array
+          nullable: true
+          items:
+            type: object
+            additionalProperties: true
+      additionalProperties: true
+
+    # --- Responses ---
+    ConnectorConfigResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        tenantId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        connectorType:
+          type: string
+          enum: [KIOTVIET, SAPO, HARAVAN]
+          example: "KIOTVIET"
+        name:
+          type: string
+          example: "My KiotViet Store"
+        status:
+          type: string
+          enum: [active, inactive, error]
+          example: "active"
+        lastSyncAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-05-24T06:00:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-01T08:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T06:00:00Z"
+
+    TriggerSyncResult:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          description: Sync job ID for polling
+          example: "e5f6a7b8-c9d0-1234-efab-345678901234"
+        status:
+          type: string
+          enum: [queued]
+          example: "queued"
+        message:
+          type: string
+          example: "Full sync triggered asynchronously"
+
+    SyncJobResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "e5f6a7b8-c9d0-1234-efab-345678901234"
+        tenantId:
+          type: string
+          format: uuid
+        connectorConfigId:
+          type: string
+          format: uuid
+        entityType:
+          type: string
+          nullable: true
+          description: Type of entity being synced (e.g. products, orders, inventory)
+          example: "products"
+        syncType:
+          type: string
+          enum: [WEBHOOK, INCREMENTAL, FULL_RECONCILIATION]
+          example: "FULL_RECONCILIATION"
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, SUCCESS, FAILED, PARTIAL]
+          example: "SUCCESS"
+        recordsProcessed:
+          type: integer
+          example: 342
+        recordsFailed:
+          type: integer
+          example: 0
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-05-24T06:00:05Z"
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-05-24T06:02:45Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T06:00:00Z"
+
+    # --- Paginated wrapper ---
+    PagedSyncJobResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncJobResponse'
+        page:
+          $ref: '#/components/schemas/PageMeta'
+
+    PageMeta:
+      type: object
+      properties:
+        number:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          example: 15
+        totalPages:
+          type: integer
+          example: 1
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://insightflow.ai/errors/not-found"
+        title:
+          type: string
+          example: "Resource Not Found"
+        status:
+          type: integer
+          example: 404
+        detail:
+          type: string
+          example: "No active KiotViet connector found for tenantId"
+        instance:
+          type: string
+          format: uri
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        errors:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Conflict:
+      description: Connector of this type already exists for the tenant
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Missing or invalid authentication headers
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'

@@ -6,9 +6,10 @@ import com.insightflow.sales.dto.response.SalesOrderResponse;
 import com.insightflow.sales.entity.Customer;
 import com.insightflow.sales.entity.SalesOrder;
 import com.insightflow.sales.entity.SalesOrderItem;
-import com.insightflow.sales.event.OrderCompletedEvent;
-import com.insightflow.sales.exception.OrderStateException;
-import com.insightflow.sales.exception.ResourceNotFoundException;
+import com.insightflow.common.events.sales.OrderCompletedEvent;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
 import com.insightflow.sales.mapper.SalesOrderMapper;
 import com.insightflow.sales.repository.CustomerRepository;
 import com.insightflow.sales.repository.SalesOrderRepository;
@@ -47,7 +48,7 @@ public class OrderService {
 
         if (request.getCustomerId() != null) {
             Customer customer = customerRepository.findByTenantIdAndId(tenantId, request.getCustomerId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer", request.getCustomerId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + request.getCustomerId()));
             order.setCustomer(customer);
         }
 
@@ -71,10 +72,10 @@ public class OrderService {
     @Transactional
     public SalesOrderResponse completeOrder(UUID orderId, UUID tenantId) {
         SalesOrder order = orderRepository.findByTenantIdAndId(tenantId, orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("SalesOrder", orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("SalesOrder not found: " + orderId));
 
         if (!"pending".equals(order.getStatus())) {
-            throw new OrderStateException("Order " + orderId + " is already " + order.getStatus());
+            throw new BusinessException(ErrorCode.CONFLICT, "Order " + orderId + " is already " + order.getStatus());
         }
 
         order.setStatus("completed");
@@ -102,7 +103,7 @@ public class OrderService {
     public SalesOrderResponse getOrderById(UUID orderId, UUID tenantId) {
         return orderRepository.findByTenantIdAndId(tenantId, orderId)
                 .map(orderMapper::toResponse)
-                .orElseThrow(() -> new ResourceNotFoundException("SalesOrder", orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("SalesOrder not found: " + orderId));
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
@@ -134,29 +135,30 @@ public class OrderService {
     }
 
     private void publishOrderCompleted(SalesOrder order) {
-        List<OrderCompletedEvent.OrderItem> eventItems = order.getItems().stream()
-                .map(i -> OrderCompletedEvent.OrderItem.builder()
-                        .variantId(i.getVariantId())
+        List<OrderCompletedEvent.OrderItemPayload> eventItems = order.getItems().stream()
+                .map(i -> OrderCompletedEvent.OrderItemPayload.builder()
+                        .variantId(i.getVariantId().toString())
+                        .sku(null)
                         .quantity(i.getQuantity())
                         .unitPrice(i.getUnitPrice())
+                        .totalPrice(i.getLineTotal())
                         .build())
                 .toList();
 
         OrderCompletedEvent event = OrderCompletedEvent.builder()
-                .eventId(UUID.randomUUID())
-                .eventType(OrderCompletedEvent.TYPE)
-                .tenantId(order.getTenantId())
-                .orderId(order.getId())
+                .eventId(UUID.randomUUID().toString())
+                .eventType("sales.order.completed")
+                .tenantId(order.getTenantId().toString())
+                .orderId(order.getId().toString())
                 .orderNumber(order.getOrderNumber())
-                .locationId(order.getLocationId())
-                .customerId(order.getCustomer() != null ? order.getCustomer().getId() : null)
-                .channel(order.getChannel())
+                .customerId(order.getCustomer() != null ? order.getCustomer().getId().toString() : null)
                 .totalAmount(order.getTotalAmount())
+                .currency("VND")
                 .items(eventItems)
                 .occurredAt(Instant.now())
                 .build();
 
-        kafkaTemplate.send(OrderCompletedEvent.TOPIC, order.getTenantId().toString(), event)
+        kafkaTemplate.send("sales.order.completed", order.getTenantId().toString(), event)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Failed to publish OrderCompletedEvent orderId={}: {}",

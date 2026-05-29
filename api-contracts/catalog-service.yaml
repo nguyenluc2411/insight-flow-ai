@@ -1,0 +1,1074 @@
+openapi: "3.1.0"
+info:
+  title: Catalog Service API
+  description: |
+    Product catalog, variant management, location management, and inventory tracking
+    for Insight Flow AI multi-tenant fashion retail.
+
+    ## Endpoints Overview
+    - **Products**: CRUD for products and their variants (SKU-based)
+    - **Categories**: Read-only list with active product count
+    - **Locations**: Store/warehouse location management
+    - **Inventory**: Stock levels, movement history, and summary dashboard data
+
+    ## Tenant Isolation
+    All endpoints require `X-Tenant-Id` set by the API Gateway after JWT validation.
+    Every query is scoped to the tenant — cross-tenant data access is not possible.
+
+    ## Kafka Events Published
+    - `catalog.inventory.updated` — emitted on every inventory movement (POST /inventory/movements)
+  version: "1.0.0"
+  contact:
+    name: Insight Flow AI
+    email: dev@insightflow.ai
+
+servers:
+  - url: http://localhost:8080/api/v1/catalog
+    description: Via API Gateway (dev)
+  - url: http://localhost:8082/api/v1/catalog
+    description: Direct (dev)
+
+paths:
+  # -----------------------------------------------------------------------
+  # Products
+  # -----------------------------------------------------------------------
+  /products:
+    get:
+      operationId: listProducts
+      summary: List products (paginated)
+      description: Returns a paginated list of products for the authenticated tenant.
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProductResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createProduct
+      summary: Create product
+      description: Creates a new product. The `skuRoot` must be unique within the tenant.
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /products/{id}:
+    get:
+      operationId: getProductById
+      summary: Get product by ID
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      operationId: updateProduct
+      summary: Update product
+      description: Partial update — only provided fields are changed. Use `status` to activate/deactivate.
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      operationId: deleteProduct
+      summary: Soft-delete product
+      description: Sets product status to `inactive`. Does not physically remove the record.
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204':
+          description: Product deactivated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /products/{productId}/variants:
+    get:
+      operationId: listVariants
+      summary: List variants for a product
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - in: path
+          name: productId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Parent product ID
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      responses:
+        '200':
+          description: Variant list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VariantResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createVariant
+      summary: Create product variant
+      description: Adds a new SKU variant to an existing product. `sku` must be unique within the tenant.
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - in: path
+          name: productId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Parent product ID
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVariantRequest'
+      responses:
+        '201':
+          description: Variant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Categories
+  # -----------------------------------------------------------------------
+  /categories:
+    get:
+      operationId: listCategories
+      summary: List categories with product count
+      description: Returns a flat list of categories with the count of active products per category, ordered by name.
+      tags: [Categories]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategorySummaryItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Locations
+  # -----------------------------------------------------------------------
+  /locations:
+    get:
+      operationId: listLocations
+      summary: List active locations
+      description: Returns all active store and warehouse locations for the tenant.
+      tags: [Locations]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Location list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LocationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createLocation
+      summary: Create location
+      description: Creates a new store or warehouse location.
+      tags: [Locations]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+      responses:
+        '201':
+          description: Location created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Inventory
+  # -----------------------------------------------------------------------
+  /inventory/summary:
+    get:
+      operationId: getInventorySummary
+      summary: Inventory summary dashboard data
+      description: |
+        Returns high-level inventory snapshot:
+        - `totalSKU`: count of active variants
+        - `totalQuantity`: sum of `quantity_on_hand` across all locations
+        - `lowStockCount`: count of (variant × location) positions at or below the reorder threshold
+      tags: [Inventory]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Inventory summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventorySummaryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /inventory/variants/{variantId}:
+    get:
+      operationId: getInventoryLevelsByVariant
+      summary: Get inventory levels by variant
+      description: Returns stock levels for the specified variant across all locations.
+      tags: [Inventory]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - in: path
+          name: variantId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Variant ID
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+      responses:
+        '200':
+          description: Inventory levels per location
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryLevelResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /inventory/movements:
+    post:
+      operationId: recordInventoryMovement
+      summary: Record inventory movement
+      description: |
+        Appends a movement record and atomically updates the inventory level for the
+        (variant, location) pair. Publishes `catalog.inventory.updated` to Kafka after commit.
+
+        Movement types: `PURCHASE`, `SALE`, `RETURN`, `ADJUSTMENT`, `TRANSFER_IN`, `TRANSFER_OUT`
+
+        Positive `quantityChange` = stock in; negative = stock out.
+      tags: [Inventory]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordMovementRequest'
+      responses:
+        '201':
+          description: Movement recorded and inventory level updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryMovementResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /inventory/movements/{variantId}:
+    get:
+      operationId: getMovementHistory
+      summary: Get movement history by variant
+      description: Returns paginated movement history for the specified variant, ordered by `createdAt` DESC.
+      tags: [Inventory]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - in: path
+          name: variantId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Variant ID
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        - $ref: '#/components/parameters/PageParam'
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+          description: Items per page (default 50)
+      responses:
+        '200':
+          description: Paginated movement history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedInventoryMovementResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    TenantIdHeader:
+      in: header
+      name: X-Tenant-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Tenant UUID — injected by API Gateway after JWT validation
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UserIdHeader:
+      in: header
+      name: X-User-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Authenticated user UUID — injected by API Gateway
+      example: "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Resource UUID
+      example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+      description: Zero-based page number
+
+    SizeParam:
+      in: query
+      name: size
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      description: Items per page (default 20, max 100)
+
+    SortParam:
+      in: query
+      name: sort
+      schema:
+        type: string
+        example: "createdAt,desc"
+      description: "Sort expression: `field,direction` (e.g. `createdAt,desc`)"
+
+  schemas:
+    # --- Requests ---
+    CreateProductRequest:
+      type: object
+      required: [skuRoot, name]
+      properties:
+        skuRoot:
+          type: string
+          maxLength: 100
+          description: Base SKU root identifier — must be unique within the tenant
+          example: "SHIRT-POLO-001"
+        name:
+          type: string
+          maxLength: 500
+          example: "Classic Polo Shirt"
+        description:
+          type: string
+          nullable: true
+          example: "Premium cotton polo, regular fit"
+        categoryId:
+          type: string
+          format: uuid
+          nullable: true
+          example: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+        brand:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "InsightWear"
+        season:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: "SS2025"
+        gender:
+          type: string
+          maxLength: 20
+          nullable: true
+          enum: [male, female, unisex, kids]
+          example: "male"
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ["polo", "cotton", "classic"]
+
+    UpdateProductRequest:
+      type: object
+      description: All fields are optional — only provided fields are updated.
+      properties:
+        name:
+          type: string
+          maxLength: 500
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        categoryId:
+          type: string
+          format: uuid
+          nullable: true
+        brand:
+          type: string
+          maxLength: 255
+          nullable: true
+        season:
+          type: string
+          maxLength: 50
+          nullable: true
+        gender:
+          type: string
+          maxLength: 20
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        status:
+          type: string
+          maxLength: 20
+          enum: [active, inactive]
+          nullable: true
+          example: "active"
+
+    CreateVariantRequest:
+      type: object
+      required: [sku, sellingPrice]
+      properties:
+        sku:
+          type: string
+          maxLength: 150
+          description: Full SKU code — must be unique within the tenant
+          example: "SHIRT-POLO-001-L-RED"
+        barcode:
+          type: string
+          maxLength: 100
+          nullable: true
+          example: "8938505919123"
+        size:
+          type: string
+          maxLength: 20
+          nullable: true
+          example: "L"
+        color:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: "Red"
+        colorHex:
+          type: string
+          maxLength: 7
+          nullable: true
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#FF0000"
+        costPrice:
+          type: string
+          format: decimal
+          nullable: true
+          description: Cost price as decimal string (avoid float precision issues)
+          example: "85000.00"
+        sellingPrice:
+          type: string
+          format: decimal
+          description: Selling price as decimal string
+          example: "199000.00"
+        compareAtPrice:
+          type: string
+          format: decimal
+          nullable: true
+          description: Original/compare-at price for discount display
+          example: "250000.00"
+        status:
+          type: string
+          maxLength: 20
+          enum: [active, inactive]
+          nullable: true
+          example: "active"
+
+    CreateLocationRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: "Hanoi Flagship Store"
+        type:
+          type: string
+          enum: [store, warehouse]
+          example: "store"
+        address:
+          type: string
+          nullable: true
+          example: "123 Hang Bong Street, Hoan Kiem"
+        city:
+          type: string
+          maxLength: 100
+          nullable: true
+          example: "Hanoi"
+
+    RecordMovementRequest:
+      type: object
+      required: [variantId, locationId, movementType, quantityChange]
+      properties:
+        variantId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        locationId:
+          type: string
+          format: uuid
+          example: "d4e5f6a7-b8c9-0123-defa-234567890123"
+        movementType:
+          type: string
+          maxLength: 30
+          enum: [PURCHASE, SALE, RETURN, ADJUSTMENT, TRANSFER_IN, TRANSFER_OUT]
+          example: "PURCHASE"
+        quantityChange:
+          type: integer
+          description: Positive = stock in, negative = stock out
+          example: 50
+        referenceType:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Optional reference entity type (e.g. ORDER, PURCHASE_ORDER)
+          example: "PURCHASE_ORDER"
+        referenceId:
+          type: string
+          format: uuid
+          nullable: true
+          example: "e5f6a7b8-c9d0-1234-efab-345678901234"
+        notes:
+          type: string
+          nullable: true
+          example: "Initial stock intake"
+
+    # --- Responses ---
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        tenantId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        skuRoot:
+          type: string
+          example: "SHIRT-POLO-001"
+        name:
+          type: string
+          example: "Classic Polo Shirt"
+        description:
+          type: string
+          nullable: true
+        categoryId:
+          type: string
+          format: uuid
+          nullable: true
+        brand:
+          type: string
+          nullable: true
+          example: "InsightWear"
+        season:
+          type: string
+          nullable: true
+          example: "SS2025"
+        gender:
+          type: string
+          nullable: true
+          example: "male"
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive]
+          example: "active"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+
+    VariantResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        tenantId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        sku:
+          type: string
+          example: "SHIRT-POLO-001-L-RED"
+        barcode:
+          type: string
+          nullable: true
+          example: "8938505919123"
+        size:
+          type: string
+          nullable: true
+          example: "L"
+        color:
+          type: string
+          nullable: true
+          example: "Red"
+        colorHex:
+          type: string
+          nullable: true
+          example: "#FF0000"
+        costPrice:
+          type: string
+          format: decimal
+          nullable: true
+          example: "85000.00"
+        sellingPrice:
+          type: string
+          format: decimal
+          example: "199000.00"
+        compareAtPrice:
+          type: string
+          format: decimal
+          nullable: true
+          example: "250000.00"
+        status:
+          type: string
+          enum: [active, inactive]
+          example: "active"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+
+    CategorySummaryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+        name:
+          type: string
+          example: "Shirts"
+        productCount:
+          type: integer
+          format: int64
+          description: Number of active products in this category
+          example: 42
+
+    LocationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "d4e5f6a7-b8c9-0123-defa-234567890123"
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Hanoi Flagship Store"
+        type:
+          type: string
+          enum: [store, warehouse]
+          example: "store"
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+          example: "Hanoi"
+        active:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+
+    InventorySummaryResponse:
+      type: object
+      properties:
+        totalSKU:
+          type: integer
+          format: int64
+          description: Count of active variants
+          example: 245
+        totalQuantity:
+          type: integer
+          format: int64
+          description: Sum of quantity_on_hand across all locations
+          example: 3820
+        lowStockCount:
+          type: integer
+          format: int64
+          description: Count of (variant x location) positions at or below reorder threshold
+          example: 17
+
+    InventoryLevelResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "e5f6a7b8-c9d0-1234-efab-345678901234"
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        locationName:
+          type: string
+          example: "Hanoi Flagship Store"
+        quantityOnHand:
+          type: integer
+          example: 25
+        quantityReserved:
+          type: integer
+          example: 3
+        quantityAvailable:
+          type: integer
+          description: quantityOnHand - quantityReserved
+          example: 22
+        reorderPoint:
+          type: integer
+          nullable: true
+          description: Reorder threshold; null if not configured
+          example: 10
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+
+    InventoryMovementResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1001
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        movementType:
+          type: string
+          enum: [PURCHASE, SALE, RETURN, ADJUSTMENT, TRANSFER_IN, TRANSFER_OUT]
+          example: "PURCHASE"
+        quantityChange:
+          type: integer
+          example: 50
+        referenceType:
+          type: string
+          nullable: true
+          example: "PURCHASE_ORDER"
+        referenceId:
+          type: string
+          format: uuid
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+
+    # --- Paginated wrappers ---
+    PagedProductResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResponse'
+        page:
+          $ref: '#/components/schemas/PageMeta'
+
+    PagedInventoryMovementResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryMovementResponse'
+        page:
+          $ref: '#/components/schemas/PageMeta'
+
+    PageMeta:
+      type: object
+      properties:
+        number:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          example: 145
+        totalPages:
+          type: integer
+          example: 8
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://insightflow.ai/errors/validation"
+        title:
+          type: string
+          example: "Validation Failed"
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: "Field 'name' must not be blank"
+        instance:
+          type: string
+          format: uri
+          example: "/api/v1/catalog/products"
+        correlationId:
+          type: string
+          example: "abc-123-def"
+        timestamp:
+          type: string
+          format: date-time
+        errors:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Conflict:
+      description: Resource already exists (e.g. duplicate SKU)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Missing or invalid authentication headers
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'

@@ -1,0 +1,485 @@
+openapi: "3.1.0"
+info:
+  title: Notification Service API
+  description: |
+    In-app notification feed and per-tenant notification preference management
+    for Insight Flow AI.
+
+    ## Notification Types
+    | Type | Description |
+    |---|---|
+    | `LOW_STOCK` | Inventory position dropped to or below the reorder threshold |
+    | `RECOMMENDATION` | New ML recommendation generated (CLEARANCE / RESTOCK / PROMOTE) |
+    | `FORECAST` | Forecast update available for one or more variants |
+
+    ## Delivery Channels
+    - `IN_APP`: stored in database and surfaced via this API
+    - `EMAIL`: delivered to the configured email address (preference-controlled)
+
+    ## Event-Driven Ingestion
+    Notifications are created automatically by Kafka consumers:
+    - `catalog.inventory.updated` → triggers LOW_STOCK notifications
+    - `ml.recommendations.generated` → triggers RECOMMENDATION notifications
+    - `ml.forecast.completed` → triggers FORECAST notifications
+
+    Consumers are idempotent — duplicate events are deduplicated by `event_id`.
+
+    ## Tenant Isolation
+    All endpoints require `X-Tenant-Id` and `X-User-Id` set by the API Gateway.
+  version: "1.0.0"
+  contact:
+    name: Insight Flow AI
+    email: dev@insightflow.ai
+
+servers:
+  - url: http://localhost:8080/api/v1/notifications
+    description: Via API Gateway (dev)
+  - url: http://localhost:8091/api/v1/notifications
+    description: Direct (dev)
+
+paths:
+  # -----------------------------------------------------------------------
+  # Notification Feed
+  # -----------------------------------------------------------------------
+  /:
+    get:
+      operationId: listNotifications
+      summary: List notifications (paginated)
+      description: |
+        Returns paginated notification feed for the tenant, ordered by `createdAt` DESC.
+        Use `unreadOnly=true` to filter unread items.
+        Use `type` to filter by notification type (`LOW_STOCK`, `RECOMMENDATION`, `FORECAST`).
+      tags: [Notifications]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - in: query
+          name: unreadOnly
+          required: false
+          schema:
+            type: boolean
+          description: When true, only unread notifications are returned
+          example: true
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum: [LOW_STOCK, RECOMMENDATION, FORECAST]
+          description: Filter by notification type
+          example: "LOW_STOCK"
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          description: Paginated notification list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedNotificationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /unread-count:
+    get:
+      operationId: getUnreadCount
+      summary: Unread notification count
+      description: Returns the count of unread notifications for the tenant. Suitable for badge display.
+      tags: [Notifications]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCountResponse'
+              example:
+                count: 5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /{id}/read:
+    put:
+      operationId: markNotificationRead
+      summary: Mark notification as read
+      description: Marks a single notification as read. Returns the updated notification.
+      tags: [Notifications]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Updated notification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /read-all:
+    put:
+      operationId: markAllNotificationsRead
+      summary: Mark all notifications as read
+      description: Marks all unread notifications for the tenant as read. Returns 200 with empty body.
+      tags: [Notifications]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: All notifications marked as read
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Notification Preferences
+  # -----------------------------------------------------------------------
+  /preferences:
+    get:
+      operationId: getNotificationPreferences
+      summary: Get notification preferences for tenant
+      description: Returns all configured notification channel preferences for the tenant.
+      tags: [Notification Preferences]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: List of preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PreferenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      operationId: upsertNotificationPreference
+      summary: Upsert notification preference
+      description: |
+        Enable or disable a delivery channel (`EMAIL` | `IN_APP`) for a given event type
+        (`LOW_STOCK` | `RECOMMENDATION` | `FORECAST`).
+
+        This is an upsert — if the preference already exists it is updated; otherwise it is created.
+        Send a **single JSON object**, NOT an array.
+
+        Optional `threshold` allows type-specific configuration, e.g.:
+        ```json
+        { "stockLevel": 10 }
+        ```
+      tags: [Notification Preferences]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertPreferenceRequest'
+            examples:
+              EnableLowStockInApp:
+                summary: Enable low-stock in-app alert with threshold
+                value:
+                  eventType: "LOW_STOCK"
+                  channel: "IN_APP"
+                  enabled: true
+                  threshold:
+                    stockLevel: 10
+              DisableRecommendationEmail:
+                summary: Disable recommendation email
+                value:
+                  eventType: "RECOMMENDATION"
+                  channel: "EMAIL"
+                  enabled: false
+      responses:
+        '200':
+          description: Saved preference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferenceResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    TenantIdHeader:
+      in: header
+      name: X-Tenant-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Tenant UUID — injected by API Gateway after JWT validation
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UserIdHeader:
+      in: header
+      name: X-User-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Authenticated user UUID — injected by API Gateway
+      example: "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Notification UUID
+      example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+      description: Zero-based page number
+
+    SizeParam:
+      in: query
+      name: size
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      description: Items per page (default 20, max 100)
+
+  schemas:
+    # --- Requests ---
+    UpsertPreferenceRequest:
+      type: object
+      required: [eventType, channel]
+      description: Single notification preference update. Send ONE object, NOT an array.
+      properties:
+        eventType:
+          type: string
+          enum: [LOW_STOCK, RECOMMENDATION, FORECAST]
+          description: Event type to configure
+          example: "LOW_STOCK"
+        channel:
+          type: string
+          enum: [IN_APP, EMAIL]
+          description: Delivery channel
+          example: "IN_APP"
+        enabled:
+          type: boolean
+          default: true
+          description: Enable or disable this preference
+          example: true
+        threshold:
+          type: object
+          nullable: true
+          description: Optional threshold configuration (e.g. {"stockLevel": 10})
+          additionalProperties: true
+          example:
+            stockLevel: 10
+
+    # --- Responses ---
+    NotificationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        tenantId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        type:
+          type: string
+          enum: [LOW_STOCK, RECOMMENDATION, FORECAST]
+          example: "LOW_STOCK"
+        channel:
+          type: string
+          enum: [IN_APP, EMAIL]
+          example: "IN_APP"
+        title:
+          type: string
+          example: "Low Stock Alert: SHIRT-POLO-001-L-RED"
+        body:
+          type: string
+          example: "Variant SHIRT-POLO-001-L-RED at Hanoi Flagship has only 5 units remaining (threshold: 10)."
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Contextual data for the notification (e.g. variantId, locationId)
+          example:
+            variantId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+            locationId: "d4e5f6a7-b8c9-0123-defa-234567890123"
+            currentStock: 5
+        isRead:
+          type: boolean
+          example: false
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-05-24T08:00:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+
+    UnreadCountResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          format: int64
+          description: Count of unread notifications for the tenant
+          example: 5
+
+    PreferenceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+        tenantId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum: [LOW_STOCK, RECOMMENDATION, FORECAST]
+          example: "LOW_STOCK"
+        channel:
+          type: string
+          enum: [IN_APP, EMAIL]
+          example: "IN_APP"
+        enabled:
+          type: boolean
+          example: true
+        threshold:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            stockLevel: 10
+
+    # --- Paginated wrapper ---
+    PagedNotificationResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationResponse'
+        page:
+          $ref: '#/components/schemas/PageMeta'
+
+    PageMeta:
+      type: object
+      properties:
+        number:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          example: 42
+        totalPages:
+          type: integer
+          example: 3
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://insightflow.ai/errors/not-found"
+        title:
+          type: string
+          example: "Resource Not Found"
+        status:
+          type: integer
+          example: 404
+        detail:
+          type: string
+          example: "Notification with id abc-123 not found"
+        instance:
+          type: string
+          format: uri
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        errors:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Missing or invalid authentication headers
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'

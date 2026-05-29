@@ -13,4 +13,7 @@ public interface InventoryMovementRepository extends JpaRepository<InventoryMove
 
     Page<InventoryMovement> findByTenantIdAndVariantIdOrderByCreatedAtDesc(
             UUID tenantId, UUID variantId, Pageable pageable);
+
+    boolean existsByTenantIdAndReferenceTypeAndReferenceIdAndVariantId(
+            UUID tenantId, String referenceType, UUID referenceId, UUID variantId);
 }

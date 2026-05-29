@@ -102,7 +102,7 @@ Dự án chia làm 2 repo riêng biệt:
 
 | Messaging | Apache Kafka |
 
-| Database | PostgreSQL 16 (DB-per-service via schema) |
+| Database | PostgreSQL 16 (database-per-service: 6 databases) |
 
 | Cache | Redis 7 |
 
@@ -360,11 +360,15 @@ insight-flow-ai/
 
 
 
-\- Mỗi service 1 schema PostgreSQL riêng (không phải DB instance riêng cho MVP)
+\- Mỗi service có 1 PostgreSQL database riêng (database-per-service pattern)
 
-\- Naming convention: `{service\_name}\_db` schema, ví dụ `auth\_db`, `catalog\_db`
+\- 6 databases: `insightflow\_auth`, `insightflow\_catalog`, `insightflow\_sales`, `insightflow\_integration`, `insightflow\_notification`, `insightflow\_ml`
 
-\- Migration: Flyway cho mỗi service
+\- Khởi tạo tự động qua `infrastructure/postgres/init.sql` khi Docker container start lần đầu
+
+\- Mỗi DB dùng schema riêng cùng tên: `auth\_db`, `catalog\_db`, etc. (Flyway tự tạo schema)
+
+\- Migration: Flyway cho mỗi service (chạy trong database riêng, KHÔNG cross-database)
 
 \- Mọi bảng nghiệp vụ có: `id UUID`, `tenant\_id UUID`, `created\_at`, `updated\_at`
 
@@ -496,23 +500,77 @@ integration-services/integration-service/
 
 \### Done ✅
 
-\- `discovery-server` (Eureka)
+
+
+\*\*Platform Services\*\*
+
+\- `discovery-server` (Eureka registry)
 
 \- `config-server` (Spring Cloud Config)
 
-\- `api-gateway` (filters + Swagger aggregator + JWT + rate limit + CORS)
+\- `api-gateway` (filters: CorrelationId, Logging, RateLimit, JWT validation, TenantContext; Swagger aggregator; 6-header inject; RemoveRequestHeader=Authorization; Bearer Swagger UI)
 
-\- `auth-service` (JWT, multi-tenancy, RBAC)
 
-\- `catalog-service` (products, variants, inventory, Kafka producer)
 
-\- `sales-service` (orders, customers, suppliers, Kafka producer)
+\*\*Business Services\*\*
 
-\- `ml-service` (Python FastAPI, Prophet forecast, rule-based recommendation, Kafka consumer)
+\- `auth-service` (tenant onboarding, login, JWT issuance/refresh/logout, RBAC, Flyway V1-V5)
 
-\- Docker Compose: Kafka, Redis, PostgreSQL, Kafka UI, pgAdmin
+\- `catalog-service` (products, variants, categories, locations, inventory movements/levels/summary, Kafka producer, soft delete, C7 frontend endpoints)
 
-\- E2E test 9/9 PASS (auth → catalog → sales → Kafka → ml)
+\- `sales-service` (orders, customers, suppliers, Kafka producer, order state machine, materialized view daily\_sales\_summary)
+
+
+
+\*\*Intelligence Services\*\*
+
+\- `ml-service` (Python FastAPI, Prophet forecast + cold-start fallback, rule-based recommendation, Kafka consumer, per-tenant model storage)
+
+
+
+\*\*Integration Services\*\*
+
+\- `integration-service` (plugin framework, KiotViet connector full, HMAC webhook, Jasypt credential vault, Resilience4j rate limiter, scheduled sync, Kafka producer)
+
+
+
+\*\*Engagement Services\*\*
+
+\- `dashboard-bff` (4 aggregate endpoints, parallel Mono.zip, Kafka consumer ml events, WebClient lb://)
+
+\- `notification-service` (in-app notifications, preferences, Kafka consumer 3 topics, email wired pending auth email endpoint)
+
+
+
+\*\*Shared Core\*\*
+
+\- `common-security` (UserContext, @CurrentUser, UserContextFilter, InternalHeaders)
+
+\- `common-events` (Kafka event DTOs for all topics)
+
+\- `common-web` (GlobalExceptionHandler, RFC 7807 Problem Details)
+
+
+
+\*\*Infrastructure\*\*
+
+\- Docker Compose: Postgres (5433), Redis (6379), Kafka (9092), Zookeeper, Kafka UI (8085), pgAdmin (5050), MailHog (1025/8025)
+
+\- `.env` / `.env.example` pattern — no hardcoded credentials
+
+\- All services read config via Spring Cloud Config + env vars
+
+
+
+\*\*Cross-cutting\*\*
+
+\- Refactor: @CurrentUser thay @RequestHeader trên 6 services (auth, catalog, sales, bff, integration, notification)
+
+\- Refactor: Gateway inject 6 headers, RemoveRequestHeader=Authorization, Bearer Swagger UI
+
+\- E2E test: 9/9 PASS (auth → catalog → sales → Kafka → ml), 39/39 unit tests PASS
+
+\- Bug fixes: soft delete filter, webhook 404 security, integration jobs 404, notification OpenAPI
 
 
 
@@ -524,11 +582,45 @@ integration-services/integration-service/
 
 \### Next Up 📋
 
-\- `dashboard-bff` (BFF aggregate APIs cho frontend repo)
+\- [ ] sales-service: `daily\_sales\_summary` REFRESH job (pg\_cron hoặc Spring scheduler)
 
-\- `notification-service` (Email/Zalo/in-app alerts)
+\- [ ] catalog-service: Variant full CRUD (PUT/DELETE/GET by id)
 
-\- `integration-service` (KiotViet connector — plugin-based)
+\- [ ] scripts/: build-all.ps1, run-local.ps1, export-openapi.ps1
+
+\- [ ] observability: Prometheus scrape config, Grafana dashboards (inventory health, order volume, ML accuracy), Loki log aggregation
+
+\- [ ] Service-level JWT/tenant validation (hiện rely on gateway only)
+
+\- [ ] integration-service: Sapo connector implementation (framework đã có)
+
+\- [ ] integration-service: Haravan connector implementation
+
+\- [ ] Frontend repo: khởi tạo Next.js, pull OpenAPI specs từ `api-contracts/`, implement UI
+
+\### Recently Done ✅ (2026-05-27)
+
+\- [x] Database-per-service: tách 6 databases riêng (`insightflow\_auth/catalog/sales/integration/notification/ml`)
+
+\- [x] infrastructure/postgres/init.sql: tự động tạo 6 databases khi Docker start
+
+\- [x] docker-compose.yml: mount init.sql vào PostgreSQL container
+
+\- [x] Tất cả service application.yml: đổi từ `POSTGRES\_DB` chung → service-specific `*\_DB\_NAME`
+
+\- [x] .env + .env.example: cập nhật với per-service DB name vars
+
+
+
+\### Recently Done ✅ (2026-05-24/25)
+
+\- [x] config-repo: 16 config files cho tất cả services + config-server wired
+
+\- [x] api-contracts: 7 OpenAPI 3.1 YAML specs (tất cả services)
+
+\- [x] ml-service: training trigger endpoint (POST /train, GET /train/{id}) + multi-item order bug fix
+
+\- [x] catalog-service: Kafka consumer `sales.order.completed` → auto-deduct inventory
 
 
 

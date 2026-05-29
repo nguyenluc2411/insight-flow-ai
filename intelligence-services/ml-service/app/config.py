@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DB_HOST: str = "localhost"
     DB_PORT: int = 5433
-    DB_NAME: str = "insightflow"
+    DB_NAME: str = "insightflow_ml"
     DB_USERNAME: str = "postgres"
     DB_PASSWORD: str = "postgres"
     DB_SCHEMA: str = "ml_service_db"

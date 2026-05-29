@@ -1,0 +1,598 @@
+openapi: "3.1.0"
+info:
+  title: ML Service API
+  description: |
+    Demand forecasting, inventory recommendations, and model training for
+    Insight Flow AI. Implemented in Python (FastAPI).
+
+    ## Architecture Notes
+    - This service is **stateless for predictions** — trained models are loaded from disk/DB
+    - Training data arrives via **Kafka** (`sales.order.completed` events from sales-service)
+    - Models are trained per-variant using **Facebook Prophet**
+    - Fallback strategy when insufficient data: category average → moving average → no prediction
+
+    ## Authentication
+    All endpoints require the `X-Tenant-Id` header injected by the API Gateway.
+    There is no `X-User-Id` header on this service (ML operations are tenant-level, not user-level).
+
+    ## Confidence Levels (forecast)
+    | Level | Meaning |
+    |---|---|
+    | `high` | ≥ 30 training data points, variant-level model |
+    | `medium` | 10–29 data points, variant or category fallback |
+    | `low` | < 10 data points, moving average only |
+    | `none` | No data available — predictions field is empty |
+
+    ## Forecast Basis
+    | Basis | Description |
+    |---|---|
+    | `variant` | Prophet model trained on this specific variant's sales |
+    | `category` | Model trained on the variant's category aggregate |
+    | `moving_average` | Simple 7-day moving average as last resort |
+
+    ## Recommendation Actions
+    | Action | Description |
+    |---|---|
+    | `CLEARANCE` | Stock is ageing — recommend discount to accelerate sell-through |
+    | `RESTOCK` | Stock is running low relative to predicted demand |
+    | `PROMOTE` | Good velocity but low visibility — recommend promotion |
+    | `OK` | No action needed |
+  version: "1.0.0"
+  contact:
+    name: Insight Flow AI
+    email: dev@insightflow.ai
+
+servers:
+  - url: http://localhost:8080/api/v1/ml
+    description: Via API Gateway (dev)
+  - url: http://localhost:8000/api/v1/ml
+    description: Direct (dev — Python FastAPI)
+
+paths:
+  # -----------------------------------------------------------------------
+  # Forecast
+  # -----------------------------------------------------------------------
+  /forecast/{variant_id}:
+    get:
+      operationId: getForecast
+      summary: Get demand forecast for a variant
+      description: |
+        Returns a day-by-day demand forecast for the specified variant over the requested horizon.
+        Uses the best available model: variant-level Prophet → category fallback → moving average.
+        The `confidence` and `basis` fields indicate data quality.
+      tags: [Forecast]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - in: path
+          name: variant_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Variant UUID to forecast
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            default: 30
+            minimum: 1
+            maximum: 90
+          description: Forecast horizon in days (default 30, max 90)
+          example: 30
+      responses:
+        '200':
+          description: Forecast response with day-by-day predictions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastResponse'
+              example:
+                variantId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                tenantId: "550e8400-e29b-41d4-a716-446655440000"
+                forecastDays: 30
+                confidence: "high"
+                basis: "variant"
+                predictions:
+                  - date: "2025-05-25T00:00:00Z"
+                    predicted: 3.2
+                    lowerBound: 1.8
+                    upperBound: 4.6
+                generatedAt: "2025-05-24T08:00:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /forecast/batch:
+    post:
+      operationId: getBatchForecast
+      summary: Get demand forecasts for multiple variants
+      description: |
+        Runs forecasts for a list of variant IDs in a single call. Optimized for
+        dashboard BFF use — reduces N+1 round trips. Returns results in the same order
+        as the input `variantIds` array.
+      tags: [Forecast]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchForecastRequest'
+            example:
+              variantIds:
+                - "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                - "c3d4e5f6-a7b8-9012-cdef-123456789012"
+              days: 30
+      responses:
+        '200':
+          description: List of forecast responses (one per variant ID)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ForecastResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Recommendations
+  # -----------------------------------------------------------------------
+  /recommendations:
+    get:
+      operationId: listRecommendations
+      summary: List inventory recommendations
+      description: |
+        Returns paginated ML-generated inventory recommendations for the tenant.
+        Filter by `action` and/or `priority` to narrow results.
+        Results are ordered by `createdAt` DESC (latest recommendations first).
+      tags: [Recommendation]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - in: query
+          name: action
+          required: false
+          schema:
+            type: string
+            enum: [CLEARANCE, RESTOCK, PROMOTE, OK]
+          description: Filter by recommendation action type
+          example: "CLEARANCE"
+        - in: query
+          name: priority
+          required: false
+          schema:
+            type: string
+            enum: [HIGH, MEDIUM, LOW]
+          description: Filter by priority level
+          example: "HIGH"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Zero-based page number
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Items per page (default 20, max 100)
+      responses:
+        '200':
+          description: Paginated recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedRecommendationResponse'
+              example:
+                items:
+                  - id: "d4e5f6a7-b8c9-0123-defa-234567890123"
+                    tenantId: "550e8400-e29b-41d4-a716-446655440000"
+                    variantId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                    action: "CLEARANCE"
+                    reason: "No movement in 45 days, stock age critical"
+                    priority: "HIGH"
+                    suggestedDiscountPct: 30.0
+                    stockAgeDays: 45
+                    currentStock: 80
+                    salesVelocity30d: 0.5
+                    createdAt: "2025-05-24T06:00:00Z"
+                page: 0
+                size: 20
+                total: 28
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /recommendations/refresh:
+    post:
+      operationId: refreshRecommendations
+      summary: Trigger recommendations refresh
+      description: |
+        Asynchronously regenerates all recommendations for the tenant.
+        Spawns a background job and returns immediately with `202`.
+        Use the returned `jobId` to poll for completion if needed.
+      tags: [Recommendation]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+      responses:
+        '202':
+          description: Refresh job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshJobResponse'
+              example:
+                jobId: "e5f6a7b8-c9d0-1234-efab-345678901234"
+                status: "PENDING"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -----------------------------------------------------------------------
+  # Training
+  # -----------------------------------------------------------------------
+  /train:
+    post:
+      operationId: triggerTraining
+      summary: Trigger Prophet model training for the tenant
+      description: |
+        Triggers model training for all variants of the tenant.
+        Requires a minimum number of sales data points accumulated via Kafka
+        (`sales.order.completed` events).
+
+        Returns `422` if the minimum data threshold has not been reached.
+        Returns `202` immediately on success; training runs in background.
+        Poll `GET /train/{job_id}` for status.
+      tags: [Training]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+      responses:
+        '202':
+          description: Training job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainJobResponse'
+              example:
+                jobId: "f7a8b9c0-d1e2-3456-fbcd-567890123456"
+                status: "PENDING"
+                dataPoints: 542
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Insufficient sales data to start training
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: "https://insightflow.ai/errors/insufficient-data"
+                title: "Insufficient Training Data"
+                status: 422
+                detail: "Cần tối thiểu 100 data points để train, hiện có 42. Hãy đợi thêm đơn hàng được sync qua Kafka."
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /train/{job_id}:
+    get:
+      operationId: getTrainingJobStatus
+      summary: Poll training job status
+      description: Returns the current status of a training job. Poll until status is `SUCCESS` or `FAILED`.
+      tags: [Training]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Training job UUID
+          example: "f7a8b9c0-d1e2-3456-fbcd-567890123456"
+      responses:
+        '200':
+          description: Training job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainJobResponse'
+              example:
+                jobId: "f7a8b9c0-d1e2-3456-fbcd-567890123456"
+                status: "SUCCESS"
+                variantsTrained: 87
+                dataPoints: 542
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    TenantIdHeader:
+      in: header
+      name: X-Tenant-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: |
+        Tenant UUID — injected by API Gateway after JWT validation.
+        Note: ml-service does not use X-User-Id (ML operations are tenant-scoped).
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+  schemas:
+    # --- Requests ---
+    BatchForecastRequest:
+      type: object
+      required: [variantIds]
+      properties:
+        variantIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+          description: List of variant UUIDs to forecast (max 50)
+          example:
+            - "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+            - "c3d4e5f6-a7b8-9012-cdef-123456789012"
+        days:
+          type: integer
+          default: 30
+          minimum: 1
+          maximum: 90
+          description: Forecast horizon in days (applied to all variants)
+          example: 30
+
+    # --- Responses ---
+    ForecastPoint:
+      type: object
+      description: Single day's forecast data point
+      properties:
+        date:
+          type: string
+          format: date-time
+          description: Forecast date (UTC midnight)
+          example: "2025-05-25T00:00:00Z"
+        predicted:
+          type: number
+          format: double
+          description: Point estimate of demand (units)
+          example: 3.2
+        lowerBound:
+          type: number
+          format: double
+          description: Lower bound of confidence interval (80%)
+          example: 1.8
+        upperBound:
+          type: number
+          format: double
+          description: Upper bound of confidence interval (80%)
+          example: 4.6
+
+    ForecastResponse:
+      type: object
+      properties:
+        variantId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        tenantId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        forecastDays:
+          type: integer
+          description: Number of days forecasted
+          example: 30
+        confidence:
+          type: string
+          enum: [high, medium, low, none]
+          description: Data quality indicator
+          example: "high"
+        basis:
+          type: string
+          enum: [variant, category, moving_average]
+          description: Model used to generate predictions
+          example: "variant"
+        predictions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForecastPoint'
+        generatedAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T08:00:00Z"
+
+    RecommendationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "d4e5f6a7-b8c9-0123-defa-234567890123"
+        tenantId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        action:
+          type: string
+          enum: [CLEARANCE, RESTOCK, PROMOTE, OK]
+          example: "CLEARANCE"
+        reason:
+          type: string
+          nullable: true
+          example: "No movement in 45 days, stock age critical"
+        priority:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+          example: "HIGH"
+        suggestedDiscountPct:
+          type: number
+          format: double
+          nullable: true
+          description: Suggested discount percentage for CLEARANCE actions
+          example: 30.0
+        suggestedRestockQty:
+          type: integer
+          nullable: true
+          description: Suggested restock quantity for RESTOCK actions
+          example: null
+        stockAgeDays:
+          type: integer
+          nullable: true
+          description: Days since last inventory movement
+          example: 45
+        currentStock:
+          type: integer
+          nullable: true
+          description: Current on-hand quantity
+          example: 80
+        salesVelocity30d:
+          type: number
+          format: double
+          nullable: true
+          description: Average daily sales over the last 30 days
+          example: 0.5
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-05-24T06:00:00Z"
+
+    PagedRecommendationResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendationResponse'
+        page:
+          type: integer
+          description: Current page (0-indexed)
+          example: 0
+        size:
+          type: integer
+          description: Items per page
+          example: 20
+        total:
+          type: integer
+          format: int64
+          description: Total matching items
+          example: 28
+
+    RefreshJobResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          example: "e5f6a7b8-c9d0-1234-efab-345678901234"
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCESS, FAILED]
+          example: "PENDING"
+
+    TrainJobResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          example: "f7a8b9c0-d1e2-3456-fbcd-567890123456"
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCESS, FAILED]
+          example: "SUCCESS"
+        variantsTrained:
+          type: integer
+          nullable: true
+          description: Number of variant models successfully trained
+          example: 87
+        errorMessage:
+          type: string
+          nullable: true
+          description: Error summary if status is FAILED or partial errors occurred
+          example: null
+        dataPoints:
+          type: integer
+          nullable: true
+          description: Total sales data points available at the time of training trigger
+          example: 542
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details (FastAPI HTTPException compatible)
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://insightflow.ai/errors/insufficient-data"
+        title:
+          type: string
+          example: "Insufficient Training Data"
+        status:
+          type: integer
+          example: 422
+        detail:
+          type: string
+          example: "Minimum 100 data points required"
+        instance:
+          type: string
+          format: uri
+        correlationId:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Missing X-Tenant-Id header
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    UnprocessableEntity:
+      description: Business rule violation (e.g. insufficient data)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'

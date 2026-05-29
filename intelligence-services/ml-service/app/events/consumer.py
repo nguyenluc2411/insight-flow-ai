@@ -1,17 +1,19 @@
 """Kafka consumer for ingesting sales and inventory events."""
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import UUID
 
 from confluent_kafka import Consumer, KafkaError, KafkaException
+from pydantic import ValidationError
 
 from app.config import settings
 from app.db.database import SessionLocal
 from app.db.models import InventorySnapshot, SalesData
+from app.events.schemas import InventoryUpdatedEvent, OrderCompletedEvent
 
 logger = logging.getLogger(__name__)
 
@@ -80,98 +82,93 @@ class KafkaEventConsumer:
                 self._handle_message(msg.topic(), msg.value())
             except Exception:  # noqa: BLE001
                 logger.error("Unexpected error in consumer loop", exc_info=True)
-                # never crash the loop
 
     def _handle_message(self, topic: str, value: bytes) -> None:
         try:
-            payload = json.loads(value.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            logger.warning("Failed to parse JSON payload on topic=%s", topic, exc_info=True)
+            raw = value.decode("utf-8")
+        except UnicodeDecodeError:
+            logger.warning("Failed to decode message bytes on topic=%s", topic, exc_info=True)
             return
 
         if topic == TOPIC_SALES_COMPLETED:
-            self._handle_sales_completed(payload)
+            self._handle_sales_completed(raw)
         elif topic == TOPIC_INVENTORY_UPDATED:
-            self._handle_inventory_updated(payload)
+            self._handle_inventory_updated(raw)
 
-    def _handle_sales_completed(self, payload: dict) -> None:
-        event_id = payload.get("eventId")
-        tenant_id = payload.get("tenantId")
-        items = payload.get("items", [])
-        if not event_id or not tenant_id:
-            logger.warning("sales.order.completed missing eventId or tenantId")
+    def _handle_sales_completed(self, raw: str) -> None:
+        try:
+            event = OrderCompletedEvent.model_validate_json(raw)
+        except ValidationError:
+            logger.warning("Failed to parse OrderCompletedEvent", exc_info=True)
             return
-
-        occurred_raw = payload.get("occurredAt")
-        occurred_at = _parse_event_time(occurred_raw) or datetime.now(tz=timezone.utc)
 
         session = SessionLocal()
         try:
-            for item in items:
-                variant_id = item.get("variantId")
-                quantity = item.get("quantity")
-                if not variant_id or quantity is None:
-                    continue
-                # idempotency: skip if any row already exists for this event_id
+            occurred_at = event.occurred_at.replace(tzinfo=timezone.utc) \
+                if event.occurred_at.tzinfo is None else event.occurred_at
+
+            saved = 0
+            for item in event.items:
+                # Dedup per (event_id, variant_id) — one order can have multiple variants
                 exists = session.query(SalesData.id).filter(
-                    SalesData.event_id == UUID(event_id)
+                    SalesData.event_id == UUID(event.event_id),
+                    SalesData.variant_id == UUID(item.variant_id),
                 ).first()
                 if exists:
-                    logger.debug("Skipping duplicate event_id=%s", event_id)
-                    return
+                    logger.debug("Skipping duplicate event_id=%s variant=%s", event.event_id, item.variant_id)
+                    continue
                 session.add(SalesData(
-                    event_id=UUID(event_id),
-                    tenant_id=UUID(tenant_id),
-                    variant_id=UUID(variant_id),
-                    quantity=int(quantity),
-                    unit_price=item.get("unitPrice"),
-                    order_id=UUID(payload["orderId"]) if payload.get("orderId") else None,
+                    event_id=UUID(event.event_id),
+                    tenant_id=UUID(event.tenant_id),
+                    variant_id=UUID(item.variant_id),
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                    order_id=UUID(event.order_id) if event.order_id else None,
                     occurred_at=occurred_at,
                 ))
-            session.commit()
-            self._check_training_readiness(tenant_id)
+                saved += 1
+            if saved > 0:
+                session.commit()
+                self._check_training_readiness(event.tenant_id)
         except Exception:  # noqa: BLE001
             logger.error("DB error handling sales.order.completed", exc_info=True)
             session.rollback()
         finally:
             session.close()
 
-    def _handle_inventory_updated(self, payload: dict) -> None:
-        tenant_id = payload.get("tenantId")
-        variant_id = payload.get("variantId")
-        location_id = payload.get("locationId")
-        if not (tenant_id and variant_id and location_id):
-            logger.warning("catalog.inventory.updated missing required field")
+    def _handle_inventory_updated(self, raw: str) -> None:
+        try:
+            event = InventoryUpdatedEvent.model_validate_json(raw)
+        except ValidationError:
+            logger.warning("Failed to parse InventoryUpdatedEvent", exc_info=True)
             return
-
-        quantity_change = payload.get("quantityChange", 0)
-        movement_type = payload.get("movementType")
 
         session = SessionLocal()
         try:
             snap = session.query(InventorySnapshot).filter(
-                InventorySnapshot.tenant_id == UUID(tenant_id),
-                InventorySnapshot.variant_id == UUID(variant_id),
-                InventorySnapshot.location_id == UUID(location_id),
+                InventorySnapshot.tenant_id == UUID(event.tenant_id),
+                InventorySnapshot.variant_id == UUID(event.variant_id),
+                InventorySnapshot.location_id == UUID(event.location_id),
             ).first()
             now = datetime.now(tz=timezone.utc)
+            movement_type_lower = event.movement_type.lower() if event.movement_type else ""
             if snap is None:
                 snap = InventorySnapshot(
-                    tenant_id=UUID(tenant_id),
-                    variant_id=UUID(variant_id),
-                    location_id=UUID(location_id),
-                    quantity=int(quantity_change),
-                    first_restocked_at=now if movement_type == "restock" else None,
+                    tenant_id=UUID(event.tenant_id),
+                    variant_id=UUID(event.variant_id),
+                    location_id=UUID(event.location_id),
+                    quantity=event.quantity_change,
+                    first_restocked_at=now if movement_type_lower == "restock" else None,
                     updated_at=now,
                 )
                 session.add(snap)
             else:
-                snap.quantity = snap.quantity + int(quantity_change)
-                if movement_type == "restock" and snap.first_restocked_at is None:
+                snap.quantity = snap.quantity + event.quantity_change
+                if movement_type_lower == "restock" and snap.first_restocked_at is None:
                     snap.first_restocked_at = now
                 snap.updated_at = now
             session.commit()
-            logger.info("inventory updated for variant %s", variant_id)
+            logger.info("inventory updated for variant %s", event.variant_id)
         except Exception:  # noqa: BLE001
             logger.error("DB error handling catalog.inventory.updated", exc_info=True)
             session.rollback()
@@ -184,23 +181,26 @@ class KafkaEventConsumer:
             count = session.query(SalesData).filter(
                 SalesData.tenant_id == UUID(tenant_id)
             ).count()
-            if count >= settings.MIN_DATA_POINTS:
-                logger.info("Tenant %s ready to train (%d data points)", tenant_id, count)
+            if count < settings.MIN_DATA_POINTS:
+                return
+
+            # Auto-trigger first-time training when no model exists yet for this tenant
+            tenant_model_dir = Path(settings.MODEL_STORAGE_PATH) / tenant_id
+            has_model = tenant_model_dir.exists() and any(tenant_model_dir.rglob("*.pkl"))
+            if not has_model:
+                logger.info(
+                    "Tenant %s crossed threshold (%d points) — auto-triggering first training",
+                    tenant_id, count,
+                )
+                # Late import avoids circular dependency at module load time
+                from app.api.training import start_training_background  # noqa: PLC0415
+                start_training_background(UUID(tenant_id))
+            else:
+                logger.debug("Tenant %s has %d data points and existing models", tenant_id, count)
         except Exception:  # noqa: BLE001
             logger.warning("Could not check training readiness", exc_info=True)
         finally:
             session.close()
-
-
-def _parse_event_time(raw) -> datetime | None:
-    if raw is None:
-        return None
-    try:
-        if isinstance(raw, (int, float)):
-            return datetime.fromtimestamp(float(raw), tz=timezone.utc)
-        return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        return None
 
 
 kafka_consumer = KafkaEventConsumer()

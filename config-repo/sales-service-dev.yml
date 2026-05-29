@@ -1,0 +1,9 @@
+# =============================================================================
+# sales-service-dev.yml — Dev profile overrides for sales-service
+# =============================================================================
+
+logging:
+  level:
+    com.insightflow.sales: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.flywaydb: DEBUG

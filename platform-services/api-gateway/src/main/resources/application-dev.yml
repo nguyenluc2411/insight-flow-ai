@@ -76,6 +76,9 @@ app:
     issuer: "insightflow-auth-service"
     clock-skew-seconds: 60
 
+  service-jwt:
+    secret: ${SERVICE_JWT_SECRET:insightflow-service-jwt-secret-change-in-prod!!}
+
 # =============================================================================
 # Actuator — expose all endpoints in dev for easier debugging
 # =============================================================================

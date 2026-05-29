@@ -1,0 +1,9 @@
+# =============================================================================
+# api-gateway-dev.yml — Dev profile overrides for api-gateway
+# =============================================================================
+
+logging:
+  level:
+    com.insightflow.gateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway.filter: DEBUG

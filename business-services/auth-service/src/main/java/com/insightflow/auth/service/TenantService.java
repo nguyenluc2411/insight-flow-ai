@@ -9,8 +9,9 @@ import com.insightflow.auth.entity.RefreshToken;
 import com.insightflow.auth.entity.Role;
 import com.insightflow.auth.entity.Tenant;
 import com.insightflow.auth.entity.User;
-import com.insightflow.auth.event.TenantRegisteredEvent;
-import com.insightflow.auth.exception.ConflictException;
+import com.insightflow.common.events.auth.TenantRegisteredEvent;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
 import com.insightflow.auth.repository.RefreshTokenRepository;
 import com.insightflow.auth.repository.RoleRepository;
 import com.insightflow.auth.repository.TenantRepository;
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -47,7 +49,7 @@ public class TenantService {
     @Transactional
     public TenantRegistrationResult registerTenant(RegisterTenantRequest request) {
         if (tenantRepository.existsBySlug(request.getSlug())) {
-            throw new ConflictException("Tenant slug '" + request.getSlug() + "' is already taken");
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Tenant slug '" + request.getSlug() + "' is already taken");
         }
 
         Tenant tenant = Tenant.builder()
@@ -105,10 +107,14 @@ public class TenantService {
 
     private void publishTenantRegistered(Tenant tenant, User owner) {
         TenantRegisteredEvent event = TenantRegisteredEvent.builder()
+                .eventId(java.util.UUID.randomUUID().toString())
+                .eventType("auth.tenant.registered")
                 .tenantId(tenant.getId().toString())
                 .tenantSlug(tenant.getSlug())
-                .plan(tenant.getPlan())
-                .ownerId(owner.getId().toString())
+                .planType(tenant.getPlan())
+                .ownerEmail(owner.getEmail())
+                .ownerName(owner.getFullName())
+                .occurredAt(java.time.Instant.now())
                 .build();
         try {
             kafkaTemplate.send("auth.tenant.registered", tenant.getId().toString(), event);
@@ -117,8 +123,10 @@ public class TenantService {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private UserInfo toUserInfo(User user, Tenant tenant) {
         List<String> roleNames = user.getRoles().stream().map(Role::getName).toList();
+        Map<String, Object> s = tenant.getSettings() != null ? tenant.getSettings() : Map.of();
         return UserInfo.builder()
                 .id(user.getId())
                 .email(user.getEmail())
@@ -126,6 +134,11 @@ public class TenantService {
                 .tenantId(tenant.getId())
                 .tenantSlug(tenant.getSlug())
                 .roles(roleNames)
+                .location((String) s.get("location"))
+                .categories((List<String>) s.get("categories"))
+                .businessScale((String) s.get("businessScale"))
+                .platforms((List<String>) s.get("platforms"))
+                .profileComplete((Boolean) s.get("profileComplete"))
                 .build();
     }
 }

@@ -1,0 +1,28 @@
+# =============================================================================
+# application.yml — Shared config inherited by ALL services
+# Config-server merges this into every service's config on startup.
+# Only put config here that every service needs and would otherwise duplicate.
+# =============================================================================
+
+spring:
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId}] - %msg%n"
+  level:
+    root: INFO

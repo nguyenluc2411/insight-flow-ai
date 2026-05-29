@@ -16,6 +16,13 @@ spring:
   flyway:
     out-of-order: false
 
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
 
@@ -36,6 +43,8 @@ app:
     issuer: "insightflow-auth-service"
     expiration-minutes: 15
     refresh-expiration-days: 30
+  reset-password:
+    frontend-url: http://localhost:3000
 
 management:
   endpoints:

@@ -18,7 +18,7 @@ spring:
         max-attempts: 6
 
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?currentSchema=${AUTH_DB_SCHEMA}
+    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${AUTH_DB_NAME:insightflow_auth}
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -45,6 +45,16 @@ spring:
     default-schema: auth_db
     create-schemas: true
     baseline-on-migrate: false
+
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    protocol: smtp
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
@@ -80,6 +90,9 @@ app:
     issuer: "insightflow-auth-service"
     expiration-minutes: 15
     refresh-expiration-days: 30
+  reset-password:
+    frontend-url: ${FRONTEND_URL:http://localhost:3000}
+    token-expiry-hours: 1
 
 # =============================================================================
 # Actuator
@@ -88,7 +101,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when-authorized
@@ -98,8 +111,10 @@ management:
 # =============================================================================
 springdoc:
   api-docs:
+    enabled: true
     path: /v3/api-docs
   swagger-ui:
+    enabled: false
     path: /swagger-ui.html
   show-actuator: false
 

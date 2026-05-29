@@ -18,7 +18,7 @@ spring:
         max-attempts: 6
 
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:insightflow}?currentSchema=${CATALOG_DB_SCHEMA:catalog_db}
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${CATALOG_DB_NAME:insightflow_catalog}
     username: ${POSTGRES_USER:insightflow}
     password: ${POSTGRES_PASSWORD:insightflow}
     driver-class-name: org.postgresql.Driver
@@ -53,6 +53,14 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.add.type.headers: false
+    consumer:
+      group-id: catalog-service-events
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual_immediate
 
 # =============================================================================
 # Eureka
@@ -76,7 +84,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when-authorized
@@ -86,8 +94,10 @@ management:
 # =============================================================================
 springdoc:
   api-docs:
+    enabled: true
     path: /v3/api-docs
   swagger-ui:
+    enabled: false
     path: /swagger-ui.html
   show-actuator: false
 

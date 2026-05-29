@@ -1,0 +1,9 @@
+# =============================================================================
+# catalog-service-dev.yml — Dev profile overrides for catalog-service
+# =============================================================================
+
+logging:
+  level:
+    com.insightflow.catalog: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.flywaydb: DEBUG
