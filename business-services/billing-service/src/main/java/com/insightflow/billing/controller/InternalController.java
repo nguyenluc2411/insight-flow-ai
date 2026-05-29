@@ -6,8 +6,11 @@ import com.insightflow.billing.entity.TenantUsage;
 import com.insightflow.billing.security.ServiceJwtValidator;
 import com.insightflow.billing.service.EntitlementService;
 import com.insightflow.billing.service.PlanLimitService;
+import com.insightflow.billing.service.SubscriptionLifecycleService;
 import com.insightflow.billing.service.SubscriptionService;
 import com.insightflow.billing.service.UsageTrackingService;
+
+import java.util.Map;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,7 @@ public class InternalController {
     private final EntitlementService entitlementService;
     private final SubscriptionService subscriptionService;
     private final UsageTrackingService usageTrackingService;
+    private final SubscriptionLifecycleService lifecycleService;
 
     @GetMapping("/tenants/{tenantId}/limits")
     @Operation(summary = "Get rate limits for a tenant (service-to-service)")
@@ -45,6 +49,15 @@ public class InternalController {
             @RequestHeader("Authorization") String authHeader) {
         jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
         return ResponseEntity.ok(planLimitService.checkAndConsumeApiCall(tenantId));
+    }
+
+    @PostMapping("/subscriptions/expire-trials")
+    @Operation(summary = "Manually run the trial-expiry job (service-to-service / ops)")
+    public ResponseEntity<Map<String, Integer>> expireTrials(
+            @RequestHeader("Authorization") String authHeader) {
+        jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
+        int downgraded = lifecycleService.expireTrials();
+        return ResponseEntity.ok(Map.of("downgraded", downgraded));
     }
 
     @GetMapping("/tenants/{tenantId}/features")

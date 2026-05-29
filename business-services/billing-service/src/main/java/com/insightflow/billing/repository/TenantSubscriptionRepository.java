@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +19,8 @@ public interface TenantSubscriptionRepository extends JpaRepository<TenantSubscr
     List<TenantSubscription> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
     List<TenantSubscription> findByStatus(String status);
+
+    List<TenantSubscription> findByStatusAndEndDateBefore(String status, LocalDate date);
 
     boolean existsByTenantIdAndStatus(UUID tenantId, String status);
 }

@@ -261,6 +261,63 @@ public class SubscriptionService {
         log.info("Auto-created 30-day TRIAL for tenant [{}] ending {}", tenantId, endDate);
     }
 
+    /**
+     * Downgrades a tenant to the FREE plan — used when a Trial expires.
+     * Expires the current (trial) subscription and creates a FREE one, keeping
+     * all tenant data. No-op if the tenant is already on FREE.
+     */
+    @Transactional
+    public void downgradeToFree(UUID tenantId) {
+        BillingPackage freePkg = packageRepository.findByCode("FREE")
+                .orElseThrow(() -> new ResourceNotFoundException("FREE package not found"));
+        Plan freePlan = planRepository.findByPackageIdAndBillingCycle(freePkg.getId(), "MONTHLY")
+                .orElseThrow(() -> new ResourceNotFoundException("FREE plan not found"));
+
+        TenantSubscription current = subscriptionRepository.findActiveOrTrialByTenantId(tenantId).orElse(null);
+        if (current != null) {
+            if (freePlan.getId().equals(current.getPlanId())) {
+                return; // already FREE
+            }
+            current.setStatus("EXPIRED");
+            subscriptionRepository.save(current);
+        }
+
+        List<String> featureCodes = packageService.getFeatureCodesForPackage(freePkg.getId());
+        Map<String, Object> limitsSnapshot = buildLimitsSnapshot(freePkg.getId());
+        LocalDate startDate = LocalDate.now();
+
+        TenantSubscription freeSub = TenantSubscription.builder()
+                .tenantId(tenantId)
+                .planId(freePlan.getId())
+                .priceAtSubscription(0)
+                .featuresAtSubscription(featureCodes)
+                .limitsAtSubscription(limitsSnapshot)
+                .planVersion(freePkg.getVersion())
+                .status("ACTIVE")
+                .startDate(startDate)
+                .endDate(startDate.plusYears(100))   // FREE has no expiry
+                .autoRenew(false)
+                .build();
+        TenantSubscription saved = subscriptionRepository.save(freeSub);
+
+        billingHistoryService.recordEvent(tenantId, saved.getId(), "TRIAL_EXPIRED",
+                "TRIAL", "FREE", 0, "Trial expired — auto-downgraded to Free");
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("tenantId", tenantId.toString());
+        payload.put("subscriptionId", saved.getId().toString());
+        payload.put("newPackageCode", "FREE");
+        payload.put("status", "ACTIVE");
+        outboxRepository.save(OutboxEvent.builder()
+                .aggregateId(tenantId)
+                .eventType("subscription.expired")
+                .payload(payload)
+                .build());
+
+        entitlementService.evictCache(tenantId);
+        log.info("Tenant [{}] downgraded to FREE", tenantId);
+    }
+
     private Map<String, Object> buildLimitsSnapshot(UUID packageId) {
         return planLimitRepository.findByPackageId(packageId)
                 .map(limit -> {
