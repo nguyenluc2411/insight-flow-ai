@@ -1,7 +1,7 @@
 package com.insightflow.notification.service.retry;
 
+import com.insightflow.common.web.exception.BusinessException;
 import com.insightflow.notification.config.kafka.NotificationKafkaTopics;
-import com.insightflow.notification.exception.BusinessException;
 import com.insightflow.notification.exception.NotificationDeliveryException;
 import org.springframework.stereotype.Service;
 

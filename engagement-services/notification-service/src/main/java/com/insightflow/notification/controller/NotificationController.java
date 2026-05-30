@@ -2,6 +2,7 @@ package com.insightflow.notification.controller;
 
 import com.insightflow.notification.dto.response.NotificationResponse;
 import com.insightflow.notification.dto.response.UnreadCountResponse;
+import com.insightflow.common.web.exception.UnauthorizedException;
 import com.insightflow.notification.service.interfaces.NotificationQueryService;
 import com.insightflow.security.CurrentUser;
 import com.insightflow.security.UserContext;
@@ -11,10 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -61,7 +60,7 @@ public class NotificationController {
 
     private UUID recipientId(UserContext user) {
         if (user == null || user.tenantId() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing tenant context");
+            throw new UnauthorizedException("Missing tenant context");
         }
         return user.tenantId();
     }

@@ -150,6 +150,13 @@
         <version>1.0.0</version>
     </dependency>
 
+    <!-- Shared web: RFC7807 ApiError + GlobalExceptionHandler (consistent error contract) -->
+    <dependency>
+        <groupId>com.insightflow</groupId>
+        <artifactId>common-web</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+
     <!-- ============================================================
          API DOCS — SpringDoc OpenAPI (webmvc)
          ============================================================ -->

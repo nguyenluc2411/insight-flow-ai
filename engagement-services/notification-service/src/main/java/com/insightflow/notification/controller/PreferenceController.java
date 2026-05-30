@@ -2,6 +2,7 @@ package com.insightflow.notification.controller;
 
 import com.insightflow.notification.dto.request.NotificationPreferenceRequest;
 import com.insightflow.notification.dto.response.UserNotificationPreferenceResponse;
+import com.insightflow.common.web.exception.UnauthorizedException;
 import com.insightflow.notification.service.interfaces.NotificationPreferenceService;
 import com.insightflow.security.CurrentUser;
 import com.insightflow.security.UserContext;
@@ -9,10 +10,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -42,7 +41,7 @@ public class PreferenceController {
 
     private UUID userId(UserContext user) {
         if (user == null || user.userId() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing user context");
+            throw new UnauthorizedException("Missing user context");
         }
         return user.userId();
     }

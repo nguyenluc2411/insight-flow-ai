@@ -1,14 +1,18 @@
 package com.insightflow.notification.exception;
 
-import org.springframework.http.HttpStatus;
-
-public class NotificationDeliveryException extends BusinessException {
+/**
+ * Raised when a delivery channel (email/websocket) fails transiently.
+ * Treated as RETRYABLE by the retry/DLQ router, so it is intentionally NOT a
+ * common-web BusinessException (those are permanent / non-retryable). It is an
+ * internal async signal and is never serialized to an HTTP response.
+ */
+public class NotificationDeliveryException extends RuntimeException {
 
     public NotificationDeliveryException(String message) {
-        super(message, "NOTIFICATION_DELIVERY_FAILED", HttpStatus.BAD_GATEWAY);
+        super(message);
     }
 
     public NotificationDeliveryException(String message, Throwable cause) {
-        super(message, "NOTIFICATION_DELIVERY_FAILED", HttpStatus.BAD_GATEWAY, cause);
+        super(message, cause);
     }
 }

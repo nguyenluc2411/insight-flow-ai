@@ -7,16 +7,15 @@ import com.insightflow.notification.enums.InboxStatus;
 import com.insightflow.notification.enums.NotificationType;
 import com.insightflow.notification.mapper.NotificationMapper;
 import com.insightflow.notification.repository.NotificationRepository;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
 import com.insightflow.notification.service.interfaces.NotificationQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -65,7 +64,7 @@ public class NotificationQueryServiceImpl implements NotificationQueryService {
     @Transactional
     public NotificationResponse markRead(UUID id, UUID recipientId) {
         Notification notif = notificationRepository.findByIdAndRecipientIdAndDeletedFalse(id, recipientId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found: " + id));
         if (notif.getInboxStatus() == InboxStatus.UNREAD) {
             notif.setInboxStatus(InboxStatus.READ);
             notif.setReadAt(Instant.now());
