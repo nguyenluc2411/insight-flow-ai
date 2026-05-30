@@ -37,8 +37,11 @@ public class AggregationServiceImpl implements AggregationService {
             key = event.payload().get("aggregationKey").toString();
         }
 
-        if (key == null && event.correlationId() != null) {
-            key = event.correlationId().toString();
+        // Deterministic key so genuine duplicates (same recipient + event type)
+        // actually group within a window. Previously used correlationId, which is
+        // unique per event, so nothing ever grouped.
+        if (key == null && event.recipientId() != null) {
+            key = event.recipientId() + ":" + (event.eventType() != null ? event.eventType() : "GENERIC");
         }
 
         if (key == null) {
@@ -71,7 +74,9 @@ public class AggregationServiceImpl implements AggregationService {
         windowRepository.save(window);
         log.info("Created aggregation window key={} windowSeconds={} threshold={}", key, windowSeconds, threshold);
 
-        return threshold > 1;
+        // First event of a window is delivered (not suppressed); subsequent
+        // same-key events within the window are folded/counted and suppressed.
+        return false;
     }
 
     @Override

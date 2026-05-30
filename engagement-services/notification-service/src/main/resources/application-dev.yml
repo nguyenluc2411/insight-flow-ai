@@ -1,0 +1,9 @@
+# =============================================================================
+# notification-service — application-dev.yml
+# Local dev overrides (mirrors other services): config-server optional so the
+# service boots without it. All other values come from application.yml + env.
+# =============================================================================
+spring:
+  cloud:
+    config:
+      fail-fast: false

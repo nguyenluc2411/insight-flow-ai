@@ -49,9 +49,11 @@ public class DomainEventConsumer {
             payload.put("reason", e.getReason());
             if (e.getSuggestedDiscount() != null) payload.put("suggestedDiscount", e.getSuggestedDiscount());
 
+            // eventType must be a valid NotificationType code — the mapper resolves it
+            // via NotificationType.fromCode(eventType).
             producer.publishBySeverity(IncomingNotificationEvent.builder()
                     .eventId(parseUuid(e.getEventId()))
-                    .eventType("RECOMMENDATION_CREATED")
+                    .eventType(recommendationType(e.getAction()))
                     .timestamp(e.getOccurredAt() != null ? e.getOccurredAt() : Instant.now())
                     .recipientId(parseUuid(e.getTenantId()))
                     .severity(mapPriority(e.getPriority()))
@@ -83,7 +85,7 @@ public class DomainEventConsumer {
 
             producer.publishBySeverity(IncomingNotificationEvent.builder()
                     .eventId(parseUuid(e.getEventId()))
-                    .eventType("FORECAST_GENERATED")
+                    .eventType("DASHBOARD_ALERT")
                     .timestamp(e.getOccurredAt() != null ? e.getOccurredAt() : Instant.now())
                     .recipientId(parseUuid(e.getTenantId()))
                     .severity(NotificationSeverity.LOW)
@@ -108,6 +110,15 @@ public class DomainEventConsumer {
             case "HIGH" -> NotificationSeverity.HIGH;
             case "LOW" -> NotificationSeverity.LOW;
             default -> NotificationSeverity.MEDIUM;
+        };
+    }
+
+    private String recommendationType(String action) {
+        if (action == null) return "DASHBOARD_ALERT";
+        return switch (action.toUpperCase()) {
+            case "CLEARANCE" -> "CLEARANCE_RECOMMENDATION";
+            case "RESTOCK" -> "RESTOCK_RECOMMENDATION";
+            default -> "DASHBOARD_ALERT";
         };
     }
 

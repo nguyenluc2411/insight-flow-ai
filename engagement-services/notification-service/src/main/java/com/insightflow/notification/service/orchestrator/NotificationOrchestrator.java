@@ -69,8 +69,10 @@ public class NotificationOrchestrator {
             return;
         }
 
+        // Do NOT assign the id manually: Notification#id is @GeneratedValue, so a
+        // pre-set id makes Spring Data treat the entity as existing and issue an
+        // UPDATE (ObjectOptimisticLockingFailureException) instead of an INSERT.
         Notification notif = notificationMapper.fromIncomingEvent(event);
-        notif.setId(UUID.randomUUID());
         Notification saved = notificationRepository.save(notif);
 
         List<NotificationChannel> channels = channelRouter.resolveChannels(saved);
