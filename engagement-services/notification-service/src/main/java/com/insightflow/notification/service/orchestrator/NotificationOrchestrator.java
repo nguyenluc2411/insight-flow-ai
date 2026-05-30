@@ -2,7 +2,9 @@ package com.insightflow.notification.service.orchestrator;
 
 import com.insightflow.notification.dto.kafka.IncomingNotificationEventDto;
 import com.insightflow.notification.entity.Notification;
+import com.insightflow.notification.enums.DeliveryPolicy;
 import com.insightflow.notification.enums.NotificationChannel;
+import com.insightflow.notification.enums.NotificationType;
 import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
 import com.insightflow.notification.mapper.NotificationKafkaMapper;
 import com.insightflow.notification.mapper.NotificationMapper;
@@ -63,10 +65,15 @@ public class NotificationOrchestrator {
             return;
         }
 
-        boolean suppressed = aggregationService.tryAggregate(incomingEvent);
-        if (suppressed) {
-            log.info("Event aggregated/suppressed eventId={}", event.getEventId());
-            return;
+        // Aggregation is only a de-dup guard for REALTIME alert storms (e.g. a
+        // flapping integration). Daily-report items are produced by the 04:00
+        // scheduler, not this path, so they never reach here.
+        if (isRealtime(event.getEventType())) {
+            boolean suppressed = aggregationService.tryAggregate(incomingEvent);
+            if (suppressed) {
+                log.info("Realtime event de-duplicated/suppressed eventId={}", event.getEventId());
+                return;
+            }
         }
 
         // Do NOT assign the id manually: Notification#id is @GeneratedValue, so a
@@ -99,6 +106,17 @@ public class NotificationOrchestrator {
             kafkaPublisher.publish("notifications.outgoing.broadcast", saved.getId().toString(), out);
         } catch (Exception ex) {
             log.error("Failed to publish broadcast event notificationId={} error={}", saved.getId(), ex.getMessage());
+        }
+    }
+
+    private boolean isRealtime(String eventType) {
+        if (eventType == null) {
+            return false;
+        }
+        try {
+            return NotificationType.fromCode(eventType).getDeliveryPolicy() == DeliveryPolicy.REALTIME;
+        } catch (IllegalArgumentException ex) {
+            return false;
         }
     }
 }

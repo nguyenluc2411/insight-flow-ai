@@ -136,13 +136,6 @@
         <artifactId>spring-kafka</artifactId>
     </dependency>
 
-    <!-- Shared Kafka domain event DTOs (ml.*, catalog.* contracts) -->
-    <dependency>
-        <groupId>com.insightflow</groupId>
-        <artifactId>common-events</artifactId>
-        <version>1.0.0</version>
-    </dependency>
-
     <!-- Shared security: @CurrentUser / UserContext populated from gateway headers -->
     <dependency>
         <groupId>com.insightflow</groupId>
