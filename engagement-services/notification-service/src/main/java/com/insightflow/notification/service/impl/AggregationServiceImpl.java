@@ -1,8 +1,9 @@
-package com.insightflow.notification.service.aggregation;
+package com.insightflow.notification.service.impl;
 
 import com.insightflow.notification.entity.NotificationAggregationWindow;
 import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
 import com.insightflow.notification.repository.NotificationAggregationWindowRepository;
+import com.insightflow.notification.service.aggregation.AggregationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
