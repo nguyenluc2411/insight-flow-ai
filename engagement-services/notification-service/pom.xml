@@ -143,6 +143,13 @@
         <version>1.0.0</version>
     </dependency>
 
+    <!-- Shared security: @CurrentUser / UserContext populated from gateway headers -->
+    <dependency>
+        <groupId>com.insightflow</groupId>
+        <artifactId>common-security</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+
     <!-- ============================================================
          API DOCS — SpringDoc OpenAPI (webmvc)
          ============================================================ -->

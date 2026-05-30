@@ -16,7 +16,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class NotificationPreferenceRequest {
 
-    @NotNull
+    // Derived server-side from the authenticated user (@CurrentUser), not the client.
     private UUID userId;
 
     @NotNull

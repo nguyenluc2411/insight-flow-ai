@@ -7,3 +7,24 @@ spring:
   cloud:
     config:
       fail-fast: false
+
+  # Dev uses MailHog (no auth) instead of Gmail SMTP so email delivery works
+  # locally and never fails on missing credentials.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username:
+    password:
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+management:
+  # A failed email send (one delivery channel) must NOT mark the whole service
+  # DOWN (503). The inbox/Kafka pipeline stays healthy regardless of mail.
+  health:
+    mail:
+      enabled: false

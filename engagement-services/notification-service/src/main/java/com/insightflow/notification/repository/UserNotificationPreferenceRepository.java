@@ -22,6 +22,8 @@ public interface UserNotificationPreferenceRepository extends JpaRepository<User
 
     List<UserNotificationPreference> findByUserIdAndEnabledTrue(UUID userId);
 
+    List<UserNotificationPreference> findByUserIdAndDeletedFalse(UUID userId);
+
     Page<UserNotificationPreference> findByUserId(UUID userId, Pageable pageable);
 
     boolean existsByUserIdAndNotificationTypeAndChannel(

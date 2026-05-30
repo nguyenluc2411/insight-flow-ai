@@ -8,7 +8,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -50,4 +52,18 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     @Query("select count(n) from Notification n " +
             "where n.notificationType = :type and n.createdAt between :start and :end")
     long countByTypeAndCreatedAtBetween(NotificationType type, Instant start, Instant end);
+
+    // ---- Inbox read API (recipient-scoped, excludes soft-deleted) ----
+
+    long countByRecipientIdAndInboxStatusAndDeletedFalse(UUID recipientId, InboxStatus inboxStatus);
+
+    Optional<Notification> findByIdAndRecipientIdAndDeletedFalse(UUID id, UUID recipientId);
+
+    @Modifying(clearAutomatically = true)
+    @Query("update Notification n set n.inboxStatus = com.insightflow.notification.enums.InboxStatus.READ, " +
+            "n.readAt = :now " +
+            "where n.recipientId = :recipientId " +
+            "and n.inboxStatus = com.insightflow.notification.enums.InboxStatus.UNREAD " +
+            "and n.deleted = false")
+    int markAllReadForRecipient(@Param("recipientId") UUID recipientId, @Param("now") Instant now);
 }
