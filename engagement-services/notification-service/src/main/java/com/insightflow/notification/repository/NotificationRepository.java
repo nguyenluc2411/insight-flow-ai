@@ -8,8 +8,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -33,6 +35,8 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     Optional<Notification> findByEventId(UUID eventId);
 
+    Optional<Notification> findByIdAndRecipientId(UUID id, UUID recipientId);
+
     boolean existsByEventId(UUID eventId);
 
     long countByRecipientIdAndInboxStatus(UUID recipientId, InboxStatus inboxStatus);
@@ -50,4 +54,10 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     @Query("select count(n) from Notification n " +
             "where n.notificationType = :type and n.createdAt between :start and :end")
     long countByTypeAndCreatedAtBetween(NotificationType type, Instant start, Instant end);
+
+    @Modifying
+    @Transactional
+    @Query("update Notification n set n.inboxStatus = :readStatus, n.readAt = :readAt " +
+            "where n.recipientId = :recipientId and n.inboxStatus = :unreadStatus and n.deleted = false")
+    int markAllAsRead(UUID recipientId, InboxStatus unreadStatus, InboxStatus readStatus, Instant readAt);
 }
