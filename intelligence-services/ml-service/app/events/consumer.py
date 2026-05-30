@@ -12,12 +12,13 @@ from pydantic import ValidationError
 
 from app.config import settings
 from app.db.database import SessionLocal
-from app.db.models import InventorySnapshot, SalesData
+from app.db.models import InventorySnapshot, SalesData, VariantCategoryMap
 from app.events.schemas import (
     CatalogOrderNormalizedEvent,
     InventoryUpdatedEvent,
     OrderCompletedEvent,
 )
+from app.utils.category_mapper import resolve_category_key
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +219,20 @@ class KafkaEventConsumer:
                 if movement_type_lower == "restock" and snap.first_restocked_at is None:
                     snap.first_restocked_at = now
                 snap.updated_at = now
+
+            # Upsert variant → category_key mapping for cold-start forecasting.
+            if event.category_slug or event.category_name:
+                mapped = resolve_category_key(event.category_slug, event.category_name)
+                mapping = session.get(VariantCategoryMap, UUID(event.variant_id))
+                if mapping is None:
+                    session.add(VariantCategoryMap(
+                        variant_id=UUID(event.variant_id),
+                        tenant_id=UUID(event.tenant_id),
+                        category_key=mapped,
+                    ))
+                else:
+                    mapping.category_key = mapped
+
             session.commit()
             logger.info("inventory updated for variant %s", event.variant_id)
         except Exception:  # noqa: BLE001
