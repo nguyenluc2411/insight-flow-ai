@@ -14,8 +14,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import SalesData
+from app.db.models import SalesData, VariantCategoryMap
 from app.models.schemas import ForecastPoint
+from app.utils.vn_holidays import VN_HOLIDAYS
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,9 @@ class ProphetForecaster:
             weekly_seasonality=True,
             daily_seasonality=False,
             seasonality_mode="multiplicative",
+            # Holiday effects via dummy variables — Taylor & Letham (2018).
+            # Captures Tết / 8-3 / 20-10 / 11-11 / Black Friday / Noel spikes.
+            holidays=VN_HOLIDAYS,
         )
         model.fit(data)
 
@@ -93,19 +97,26 @@ class ProphetForecaster:
         tenant_id: UUID,
         variant_id: UUID,
         days: int = 30,
+        category_key: str | None = None,
     ) -> tuple[list[ForecastPoint], str, str]:
-        """Return (predictions, confidence, basis)."""
+        """Return (predictions, confidence, basis).
+
+        Args:
+            category_key: Optional fashion category for cold-start. When the shop
+                has no per-variant model, the HCM market base model for this
+                category is used instead of returning zeros.
+        """
         latest = _find_latest_model(tenant_id, variant_id)
         if latest is None:
             logger.info("No model found, using category fallback for variant=%s", variant_id)
-            return self._category_fallback(db, tenant_id, variant_id, days)
+            return self._category_fallback(db, tenant_id, variant_id, days, category_key)
 
         try:
             with latest.open("rb") as f:
                 model = pickle.load(f)
         except (OSError, pickle.UnpicklingError):
             logger.warning("Failed to load model %s, falling back", latest, exc_info=True)
-            return self._category_fallback(db, tenant_id, variant_id, days)
+            return self._category_fallback(db, tenant_id, variant_id, days, category_key)
 
         future = model.make_future_dataframe(periods=days)
         forecast_df = model.predict(future)
@@ -128,43 +139,65 @@ class ProphetForecaster:
         tenant_id: UUID,
         variant_id: UUID,
         days: int,
+        category_key: str | None = None,
     ) -> tuple[list[ForecastPoint], str, str]:
-        """Moving-average fallback when no per-variant model exists."""
-        logger.info("Using category fallback for variant %s", variant_id)
-        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=30)
-        avg = (
-            db.query(func.avg(SalesData.quantity))
-            .filter(
-                SalesData.tenant_id == tenant_id,
-                SalesData.variant_id == variant_id,
-                SalesData.occurred_at >= cutoff,
-            )
-            .scalar()
-        )
+        """Cold-start: forecast from the HCM market base model for the category.
 
-        if avg is None or float(avg) <= 0:
-            zeros = [
-                ForecastPoint(
-                    date=datetime.now(tz=timezone.utc) + timedelta(days=i + 1),
-                    predicted=0.0,
-                    lower_bound=0.0,
-                    upper_bound=0.0,
-                )
-                for i in range(days)
-            ]
-            return zeros, "none", "moving_average"
+        A brand-new shop has no per-variant history, so we use the pre-trained
+        category base model (Google Trends, geo=VN-SG — see
+        scripts/build_base_model.py) as the prior. Returns zeros only when the
+        category is unknown or no base model has been built yet.
 
-        avg_f = float(avg)
+        Base-model predictions reflect the seasonal SHAPE (relative Google Trends
+        index, 0–100), NOT absolute units; the level is calibrated later once the
+        shop accumulates real POS sales.
+        """
+        if category_key is None:
+            category_key = _resolve_category_key(db, tenant_id, variant_id)
+        if category_key is None:
+            logger.info("Cold-start with unknown category for variant=%s — no base model", variant_id)
+            return self._zeros(days), "none", "no_base_model"
+
+        base_path = _base_model_path(category_key)
+        if not base_path.exists():
+            logger.warning("No base model for category=%s (variant=%s)", category_key, variant_id)
+            return self._zeros(days), "none", "no_base_model"
+
+        try:
+            with base_path.open("rb") as f:
+                model = pickle.load(f)
+        except (OSError, pickle.UnpicklingError):
+            logger.warning("Failed to load base model %s, returning zeros", base_path, exc_info=True)
+            return self._zeros(days), "none", "no_base_model"
+
+        future = model.make_future_dataframe(periods=days, freq="D")
+        forecast_df = model.predict(future)
+        tail = forecast_df.tail(days)
+
         predictions = [
             ForecastPoint(
-                date=datetime.now(tz=timezone.utc) + timedelta(days=i + 1),
-                predicted=avg_f,
-                lower_bound=max(0.0, avg_f * 0.5),
-                upper_bound=avg_f * 1.5,
+                date=row.ds.to_pydatetime().replace(tzinfo=timezone.utc),
+                predicted=max(0.0, float(row.yhat)),
+                lower_bound=max(0.0, float(row.yhat_lower)),
+                upper_bound=max(0.0, float(row.yhat_upper)),
+            )
+            for row in tail.itertuples(index=False)
+        ]
+        logger.info("Cold-start forecast from base model category=%s for variant=%s", category_key, variant_id)
+        return predictions, "low", "market_trends_hcm"
+
+    def _zeros(self, days: int) -> list[ForecastPoint]:
+        """Empty forecast used when no model or base model is available."""
+        now = datetime.now(tz=timezone.utc)
+        return [
+            ForecastPoint(
+                date=now + timedelta(days=i + 1),
+                predicted=0.0,
+                lower_bound=0.0,
+                upper_bound=0.0,
             )
             for i in range(days)
         ]
-        return predictions, "low", "moving_average"
 
     def count_loaded_models(self) -> int:
         """Count model files on disk (rough proxy for 'models loaded')."""
@@ -189,6 +222,30 @@ def _find_latest_model(tenant_id: UUID, variant_id: UUID) -> Path | None:
         return None
     candidates = sorted(base.glob("*.pkl"), key=os.path.getmtime, reverse=True)
     return candidates[0] if candidates else None
+
+
+def _base_model_path(category_key: str) -> Path:
+    """Path to the pre-trained HCM market base model for a fashion category."""
+    return Path(settings.MODEL_STORAGE_PATH) / "base" / f"{category_key}.pkl"
+
+
+def _resolve_category_key(db: Session, tenant_id: UUID, variant_id: UUID) -> str | None:
+    """Resolve a variant to its base-model category key for cold-start.
+
+    Reads ``variant_category_map``, populated by the catalog.inventory.updated
+    consumer (raw catalog slug/name → key via app.utils.category_mapper).
+    Returns None when there is no mapping yet or the mapping is "unknown", so the
+    caller can pass the category explicitly via the forecast API ``category``
+    parameter as a fallback.
+    """
+    row = (
+        db.query(VariantCategoryMap.category_key)
+        .filter(VariantCategoryMap.variant_id == variant_id)
+        .first()
+    )
+    if row is None or row.category_key == "unknown":
+        return None
+    return row.category_key
 
 
 forecaster = ProphetForecaster()
