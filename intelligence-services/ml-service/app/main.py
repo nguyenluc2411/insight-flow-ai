@@ -40,6 +40,17 @@ async def lifespan(app: FastAPI):
         logger.info("Database initialized: schema=%s", settings.DB_SCHEMA)
     except Exception:  # noqa: BLE001
         logger.error("Failed to init database", exc_info=True)
+    if settings.MINIO_ENABLED:
+        try:
+            from app.models.storage import _get_s3  # noqa: PLC0415
+
+            s3 = _get_s3()
+            existing = [b["Name"] for b in s3.list_buckets().get("Buckets", [])]
+            if settings.MINIO_BUCKET not in existing:
+                s3.create_bucket(Bucket=settings.MINIO_BUCKET)
+                logger.info("Created MinIO bucket: %s", settings.MINIO_BUCKET)
+        except Exception:  # noqa: BLE001 — never block startup on MinIO
+            logger.warning("MinIO bucket setup failed (model storage degraded)", exc_info=True)
     try:
         kafka_consumer.start()
     except Exception:  # noqa: BLE001
