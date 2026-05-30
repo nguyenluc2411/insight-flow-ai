@@ -510,6 +510,8 @@ integration-services/integration-service/
 
 \- `PROJECT\_CONTEXT.md`, `CLAUDE.md` ready
 
+\- `shared-core` libraries: `common-web`, `common-security`, `common-events`
+
 
 
 \### In Progress 🔄
@@ -637,4 +639,117 @@ Avoid:
 \- Hỏi mà không reference file/folder cụ thể
 
 \- Đề cập đến frontend code (đó là repo khác, scope khác)
+
+
+
+\## 17. shared-core — Hướng Dẫn Sử Dụng
+
+
+
+`shared-core` là Java multi-module library được build thành jar và import vào các business service.
+
+**Bước đầu tiên (một lần duy nhất):** install vào local Maven repo:
+
+```bash
+cd shared-core && mvn install
+```
+
+
+
+\### Dependency cho từng module
+
+
+
+\#### common-web — Exception handling + RFC 7807
+
+Dùng cho: mọi servlet-based Java service (auth, catalog, sales, dashboard-bff...)
+
+```xml
+<dependency>
+    <groupId>com.insightflow</groupId>
+    <artifactId>common-web</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+</dependency>
+```
+
+\- `GlobalExceptionHandler` tự đăng ký qua Spring Boot auto-configuration — không cần làm gì thêm.
+
+\- Throw `ResourceNotFoundException`, `TenantAccessException`, `ConflictException`, hoặc `BusinessException` từ bất kỳ layer nào — handler tự convert sang đúng RFC 7807 response.
+
+
+
+\#### common-security — TenantContext propagation
+
+Dùng cho: mọi service cần đọc tenantId/userId từ request (tức là tất cả business services).
+
+```xml
+<dependency>
+    <groupId>com.insightflow</groupId>
+    <artifactId>common-security</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+</dependency>
+```
+
+\- `TenantContextFilter` tự đăng ký qua auto-configuration — đọc `X-Tenant-Id` và `X-User-Id` từ gateway headers.
+
+\- Trong service layer, gọi `TenantContextHolder.requireTenantId()` để lấy tenantId hiện tại.
+
+\- Trong repository, LUÔN filter theo tenantId:
+
+```java
+// ✅ Đúng
+List<Product> findByTenantId(UUID tenantId);
+
+// ❌ Sai — leak data giữa tenants
+List<Product> findAll();
+```
+
+
+
+\#### common-events — Kafka event DTOs
+
+Dùng cho: service nào produce hoặc consume Kafka events.
+
+```xml
+<dependency>
+    <groupId>com.insightflow</groupId>
+    <artifactId>common-events</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+</dependency>
+```
+
+\- Dùng `EventTopics.*` constants khi khai báo `@KafkaListener(topics = ...)` và khi gọi `KafkaTemplate.send(...)`.
+
+\- Mỗi event class implement `InsightFlowEvent`, dùng `@Builder` để tạo:
+
+```java
+// Producer (catalog-service)
+var event = CatalogProductCreatedEvent.builder()
+        .tenantId(tenantId)
+        .productId(product.getId())
+        .name(product.getName())
+        .sku(product.getSku())
+        .category(product.getCategory())
+        .status("ACTIVE")
+        .build();
+kafkaTemplate.send(EventTopics.CATALOG_PRODUCT_CREATED, event.getTenantId().toString(), event);
+
+// Consumer (ml-service)
+@KafkaListener(topics = EventTopics.CATALOG_PRODUCT_CREATED, groupId = "ml-service")
+public void onProductCreated(CatalogProductCreatedEvent event) { ... }
+```
+
+
+
+\### Dependency graph
+
+```
+auth-service      → common-web + common-security
+catalog-service   → common-web + common-security + common-events
+sales-service     → common-web + common-security + common-events
+integration-service → common-web + common-security + common-events
+dashboard-bff     → common-web + common-security
+ml-service        → common-events (Python — không dùng Java libs)
+notification-service → common-web + common-security + common-events
+```
 

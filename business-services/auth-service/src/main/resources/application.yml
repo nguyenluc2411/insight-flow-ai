@@ -1,0 +1,108 @@
+# =============================================================================
+# auth-service — application.yml
+# Base config loaded in ALL profiles. Profile-specific files override only
+# what they explicitly declare.
+# =============================================================================
+
+server:
+  port: 8081
+
+spring:
+  application:
+    name: auth-service
+
+  # ---------------------------------------------------------------------------
+  # Spring Cloud Config — pull JWT secret and other sensitive values from
+  # config-server at startup. "optional:" keeps the service alive when
+  # config-server is unavailable (useful for local dev without full infra).
+  # ---------------------------------------------------------------------------
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        initial-interval: 1000
+        max-interval: 2000
+        multiplier: 1.5
+        max-attempts: 6
+
+  # ---------------------------------------------------------------------------
+  # JPA — Flyway owns DDL; Hibernate only validates the schema.
+  # default_schema tells Hibernate which schema to prefix tables with.
+  # ---------------------------------------------------------------------------
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: auth_db
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+
+  # ---------------------------------------------------------------------------
+  # Flyway — manages auth_db schema lifecycle.
+  # create-schemas: true lets Flyway create auth_db if it does not exist.
+  # ---------------------------------------------------------------------------
+  flyway:
+    enabled: true
+    schemas: auth_db
+    default-schema: auth_db
+    create-schemas: true
+    locations: classpath:db/migration
+
+  # ---------------------------------------------------------------------------
+  # Jackson — serialize Instant as ISO-8601 string, not epoch array.
+  # ---------------------------------------------------------------------------
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+# =============================================================================
+# Eureka — register this service so the gateway can load-balance to it.
+# =============================================================================
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: "${spring.application.name}:${random.value}"
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+# =============================================================================
+# Actuator
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# =============================================================================
+# SpringDoc OpenAPI — accessible at /swagger-ui.html and /v3/api-docs
+# =============================================================================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# =============================================================================
+# Logging
+# =============================================================================
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId}] - %msg%n"
+  level:
+    root: INFO
+    com.insightflow.auth: DEBUG

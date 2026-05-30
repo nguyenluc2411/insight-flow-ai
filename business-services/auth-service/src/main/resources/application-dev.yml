@@ -1,0 +1,45 @@
+# =============================================================================
+# auth-service — application-dev.yml
+# Local development profile. Connects to Docker Compose infra.
+# Run with: mvn spring-boot:run -Dspring-boot.run.profiles=dev
+# =============================================================================
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+
+  jpa:
+    show-sql: false
+
+  flyway:
+    enabled: true
+
+# Override config-server to be fully optional in dev so the service starts
+# without requiring the config-server to be running.
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
+# JWT defaults for local dev (overridden by config-server in staging/prod).
+# NEVER use this secret in production.
+app:
+  jwt:
+    secret: "dev-secret-key-min-32-chars-insightflow-ai-2025"
+    issuer: insightflow-auth-service
+    access-token-ttl-seconds: 900
+    refresh-token-ttl-days: 30
+
+springdoc:
+  show-actuator: true
+
+logging:
+  level:
+    com.insightflow.auth: DEBUG
+    org.flywaydb: INFO
+    org.hibernate.SQL: DEBUG

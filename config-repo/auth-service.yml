@@ -1,0 +1,13 @@
+# =============================================================================
+# auth-service — Spring Cloud Config source
+# Fetched by auth-service at startup via spring.config.import.
+# In production, override app.jwt.secret via environment variable or KMS.
+# =============================================================================
+
+app:
+  jwt:
+    # MUST be overridden in production — minimum 32 characters for HS256
+    secret: "CHANGE_ME_IN_PROD_MIN_32_CHARS_SECRET_KEY"
+    issuer: insightflow-auth-service
+    access-token-ttl-seconds: 900      # 15 minutes
+    refresh-token-ttl-days: 30
