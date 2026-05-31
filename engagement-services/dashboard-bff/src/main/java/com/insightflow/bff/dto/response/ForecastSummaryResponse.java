@@ -33,6 +33,7 @@ public class ForecastSummaryResponse {
     @Builder
     public static class TopProduct {
         private UUID variantId;
+        private String sku;
         private Double forecastDays30;
         private String confidence;
     }

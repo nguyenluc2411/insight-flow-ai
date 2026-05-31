@@ -313,6 +313,15 @@ public class DashboardAggregationService {
 
         List<Map<String, Object>> variants = variantsPage != null ? variantsPage.safeContent() : Collections.emptyList();
 
+        // Build variantId → sku lookup so TopProduct cards show readable identifiers
+        Map<String, String> variantSkuMap = variants.stream()
+                .filter(v -> v.get("id") != null && v.get("sku") != null)
+                .collect(Collectors.toMap(
+                        v -> v.get("id").toString(),
+                        v -> v.get("sku").toString(),
+                        (a, b) -> a
+                ));
+
         if (variants.isEmpty()) {
             return ForecastSummaryResponse.builder()
                     .categoryTrends(Collections.emptyList())
@@ -358,8 +367,10 @@ public class DashboardAggregationService {
                                     .filter(p -> p.getPredictedQty() != null)
                                     .mapToDouble(MlForecastResponse.ForecastPoint::getPredictedQty)
                                     .sum();
+                    String variantKey = f.getVariantId() != null ? f.getVariantId().toString() : "";
                     return ForecastSummaryResponse.TopProduct.builder()
                             .variantId(f.getVariantId())
+                            .sku(variantSkuMap.get(variantKey))
                             .forecastDays30(Math.round(totalQty * 10.0) / 10.0)
                             .confidence(f.getConfidence())
                             .build();
