@@ -1,0 +1,13 @@
+# =============================================================================
+# dashboard-bff.yml — Config-server overrides for dashboard-bff
+# Port: 8090
+# =============================================================================
+
+app:
+  downstream:
+    catalog-base-url: lb://catalog-service
+    sales-base-url: lb://sales-service
+    ml-base-url: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
+  timeout:
+    connect-ms: 5000
+    read-ms: 10000

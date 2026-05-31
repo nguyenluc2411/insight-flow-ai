@@ -1,0 +1,10 @@
+# =============================================================================
+# notification-service-dev.yml — Dev profile overrides for notification-service
+# =============================================================================
+
+logging:
+  level:
+    com.insightflow.notification: DEBUG
+    org.springframework.kafka: DEBUG
+    org.springframework.mail: DEBUG
+    org.flywaydb: DEBUG

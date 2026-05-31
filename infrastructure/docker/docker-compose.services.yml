@@ -1,0 +1,277 @@
+# =============================================================================
+# Application services compose — run together with infra compose:
+#
+#   docker-compose \
+#     -f infrastructure/docker/docker-compose.yml \
+#     -f infrastructure/docker/docker-compose.services.yml \
+#     --env-file .env up -d
+#
+# Or use the helper script: scripts/run-local.ps1
+#
+# NOTE: Java services expect target/*.jar to exist. Build first:
+#   mvn -f platform-services/discovery-server/pom.xml package -DskipTests
+#   (or use scripts/build-all.ps1 once available)
+#
+# Env vars here override .env for Docker-internal networking:
+#   - KAFKA_BOOTSTRAP_SERVERS=kafka:29092  (internal listener)
+#   - POSTGRES_HOST=postgres               (container name)
+#   - POSTGRES_PORT=5432                   (internal port, not 5433)
+#   - EUREKA_URL=http://discovery-server:8761/eureka/
+#   - CONFIG_SERVER_URL=http://config-server:8888
+# =============================================================================
+
+services:
+
+  # ============================================================================
+  # Platform
+  # ============================================================================
+
+  discovery-server:
+    build:
+      context: ../../platform-services/discovery-server
+      dockerfile: Dockerfile
+    container_name: insight-discovery
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  config-server:
+    build:
+      context: ../../platform-services/config-server
+      dockerfile: Dockerfile
+    container_name: insight-config
+    ports:
+      - "8888:8888"
+    environment:
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      # config-repo is mounted from project root; overrides .env value which is a Windows path
+      CONFIG_REPO_PATH: /config-repo
+    volumes:
+      - ../../config-repo:/config-repo:ro
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8888/actuator/health | grep UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  api-gateway:
+    build:
+      context: ../../platform-services/api-gateway
+      dockerfile: Dockerfile
+    container_name: insight-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+      JWT_SECRET: ${JWT_SECRET}
+      GATEWAY_CORS_ALLOWED_ORIGIN: ${GATEWAY_CORS_ALLOWED_ORIGIN}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    depends_on:
+      config-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ============================================================================
+  # Business
+  # ============================================================================
+
+  auth-service:
+    build:
+      context: ../../business-services/auth-service
+      dockerfile: Dockerfile
+    container_name: insight-auth
+    ports:
+      - "8081:8081"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTH_DB_NAME: ${AUTH_DB_NAME:-insightflow_auth}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  catalog-service:
+    build:
+      context: ../../business-services/catalog-service
+      dockerfile: Dockerfile
+    container_name: insight-catalog
+    ports:
+      - "8082:8082"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME:-insightflow_catalog}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  sales-service:
+    build:
+      context: ../../business-services/sales-service
+      dockerfile: Dockerfile
+    container_name: insight-sales
+    ports:
+      - "8083:8083"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SALES_DB_NAME: ${SALES_DB_NAME:-insightflow_sales}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  # ============================================================================
+  # Integration
+  # ============================================================================
+
+  integration-service:
+    build:
+      context: ../../integration-services/integration-service
+      dockerfile: Dockerfile
+    container_name: insight-integration
+    ports:
+      - "8084:8084"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      INTEGRATION_DB_NAME: ${INTEGRATION_DB_NAME:-insightflow_integration}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+      JASYPT_PASSWORD: ${JASYPT_PASSWORD}
+      KIOTVIET_CLIENT_ID: ${KIOTVIET_CLIENT_ID:-}
+      KIOTVIET_CLIENT_SECRET: ${KIOTVIET_CLIENT_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  # ============================================================================
+  # Intelligence
+  # ============================================================================
+
+  ml-service:
+    build:
+      context: ../../intelligence-services/ml-service
+      dockerfile: Dockerfile
+    container_name: insight-ml
+    ports:
+      - "8000:8000"
+    environment:
+      # ml-service uses its own env var naming (Python/Pydantic)
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${ML_DB_NAME:-insightflow_ml}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KAFKA_BOOTSTRAP: kafka:29092
+      MODEL_STORAGE_PATH: /app/models
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ml-models:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  # ============================================================================
+  # Engagement
+  # ============================================================================
+
+  dashboard-bff:
+    build:
+      context: ../../engagement-services/dashboard-bff
+      dockerfile: Dockerfile
+    container_name: insight-bff
+    ports:
+      - "8090:8090"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+    depends_on:
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ../../engagement-services/notification-service
+      dockerfile: Dockerfile
+    container_name: insight-notification
+    ports:
+      - "8091:8091"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME:-insightflow_notification}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+      # Route email to MailHog container instead of localhost
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_FROM: ${MAIL_FROM:-noreply@insightflow.ai}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+volumes:
+  ml-models:
+    name: insight-ml-models

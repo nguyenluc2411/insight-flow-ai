@@ -1,0 +1,122 @@
+# =============================================================================
+# dashboard-bff — application.yml
+# Backend-for-Frontend: aggregates catalog, sales, and ml-service APIs.
+# Port: 8090
+# =============================================================================
+
+server:
+  port: 8090
+
+spring:
+  application:
+    name: dashboard-bff
+
+  # Force servlet-based web application even though webflux is on classpath.
+  # WebFlux is only used for WebClient (downstream calls), NOT as the web server.
+  main:
+    web-application-type: servlet
+
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        initial-interval: 1000
+        max-interval: 2000
+        multiplier: 1.5
+        max-attempts: 6
+    # Disable reactive load balancer auto-config (we're servlet-based)
+    loadbalancer:
+      ribbon:
+        enabled: false
+
+  # ---------------------------------------------------------------------------
+  # Kafka consumer — ml events only (no production here)
+  # ---------------------------------------------------------------------------
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: dashboard-bff-ml-events
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: true
+    properties:
+      spring.json.trusted.packages: "*"
+
+  # ---------------------------------------------------------------------------
+  # Jackson — ISO 8601 timestamps, no null fields in output
+  # ---------------------------------------------------------------------------
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
+# =============================================================================
+# Eureka
+# =============================================================================
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: "${spring.application.name}:${random.value}"
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+# =============================================================================
+# Downstream service base URLs
+# catalog / sales use lb:// (Eureka load balancer)
+# ml-service is Python — direct HTTP, no Eureka
+# =============================================================================
+app:
+  downstream:
+    catalog-base-url: lb://catalog-service
+    sales-base-url: lb://sales-service
+    ml-base-url: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
+  # Timeout settings (millis)
+  timeout:
+    connect-ms: 5000
+    read-ms: 10000
+
+# =============================================================================
+# SpringDoc — local swagger (standalone BFF docs)
+# The gateway aggregator will expose this at /v3/api-docs/dashboard
+# =============================================================================
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: false
+    path: /swagger-ui.html
+
+# =============================================================================
+# Actuator
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# =============================================================================
+# Logging
+# =============================================================================
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.insightflow.bff: INFO

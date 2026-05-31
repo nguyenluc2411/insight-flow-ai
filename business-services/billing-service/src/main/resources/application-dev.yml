@@ -1,0 +1,38 @@
+spring:
+  cloud:
+    config:
+      fail-fast: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  flyway:
+    out-of-order: false
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+app:
+  service-jwt:
+    secret: insightflow-service-jwt-secret-change-in-prod!!
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.insightflow.billing: DEBUG

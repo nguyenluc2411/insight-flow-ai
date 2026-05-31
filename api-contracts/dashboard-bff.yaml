@@ -1,0 +1,554 @@
+openapi: "3.1.0"
+info:
+  title: Dashboard BFF API
+  description: |
+    Backend-for-Frontend service that aggregates data from catalog-service, sales-service,
+    and ml-service into single-round-trip responses optimised for the Insight Flow AI dashboard.
+
+    ## BFF Design Principles
+    - Each endpoint represents one **full dashboard panel** — frontend makes one call, not three
+    - All endpoints support **graceful degradation**: if a downstream service is unavailable,
+      the response still returns with `partial: true` and available data
+    - `503` is only returned when ALL downstream services are unreachable
+
+    ## Aggregation Map
+
+    | BFF Endpoint | Downstream Services Called |
+    |---|---|
+    | `GET /overview` | catalog-service (SKU count), sales-service (today's orders/revenue), ml-service (alerts + status) |
+    | `GET /health-summary` | catalog-service (inventory levels), ml-service (recommendations by category) |
+    | `GET /recommendations-summary` | ml-service (recommendations list, top HIGH priority items) |
+    | `GET /forecast-summary` | ml-service (recommendations for top variant IDs), ml-service/forecast (batch forecast) |
+
+    ## Tenant Isolation
+    All endpoints require `X-Tenant-Id` and `X-User-Id` set by the API Gateway after JWT validation.
+  version: "1.0.0"
+  contact:
+    name: Insight Flow AI
+    email: dev@insightflow.ai
+
+servers:
+  - url: http://localhost:8080/api/v1/dashboard
+    description: Via API Gateway (dev)
+  - url: http://localhost:8090/api/v1/dashboard
+    description: Direct (dev)
+
+paths:
+  /overview:
+    get:
+      operationId: getDashboardOverview
+      summary: Get dashboard overview
+      description: |
+        Aggregates the top-level KPIs for the main dashboard panel:
+        - `totalSKU`: active variant count from catalog-service
+        - `ordersToday`: count of orders created today from sales-service
+        - `revenueToday`: total revenue (VND) from today's completed orders
+        - `highPriorityAlerts`: count of HIGH priority ML recommendations
+        - `mlStatus`: health status of ml-service (`UP` | `DOWN` | `DEGRADED`)
+        - `partial`: `true` if any downstream service returned an error (partial data returned)
+        - `lastUpdated`: timestamp of aggregation
+      tags: [Dashboard BFF]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Overview data (may be partial if downstream services are degraded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardOverviewResponse'
+              example:
+                totalSKU: 245
+                ordersToday: 18
+                revenueToday: 7542000
+                highPriorityAlerts: 3
+                mlStatus: "UP"
+                partial: false
+                lastUpdated: "2025-05-24T08:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /health-summary:
+    get:
+      operationId: getHealthSummary
+      summary: Get inventory health summary
+      description: |
+        Aggregates inventory health metrics across catalog and ML service:
+        - `inventoryPressurePct`: percentage of SKUs with stock above healthy threshold
+        - `sellThroughRate`: overall sell-through rate for current season
+        - `slowMovingSKUCount`: count of SKUs with no movement in the last 30 days
+        - `categoryRisks`: per-category risk assessment (HIGH | MEDIUM | LOW)
+        - `channelPerformance`: order counts and conversion rates by sales channel
+        - `partial`: `true` if any downstream service failed
+      tags: [Dashboard BFF]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Health summary (may be partial)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthSummaryResponse'
+              example:
+                inventoryPressurePct: 34.5
+                sellThroughRate: 62.1
+                slowMovingSKUCount: 12
+                categoryRisks:
+                  - category: "Shirts"
+                    units: 450
+                    riskLevel: "HIGH"
+                  - category: "Pants"
+                    units: 200
+                    riskLevel: "MEDIUM"
+                channelPerformance:
+                  - channel: "pos"
+                    orders: 80
+                    rate: 0.88
+                partial: false
+                lastUpdated: "2025-05-24T08:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /recommendations-summary:
+    get:
+      operationId: getRecommendationsSummary
+      summary: Get recommendations summary
+      description: |
+        Aggregates ML recommendation data for the recommendations panel:
+        - `total`: total recommendation count for the tenant
+        - `byAction`: breakdown by action type (`CLEARANCE`, `RESTOCK`, `PROMOTE`, `OK`)
+        - `topActions`: top 3 HIGH priority items with detail for quick-action display
+        - `estimatedImpact`: aggregate impact metrics across all recommendations
+        - `partial`: `true` if ml-service was degraded
+      tags: [Dashboard BFF]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Recommendations summary (may be partial)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationsSummaryResponse'
+              example:
+                total: 28
+                byAction:
+                  CLEARANCE: 8
+                  RESTOCK: 12
+                  PROMOTE: 6
+                  OK: 2
+                topActions:
+                  - variantId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                    action: "CLEARANCE"
+                    priority: "HIGH"
+                    reason: "No movement in 45 days"
+                    suggestedDiscountPct: 30.0
+                    stockAgeDays: 45
+                    currentStock: 80
+                estimatedImpact:
+                  clearanceItems: 8
+                  restockItems: 12
+                  promoteItems: 6
+                  avgDiscountPct: 22.5
+                partial: false
+                lastUpdated: "2025-05-24T08:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /forecast-summary:
+    get:
+      operationId: getForecastSummary
+      summary: Get forecast summary
+      description: |
+        Runs batch forecast for top 5 variants from ML recommendations and returns
+        aggregated 30-day forecast data for the forecast panel:
+        - `categoryTrends`: per-category demand trend direction and percentage change
+        - `topProducts`: top 5 variants with 30-day forecast quantity and confidence
+        - `overallConfidence`: weighted average confidence score (0-1)
+        - `partial`: `true` if forecast data was unavailable for some variants
+      tags: [Dashboard BFF]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Forecast summary (may be partial)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastSummaryResponse'
+              example:
+                categoryTrends:
+                  - category: "Shirts"
+                    trend: "UP"
+                    pct: 12.5
+                  - category: "Accessories"
+                    trend: "DOWN"
+                    pct: -5.2
+                topProducts:
+                  - variantId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                    forecastDays30: 42.0
+                    confidence: "high"
+                overallConfidence: 0.78
+                partial: false
+                lastUpdated: "2025-05-24T08:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+components:
+  parameters:
+    TenantIdHeader:
+      in: header
+      name: X-Tenant-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Tenant UUID — injected by API Gateway after JWT validation
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UserIdHeader:
+      in: header
+      name: X-User-Id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Authenticated user UUID — injected by API Gateway
+      example: "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
+  schemas:
+    DashboardOverviewResponse:
+      type: object
+      description: Top-level KPIs for the main dashboard panel. Null fields indicate the downstream service was unavailable.
+      properties:
+        totalSKU:
+          type: integer
+          format: int64
+          nullable: true
+          description: Active variant count from catalog-service
+          example: 245
+        ordersToday:
+          type: integer
+          format: int64
+          nullable: true
+          description: Count of orders created today from sales-service
+          example: 18
+        revenueToday:
+          type: integer
+          format: int64
+          nullable: true
+          description: Total revenue in VND from today's completed orders
+          example: 7542000
+        highPriorityAlerts:
+          type: integer
+          format: int64
+          nullable: true
+          description: Count of HIGH priority ML recommendations
+          example: 3
+        mlStatus:
+          type: string
+          nullable: true
+          enum: [UP, DOWN, DEGRADED]
+          description: Health status of ml-service
+          example: "UP"
+        partial:
+          type: boolean
+          description: True if any downstream service returned an error (partial data returned)
+          example: false
+        lastUpdated:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-05-24T08:30:00Z"
+
+    HealthSummaryResponse:
+      type: object
+      description: Inventory health metrics. Null fields indicate the downstream service was unavailable.
+      properties:
+        inventoryPressurePct:
+          type: number
+          format: double
+          nullable: true
+          description: Percentage of SKUs with overstocked positions
+          example: 34.5
+        sellThroughRate:
+          type: number
+          format: double
+          nullable: true
+          description: Overall sell-through rate (%) for current season
+          example: 62.1
+        slowMovingSKUCount:
+          type: integer
+          format: int64
+          nullable: true
+          description: Count of SKUs with no movement in the last 30 days
+          example: 12
+        categoryRisks:
+          type: array
+          nullable: true
+          description: Per-category inventory risk assessment
+          items:
+            $ref: '#/components/schemas/CategoryRisk'
+        channelPerformance:
+          type: array
+          nullable: true
+          description: Order counts and conversion rates by sales channel
+          items:
+            $ref: '#/components/schemas/ChannelPerformance'
+        partial:
+          type: boolean
+          example: false
+        lastUpdated:
+          type: string
+          format: date-time
+          nullable: true
+
+    CategoryRisk:
+      type: object
+      properties:
+        category:
+          type: string
+          example: "Shirts"
+        units:
+          type: integer
+          format: int64
+          description: Total units in the category
+          example: 450
+        riskLevel:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+          example: "HIGH"
+
+    ChannelPerformance:
+      type: object
+      properties:
+        channel:
+          type: string
+          example: "pos"
+        orders:
+          type: integer
+          format: int64
+          example: 80
+        rate:
+          type: number
+          format: double
+          description: Conversion or completion rate (0-1)
+          example: 0.88
+
+    RecommendationsSummaryResponse:
+      type: object
+      description: Aggregated ML recommendations. Null fields indicate ml-service was unavailable.
+      properties:
+        total:
+          type: integer
+          format: int64
+          nullable: true
+          description: Total recommendation count for the tenant
+          example: 28
+        byAction:
+          type: object
+          nullable: true
+          description: Breakdown by action type
+          additionalProperties:
+            type: integer
+            format: int64
+          example:
+            CLEARANCE: 8
+            RESTOCK: 12
+            PROMOTE: 6
+            OK: 2
+        topActions:
+          type: array
+          nullable: true
+          description: Top 3 HIGH priority items for quick-action display
+          items:
+            $ref: '#/components/schemas/TopAction'
+        estimatedImpact:
+          $ref: '#/components/schemas/EstimatedImpact'
+          nullable: true
+        partial:
+          type: boolean
+          example: false
+        lastUpdated:
+          type: string
+          format: date-time
+          nullable: true
+
+    TopAction:
+      type: object
+      properties:
+        variantId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        action:
+          type: string
+          enum: [CLEARANCE, RESTOCK, PROMOTE, OK]
+          example: "CLEARANCE"
+        priority:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+          example: "HIGH"
+        reason:
+          type: string
+          nullable: true
+          example: "No movement in 45 days"
+        suggestedDiscountPct:
+          type: number
+          format: double
+          nullable: true
+          example: 30.0
+        suggestedRestockQty:
+          type: integer
+          nullable: true
+          example: null
+        stockAgeDays:
+          type: integer
+          nullable: true
+          example: 45
+        currentStock:
+          type: integer
+          nullable: true
+          example: 80
+
+    EstimatedImpact:
+      type: object
+      properties:
+        clearanceItems:
+          type: integer
+          format: int64
+          nullable: true
+          example: 8
+        restockItems:
+          type: integer
+          format: int64
+          nullable: true
+          example: 12
+        promoteItems:
+          type: integer
+          format: int64
+          nullable: true
+          example: 6
+        avgDiscountPct:
+          type: number
+          format: double
+          nullable: true
+          description: Average suggested discount percentage across CLEARANCE recommendations
+          example: 22.5
+
+    ForecastSummaryResponse:
+      type: object
+      description: Aggregated forecast data. Null fields indicate ml-service was unavailable.
+      properties:
+        categoryTrends:
+          type: array
+          nullable: true
+          description: Per-category demand trend for the next 30 days
+          items:
+            $ref: '#/components/schemas/CategoryTrend'
+        topProducts:
+          type: array
+          nullable: true
+          description: Top 5 variants with 30-day forecast and confidence
+          items:
+            $ref: '#/components/schemas/TopProduct'
+        overallConfidence:
+          type: number
+          format: double
+          nullable: true
+          description: Weighted average confidence score (0-1)
+          example: 0.78
+        partial:
+          type: boolean
+          example: false
+        lastUpdated:
+          type: string
+          format: date-time
+          nullable: true
+
+    CategoryTrend:
+      type: object
+      properties:
+        category:
+          type: string
+          example: "Shirts"
+        trend:
+          type: string
+          enum: [UP, DOWN, STABLE]
+          example: "UP"
+        pct:
+          type: number
+          format: double
+          description: Percentage change vs previous period (negative = decline)
+          example: 12.5
+
+    TopProduct:
+      type: object
+      properties:
+        variantId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        forecastDays30:
+          type: number
+          format: double
+          description: Forecasted demand quantity for next 30 days
+          example: 42.0
+        confidence:
+          type: string
+          enum: [high, medium, low, none]
+          example: "high"
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://insightflow.ai/errors/service-unavailable"
+        title:
+          type: string
+          example: "Service Unavailable"
+        status:
+          type: integer
+          example: 503
+        detail:
+          type: string
+          example: "All downstream services are unreachable"
+        instance:
+          type: string
+          format: uri
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication headers
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    ServiceUnavailable:
+      description: All downstream services are unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'

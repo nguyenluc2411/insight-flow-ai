@@ -1,0 +1,30 @@
+# =============================================================================
+# api-gateway.yml — Config-server overrides for api-gateway
+# Port: 8080
+# =============================================================================
+
+app:
+  jwt:
+    issuer: insightflow-auth-service
+    clock-skew-seconds: 30
+    # secret: injected via JWT_SECRET env var — never commit plaintext here
+
+  swagger:
+    services:
+      - alias: auth
+        service-id: auth-service
+      - alias: catalog
+        service-id: catalog-service
+      - alias: sales
+        service-id: sales-service
+      - alias: ml
+        url: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
+      - alias: dashboard
+        service-id: dashboard-bff
+      - alias: notification
+        service-id: notification-service
+      - alias: integration
+        service-id: integration-service
+
+# CORS — override GATEWAY_CORS_ALLOWED_ORIGIN env var for non-standard deployments
+# spring.cloud.gateway.server.webflux.globalcors is configured per env via env var

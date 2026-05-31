@@ -1,0 +1,419 @@
+# =============================================================================
+# api-gateway — application.yml
+# Base configuration. Loaded in ALL profiles.
+# Profile-specific files (application-dev.yml, application-prod.yml) override
+# only the values they explicitly declare.
+# =============================================================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # ---------------------------------------------------------------------------
+  # Spring Cloud Config — pull from config server at startup.
+  # "optional:" means the gateway still starts if config server is absent
+  # (useful for local dev without full infra). Remove "optional:" in prod CI.
+  # ---------------------------------------------------------------------------
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        initial-interval: 1000
+        max-interval: 2000
+        multiplier: 1.5
+        max-attempts: 6
+
+    # -------------------------------------------------------------------------
+    # Spring Cloud Gateway
+    # default-filters is intentionally EMPTY. Cross-cutting behaviour
+    # (correlation ID, logging, JWT auth, tenant context) is implemented as
+    # @Bean GlobalFilter / GatewayFilter beans so that filter ordering is
+    # enforced in code rather than YAML position (see filter/ package).
+    # -------------------------------------------------------------------------
+    gateway:
+
+      server:
+        webflux:
+          default-filters: []
+
+          # -----------------------------------------------------------------------
+          # Global CORS — applies to every route.
+          # NEVER use "*" for allowed-origins when allow-credentials is true
+          # (browsers reject the pre-flight response per CORS spec).
+          # -----------------------------------------------------------------------
+          globalcors:
+            cors-configurations:
+              "[/**]":
+                allowed-origins:
+                  - ${GATEWAY_CORS_ALLOWED_ORIGIN:http://localhost:3000}
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - PATCH
+                  - DELETE
+                  - OPTIONS
+                allowed-headers:
+                  - Authorization
+                  - Content-Type
+                  - X-Requested-With
+                  - X-Correlation-Id
+                exposed-headers:
+                  - X-Correlation-Id
+                  - X-RateLimit-Remaining
+                allow-credentials: true
+                max-age: 3600
+
+      # discovery locator removed: we rely on DiscoveryClient + proxy for Swagger aggregation
+
+      # -----------------------------------------------------------------------
+      # Route definition contract:
+      # - metadata.public: true|false (REQUIRED) - determines JWT filter behavior
+      # - metadata.rateLimiter: bean name (REQUIRED) - which limiter to apply
+      # - Order matters: webhook routes BEFORE integration routes (more specific first)
+      # See docs/architecture/rate-limiting-strategy.md for L1 design
+      # -----------------------------------------------------------------------
+      routes:
+
+        # NOTE: /swagger-ui/**, /v3/api-docs/**, and /swagger/{serviceId}/v3/api-docs
+        # are served directly by the gateway process (springdoc + SwaggerDocsProxyController).
+        # They bypass gateway routing entirely — no route entries needed here.
+
+        # ── Auth service — public endpoints (no JWT) ─────────────────────────
+        # Covers login, tenant registration, and token refresh.
+        # Rate limit: 5 req / 15 min / IP (loginRateLimiter — FixedWindow custom bean).
+        - id: auth-service-public
+          uri: lb://auth-service
+          predicates:
+              - Path=/api/v1/auth/login,/api/v1/auth/register-tenant,/api/v1/auth/refresh,/api/v1/auth/forgot-password,/api/v1/auth/reset-password
+              - Method=POST
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@loginRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: loginRateLimiter
+          order: 1
+
+        # ── Auth service — protected endpoints (JWT required) ─────────────────
+        # Covers password change, profile, admin user management, etc.
+        - id: auth-service-protected
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 2
+
+        # ── Catalog service ───────────────────────────────────────────────────
+        - id: catalog-service
+          uri: lb://catalog-service
+          predicates:
+            - Path=/api/v1/catalog/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 10
+
+        # ── Sales service ─────────────────────────────────────────────────────
+        - id: sales-service
+          uri: lb://sales-service
+          predicates:
+            - Path=/api/v1/sales/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 20
+
+        # ── Integration service — POS webhooks (PUBLIC, POST only) ────────────
+        # POS platforms authenticate via HMAC payload signature verified inside
+        # integration-service. Gateway MUST forward POS signature headers unmodified:
+        #   X-KiotViet-Signature, X-Sapo-Signature,
+        #   X-Shopify-Hmac-Sha256, X-Haravan-Signature
+        # RemoveRequestHeader=Authorization is safe here — webhook callers don't send JWT.
+        # This route MUST appear before integration-service-protected (more specific).
+        - id: integration-service-webhooks
+          uri: lb://integration-service
+          predicates:
+            - Path=/api/v1/webhooks/**
+            - Method=POST
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@webhookRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: webhookRateLimiter
+          order: 30
+
+        # ── Integration service — protected management endpoints ───────────────
+        # Covers connector configuration, OAuth flows, manual sync triggers.
+        - id: integration-service-protected
+          uri: lb://integration-service
+          predicates:
+            - Path=/api/v1/integrations/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 31
+
+        # ── Dashboard BFF ─────────────────────────────────────────────────────
+        - id: dashboard-bff
+          uri: lb://dashboard-bff
+          predicates:
+            - Path=/api/v1/dashboard/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 40
+
+        # ── Billing service — public package/feature listing (no JWT) ────────
+        - id: billing-service-public
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/v1/billing/packages/**,/api/v1/billing/features
+            - Method=GET
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: defaultRateLimiter
+          order: 45
+
+        # ── Billing service — protected user + internal endpoints ─────────────
+        - id: billing-service-protected
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/v1/billing/**,/api/v1/internal/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 46
+
+        # ── Notification service ──────────────────────────────────────────────
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 50
+
+        # ── ML service ────────────────────────────────────────────────────────
+        # Python FastAPI — does NOT register with Eureka. Use direct HTTP URI.
+        - id: ml-service
+          uri: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
+          predicates:
+            - Path=/api/v1/ml/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 60
+
+        # NOTE: /actuator/health and /v3/api-docs/** are served by the gateway
+        # process itself — Spring Boot exposes them on port 8080 automatically.
+        # No routing entries needed.
+
+# =============================================================================
+# Springdoc — Swagger Aggregator
+# Gateway aggregates API docs from all downstream services.
+# Add new services under app.swagger.services + springdoc.swagger-ui.urls.
+# =============================================================================
+springdoc:
+  api-docs:
+    enabled: true                  # Bắt buộc — tắt là springdoc không register handler nào, kể cả swagger-config
+  swagger-ui:
+    enabled: true
+    disable-swagger-default-url: true
+    urls:
+      - name: "Auth Service"
+        url: /v3/api-docs/auth
+      - name: "Catalog Service"
+        url: /v3/api-docs/catalog
+      - name: "Sales Service"
+        url: /v3/api-docs/sales
+      - name: "ML Service"
+        url: /v3/api-docs/ml
+      - name: "Dashboard BFF"
+        url: /v3/api-docs/dashboard
+      - name: "Notification Service"
+        url: /v3/api-docs/notification
+      - name: "Integration Service"
+        url: /v3/api-docs/integration
+      - name: "Billing Service"
+        url: /v3/api-docs/billing
+
+# =============================================================================
+# Eureka — MUST be at root level, NOT nested under spring.cloud.eureka.
+# spring-cloud-starter-netflix-eureka-client binds to the eureka.* namespace.
+# =============================================================================
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: "${spring.application.name}:${random.value}"
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+# =============================================================================
+# Resilience4j — Circuit breaker foundation.
+#
+# TODO(Phase 2): Wire CircuitBreaker filters per route once fallback controller
+# is implemented and baseline failure rates are known from production traffic.
+# See docs/adr/gateway-circuit-breaker.md
+# =============================================================================
+resilience4j:
+  circuitbreaker:
+    instances:
+      default-cb:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 10s
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.cloud.gateway.support.NotFoundException
+
+# =============================================================================
+# Application-level configuration.
+# jwt.secret MUST come from Config Server in prod — this is a placeholder only.
+# =============================================================================
+app:
+  jwt:
+    # Dev fallback — 32+ chars required for HS256. MUST be overridden via env in staging/prod.
+    secret: ${JWT_SECRET:insightflow-dev-secret-change-in-production!!}
+    issuer: "insightflow-auth-service"
+    clock-skew-seconds: 30
+
+  # Service-to-service JWT for calling billing-service internal endpoints.
+  # MUST match billing-service's app.service-jwt.secret exactly.
+  service-jwt:
+    secret: ${SERVICE_JWT_SECRET:insightflow-service-jwt-secret-change-in-prod!!}
+
+  # ---------------------------------------------------------------------------
+  # Swagger aggregator — alias → serviceId mapping.
+  # alias: short path used in /v3/api-docs/{alias}
+  # service-id: Eureka-registered service name (load-balanced by WebClient)
+  # To add a service: append an entry here AND add to springdoc.swagger-ui.urls.
+  # ---------------------------------------------------------------------------
+  swagger:
+    services:
+      - alias: auth
+        service-id: auth-service
+      - alias: catalog
+        service-id: catalog-service
+      - alias: sales
+        service-id: sales-service
+      # ml-service is Python — not in Eureka. Use direct URL.
+      - alias: ml
+        url: http://${ML_SERVICE_HOST:localhost}:${ML_SERVICE_PORT:8000}
+      - alias: dashboard
+        service-id: dashboard-bff
+      - alias: notification
+        service-id: notification-service
+      - alias: integration
+        service-id: integration-service
+      - alias: billing
+        service-id: billing-service
+
+# =============================================================================
+# Spring Boot Actuator
+# /actuator/health and /v3/api-docs/** are served directly by this process.
+# /actuator/gateway exposes route table for operational visibility.
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    redis:
+      enabled: true
+
+# =============================================================================
+# Logging
+# %X{correlationId} is populated by CorrelationIdFilter (order -100) via MDC.
+# =============================================================================
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId}] - %msg%n"
+  level:
+    root: INFO
+    com.insightflow.gateway: INFO

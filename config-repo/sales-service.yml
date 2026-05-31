@@ -1,0 +1,13 @@
+# =============================================================================
+# sales-service.yml — Config-server overrides for sales-service
+# Port: 8083
+# =============================================================================
+
+spring:
+  jpa:
+    properties:
+      hibernate:
+        default_schema: sales_db
+  flyway:
+    schemas: sales_db
+    default-schema: sales_db

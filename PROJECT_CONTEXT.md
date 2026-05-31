@@ -1,0 +1,766 @@
+\# Insight Flow AI - Backend Project Context
+
+
+
+> \*\*Purpose\*\*: File này là context tổng cho mọi AI session (Claude, Cursor, Copilot Chat).
+
+> Paste toàn bộ file này vào đầu mỗi conversation mới để AI hiểu dự án.
+
+> 
+
+> \*\*Scope\*\*: Repository này CHỈ chứa backend services. Frontend được tách ra repo riêng `insight-flow-frontend`.
+
+
+
+\---
+
+
+
+\## 1. Product Vision
+
+
+
+\*\*Insight Flow AI\*\* là SaaS B2B cung cấp:
+
+\- Dự báo nhu cầu sản phẩm thời trang theo thời gian (demand forecasting)
+
+\- Phát hiện xu hướng từ dữ liệu social/ecommerce (trend detection)
+
+\- Đề xuất hành động xử lý tồn kho: giảm giá, clearance, restock (recommendation engine)
+
+\- Tối ưu chuỗi cung ứng cho shop thời trang vừa và nhỏ tại Việt Nam
+
+
+
+\*\*Target MVP\*\*: Shop thời trang nhỏ 1-5 cửa hàng, đang dùng KiotViet/Sapo/Haravan.
+
+\*\*Pricing dự kiến\*\*: $20-50/store/tháng (tier-based).
+
+\*\*North star metric\*\*: Tỷ lệ shop giảm được dead stock sau 3 tháng dùng.
+
+
+
+\## 2. Repository Structure
+
+
+
+Dự án chia làm 2 repo riêng biệt:
+
+
+
+| Repo | Scope | Tech |
+
+|------|-------|------|
+
+| `insight-flow-ai` (này) | Tất cả backend services, ML, infra | Java, Python, Docker |
+
+| `insight-flow-frontend` (riêng) | Web app, admin dashboard | React/Next.js |
+
+
+
+\*\*Liên kết giữa 2 repo\*\*:
+
+\- Backend expose OpenAPI 3.1 spec qua `/v3/api-docs` mỗi service
+
+\- OpenAPI specs commit vào folder `api-contracts/` của repo này
+
+\- Frontend pull specs về và generate TypeScript client
+
+\- Contract-first development: thay đổi API → update spec → notify frontend team
+
+
+
+\## 3. Team
+
+
+
+\- 2 Backend (Java/Spring) — repo này
+
+\- 1 ML Engineer (Python) — repo này
+
+\- 1 Fullstack (Frontend + Integration) — chủ yếu repo frontend, hỗ trợ integration ở backend
+
+
+
+\## 4. Tech Stack (Backend Only)
+
+
+
+| Layer | Technology |
+
+|-------|-----------|
+
+| Backend services | Java 21, Spring Boot 3.5.x, Spring Cloud 2024.x |
+
+| Service discovery | Eureka |
+
+| Config | Spring Cloud Config |
+
+| Gateway | Spring Cloud Gateway |
+
+| ML services | Python 3.11, FastAPI, scikit-learn, Prophet, XGBoost |
+
+| Messaging | Apache Kafka |
+
+| Database | PostgreSQL 16 (database-per-service: 7 databases) |
+
+| Cache | Redis 7 |
+
+| Object storage | MinIO (S3-compatible) cho models, images |
+
+| Container | Docker Compose (dev), Kubernetes (production future) |
+
+| CI/CD | GitHub Actions |
+
+| Observability | Prometheus + Grafana + Loki |
+
+| API doc | SpringDoc OpenAPI 3.1 |
+
+
+
+\## 5. Architecture Principles
+
+
+
+1\. \*\*Microservices nhưng tối giản cho MVP\*\*: 8-10 services, không phải 20+. Tách service khi có lý do cụ thể (scale, team, tech khác).
+
+2\. \*\*Multi-tenancy\*\*: Shared database + `tenant\_id` column. Postgres Row Level Security (RLS) làm defense in depth. KHÔNG dùng schema-per-tenant hay DB-per-tenant ở giai đoạn này.
+
+3\. \*\*Event-driven\*\*: Kafka là backbone. Services giao tiếp async qua events khi có thể, sync qua REST chỉ khi bắt buộc.
+
+4\. \*\*Database-per-service\*\*: Mỗi service có Postgres schema riêng. KHÔNG cross-service join. Cần data của service khác → gọi API hoặc subscribe event.
+
+5\. \*\*API-first\*\*: Mọi service expose OpenAPI 3.1 spec. BFF aggregate cho frontend repo consume.
+
+6\. \*\*Plugin-based integrations\*\*: 1 `integration-service` với plugin pattern, không tạo service riêng cho mỗi POS.
+
+7\. \*\*Contract-first cho frontend\*\*: Thay đổi API public phải update OpenAPI spec trước, notify frontend repo.
+
+
+
+\## 6. Services (MVP Scope)
+
+
+
+\### Platform Services (`platform-services/`)
+
+\- `discovery-server` - Eureka registry ✅ DONE
+
+\- `config-server` - Spring Cloud Config ✅ DONE
+
+\- `api-gateway` - Routing, JWT auth, rate limiting, CORS cho frontend repo 🔄 IN PROGRESS
+
+
+
+\### Business Services (`business-services/`)
+
+\- `auth-service` - Tenants, users, roles, JWT issuance
+
+\- `catalog-service` - Products, variants, locations, inventory levels (gộp product/inventory/warehouse)
+
+\- `sales-service` - Orders, order items, customers, suppliers (gộp supplier vì nhỏ)
+
+\- `billing-service` - Gói/subscription, plan limits, usage, manual upgrade, outbox (port 8086)
+
+
+
+\### Intelligence Services (`intelligence-services/`)
+
+\- `ml-service` - Forecasting, recommendation (Python/FastAPI). Phase 1: Prophet + rule-based recommendation.
+
+
+
+\### Integration Services (`integration-services/`)
+
+\- `integration-service` - Plugin-based POS connectors (KiotViet, Sapo, Haravan)
+
+
+
+\### Engagement Services (`engagement-services/`)
+
+\- `dashboard-bff` - Backend for Frontend, aggregate APIs cho frontend repo
+
+\- `notification-service` - Email/Zalo/in-app alerts
+
+
+
+\*\*KHÔNG làm trong MVP\*\* (defer to Phase 2+):
+
+\- ❌ trend-intelligence-service (NLP từ social)
+
+\- ❌ feature-engineering-service riêng
+
+\- ❌ model-registry MLflow riêng (dùng file-based ban đầu)
+
+\- ❌ report-service riêng (dashboard-bff lo)
+
+\- ❌ Service riêng cho từng connector
+
+\- ❌ supplier-service riêng (gộp vào sales-service)
+
+\- ❌ warehouse-service riêng (gộp vào catalog-service)
+
+
+
+\## 7. Folder Structure (Backend Monorepo)
+
+
+
+```
+
+insight-flow-ai/
+
+├── .github/
+
+│   └── workflows/
+
+│       ├── ci-java.yml             # Build all Java services
+
+│       └── ci-python.yml           # Build ML service
+
+│
+
+├── platform-services/
+
+│   ├── discovery-server/           ✅ Eureka
+
+│   ├── config-server/              ✅ Spring Cloud Config
+
+│   └── api-gateway/                🔄 Spring Cloud Gateway
+
+│
+
+├── business-services/
+
+│   ├── auth-service/               📋 Tenants, users, JWT
+
+│   ├── catalog-service/            📋 Products + inventory + warehouses
+
+│   └── sales-service/              📋 Orders + customers + suppliers
+
+│
+
+├── intelligence-services/
+
+│   └── ml-service/                 📋 Python FastAPI - forecast + recommendation
+
+│
+
+├── integration-services/
+
+│   └── integration-service/        📋 Plugin-based, KiotViet first
+
+│
+
+├── engagement-services/
+
+│   ├── dashboard-bff/              📋 BFF cho frontend repo
+
+│   └── notification-service/       📋 Email/Zalo/in-app
+
+│
+
+├── shared-core/                    # Java shared libraries
+
+│   ├── common-events/              📋 Kafka event DTOs
+
+│   ├── common-security/            📋 JWT validator, TenantContext
+
+│   └── common-web/                 📋 Exception handlers, Problem Details
+
+│
+
+├── infrastructure/
+
+│   ├── docker/
+
+│   │   └── docker-compose.yml      ✅ Kafka, Redis, Postgres
+
+│   ├── kafka/                      📋 Topic init scripts
+
+│   └── postgres/
+
+│       └── init.sql                📋 Create schemas
+
+│
+
+├── observability/
+
+│   ├── prometheus/                 📋 Scrape config
+
+│   ├── grafana/                    📋 Dashboards JSON
+
+│   └── loki/                       📋 Log aggregation config
+
+│
+
+├── config-repo/                    📋 Spring Cloud Config source files
+
+│   ├── application.yml             # Shared config (db url pattern, kafka)
+
+│   ├── auth-service.yml
+
+│   ├── catalog-service.yml
+
+│   └── ...
+
+│
+
+├── api-contracts/                  📋 OpenAPI specs cho frontend repo
+
+│   ├── auth-service.yaml
+
+│   ├── catalog-service.yaml
+
+│   └── dashboard-bff.yaml
+
+│
+
+├── scripts/                        📋 Build, deploy, dev scripts
+
+│   ├── build-all.ps1
+
+│   ├── run-local.ps1
+
+│   └── export-openapi.ps1
+
+│
+
+├── docs/
+
+│   ├── architecture/               📋 ADR, diagrams
+
+│   ├── api/                        📋 API guides
+
+│   └── runbooks/                   📋 On-call docs
+
+│
+
+├── .gitignore                      ✅
+
+├── CLAUDE.md                       ✅ AI assistant instructions
+
+├── PROJECT\_CONTEXT.md              ✅ File này
+
+└── README.md                       ✅
+
+```
+
+
+
+\*\*Folder đã xóa (không dùng MVP)\*\*:
+
+\- ❌ `event-streaming/` → gộp vào `shared-core/common-events/`
+
+\- ❌ `testing/` → tests ở trong từng service
+
+\- ❌ `devops/` → gộp vào `infrastructure/`
+
+
+
+\## 8. Database Strategy
+
+
+
+\- Mỗi service có 1 PostgreSQL database riêng (database-per-service pattern)
+
+\- 7 databases: `insightflow\_auth`, `insightflow\_catalog`, `insightflow\_sales`, `insightflow\_integration`, `insightflow\_notification`, `insightflow\_ml`, `insightflow\_billing`
+
+\- Khởi tạo tự động qua `infrastructure/postgres/init.sql` khi Docker container start lần đầu
+
+\- Mỗi DB dùng schema riêng cùng tên: `auth\_db`, `catalog\_db`, etc. (Flyway tự tạo schema)
+
+\- Migration: Flyway cho mỗi service (chạy trong database riêng, KHÔNG cross-database)
+
+\- Mọi bảng nghiệp vụ có: `id UUID`, `tenant\_id UUID`, `created\_at`, `updated\_at`
+
+\- Mọi bảng sync với POS có thêm: `external\_ids JSONB`, `raw\_data JSONB`, `source VARCHAR`
+
+\- Inventory dùng pattern append-only `inventory\_movements` table (event sourcing)
+
+
+
+\## 9. Authentication \& Authorization
+
+
+
+\- \*\*JWT\*\*: Access token (15 min) + Refresh token (30 days, hashed in DB để revoke được)
+
+\- \*\*Access token claims\*\*: `sub`, `tenant\_id`, `tenant\_slug`, `plan`, `roles\[]`, `permissions\[]`
+
+\- \*\*Gateway\*\*: Authentication only (verify JWT signature + expiry)
+
+\- \*\*Services\*\*: Authorization (check permissions + tenant\_id match)
+
+\- \*\*Default roles\*\*: OWNER, MANAGER, STAFF, ACCOUNTANT, VIEWER
+
+\- \*\*Tenant context propagation\*\*: Header `X-Tenant-Id`, `X-User-Id` xuống downstream services
+
+\- \*\*CORS\*\*: Gateway whitelist domain của frontend repo (`localhost:3000` dev, production domain sau)
+
+
+
+\## 10. Kafka Events (Core Set)
+
+
+
+Naming: `{domain}.{entity}.{action}` - ví dụ `catalog.inventory.updated`
+
+
+
+| Topic | Producer | Consumers |
+
+|-------|----------|-----------|
+
+| `catalog.product.created` | catalog-service | ml-service, dashboard-bff |
+
+| `catalog.inventory.updated` | catalog-service | ml-service, notification-service |
+
+| `sales.order.completed` | sales-service | catalog-service, ml-service |
+
+| `integration.sync.completed` | integration-service | catalog-service, sales-service |
+
+| `ml.forecast.generated` | ml-service | dashboard-bff, notification-service |
+
+| `ml.recommendation.created` | ml-service | dashboard-bff, notification-service |
+
+
+
+Event format: JSON với schema (chuyển Avro sau khi stable).
+
+Mọi event có: `event\_id`, `event\_type`, `tenant\_id`, `occurred\_at`, `payload`, `metadata`.
+
+
+
+\## 11. Integration Strategy
+
+
+
+\### Priority order
+
+1\. \*\*KiotViet\*\* (làm trước, ship production trước khi làm cái khác)
+
+2\. Sapo
+
+3\. Haravan  
+
+4\. Shopify (chỉ khi có customer yêu cầu)
+
+
+
+\### Sync tiers
+
+1\. \*\*Webhook\*\* (real-time, best effort, idempotency key)
+
+2\. \*\*Incremental poll\*\* (15 min, từ last\_sync watermark)
+
+3\. \*\*Full reconciliation\*\* (daily 2-4 AM, alert nếu drift)
+
+
+
+\### Connector framework
+
+```
+
+integration-services/integration-service/
+
+├── core/ (Registry, Interface, Orchestrator, RateLimiter, CredentialVault)
+
+├── connectors/
+
+│   ├── kiotviet/
+
+│   ├── sapo/
+
+│   └── haravan/
+
+└── webhook/
+
+```
+
+
+
+\## 12. ML Approach (Phase 1)
+
+
+
+\*\*Keep it simple, ship value\*\*:
+
+\- Forecasting: Prophet với category-level fallback cho cold start
+
+\- Recommendation: Rule-based đầu tiên ("tồn >90 ngày + sales giảm >50% → clearance")
+
+\- KHÔNG dùng LSTM, KHÔNG train deep learning models ở Phase 1
+
+\- Model storage: file system + MinIO, chưa cần MLflow
+
+
+
+\## 13. Current Progress
+
+
+
+\### Done ✅
+
+
+
+\*\*Platform Services\*\*
+
+\- `discovery-server` (Eureka registry)
+
+\- `config-server` (Spring Cloud Config)
+
+\- `api-gateway` (filters: CorrelationId, Logging, RateLimit, JWT validation, TenantContext; Swagger aggregator; 6-header inject; RemoveRequestHeader=Authorization; Bearer Swagger UI)
+
+
+
+\*\*Business Services\*\*
+
+\- `auth-service` (tenant onboarding, login, JWT issuance/refresh/logout, RBAC, Flyway V1-V5)
+
+\- `catalog-service` (products, variants, categories, locations, inventory movements/levels/summary, Kafka producer, soft delete, C7 frontend endpoints)
+
+\- `sales-service` (orders, customers, suppliers, Kafka producer, order state machine, materialized view daily\_sales\_summary)
+
+
+
+\*\*Intelligence Services\*\*
+
+\- `ml-service` (Python FastAPI, Prophet forecast + cold-start fallback, rule-based recommendation, Kafka consumer, per-tenant model storage)
+
+
+
+\*\*Integration Services\*\*
+
+\- `integration-service` (plugin framework, KiotViet connector full, HMAC webhook, Jasypt credential vault, Resilience4j rate limiter, scheduled sync, Kafka producer)
+
+
+
+\*\*Engagement Services\*\*
+
+\- `dashboard-bff` (4 aggregate endpoints, parallel Mono.zip, Kafka consumer ml events, WebClient lb://)
+
+\- `notification-service` (in-app notifications, preferences, Kafka consumer 3 topics, email wired pending auth email endpoint)
+
+
+
+\*\*Shared Core\*\*
+
+\- `common-security` (UserContext, @CurrentUser, UserContextFilter, InternalHeaders)
+
+\- `common-events` (Kafka event DTOs for all topics)
+
+\- `common-web` (GlobalExceptionHandler, RFC 7807 Problem Details)
+
+
+
+\*\*Infrastructure\*\*
+
+\- Docker Compose: Postgres (5433), Redis (6379), Kafka (9092), Zookeeper, Kafka UI (8085), pgAdmin (5050), MailHog (1025/8025)
+
+\- `.env` / `.env.example` pattern — no hardcoded credentials
+
+\- All services read config via Spring Cloud Config + env vars
+
+
+
+\*\*Cross-cutting\*\*
+
+\- Refactor: @CurrentUser thay @RequestHeader trên 6 services (auth, catalog, sales, bff, integration, notification)
+
+\- Refactor: Gateway inject 6 headers, RemoveRequestHeader=Authorization, Bearer Swagger UI
+
+\- E2E test: 9/9 PASS (auth → catalog → sales → Kafka → ml), 39/39 unit tests PASS
+
+\- Bug fixes: soft delete filter, webhook 404 security, integration jobs 404, notification OpenAPI
+
+
+
+\### In Progress 🔄
+
+(trống)
+
+
+
+\### Next Up 📋
+
+\- [ ] integration-service: Sapo connector implementation (framework đã có)
+
+\- [ ] integration-service: Haravan connector implementation
+
+\- [ ] observability: Grafana dashboards (inventory health, order volume, ML accuracy), Loki log aggregation
+
+\- [ ] Service-level authz (permission + tenant\_id check) — hiện rely on gateway only
+
+\- [ ] market-analytics API cho trang `/market` (FE hiện đang mock data)
+
+\- [ ] billing: payment gateway (VNPay/MoMo) + admin approve UI — defer Phase 2
+
+\- [ ] B7 pipeline: test với KiotViet sandbox thật (mới test bằng synthetic events)
+
+\### Recently Done ✅ (2026-05-30)
+
+\*\*billing-service (MỚI)\*\*
+
+\- [x] Gói: Free / Trial / Basic (199k) / Advanced (499k) / Pro (699k); Trial 30 ngày mở mức Advanced, hết hạn auto-downgrade về Free
+
+\- [x] Outbox Pattern (DB + Kafka atomic), Service JWT cho `/api/v1/internal/*`, snapshot features+limits tại thời điểm subscribe
+
+\- [x] Auto-tạo Trial khi `auth.tenant.registered`; scheduled job hết hạn Trial → Free
+
+\- [x] Manual upgrade: user gửi `upgrade-request` → ops duyệt qua internal API (chưa tích hợp thanh toán — MVP)
+
+\- [x] Gateway: enforce quota API/ngày theo gói (gọi billing đồng bộ, trả 429 khi vượt; fail-open nếu billing lỗi)
+
+\*\*POS → Catalog → ML pipeline (B7)\*\*
+
+\- [x] integration `integration.product.synced` → catalog upsert Product/Variant + lưu `external\_ids`; order-synced thêm line-items; auto full-sync 365 ngày khi connect
+
+\- [x] catalog resolve SKU → variant\_id, publish `catalog.order.normalized`; ml-service consume → `sales_data` (occurred\_at = ngày mua POS) → forecast chạy được trong trial. E2E pass bằng synthetic events.
+
+\*\*auth\*\*
+
+\- [x] forgot-password / reset-password (token hash, hết hạn, single-use; email qua MailHog dev)
+
+\- [x] Vá leak cross-tenant billing-history (chuyển sang internal/service JWT)
+
+\*\*Frontend (repo riêng `insight-flow-frontend`, đã có remote)\*\*
+
+\- [x] Wire billing UI (gói/subscription/usage/upgrade-request); locked-feature UX (hiện full menu + khóa); ẩn Free/Trial khỏi thẻ gói; settings tab-nav; section `#pricing` ở landing; forgot/reset password UI
+
+\### Recently Done ✅ (2026-05-27)
+
+\- [x] Database-per-service: tách 6 databases riêng (`insightflow\_auth/catalog/sales/integration/notification/ml`)
+
+\- [x] infrastructure/postgres/init.sql: tự động tạo 6 databases khi Docker start
+
+\- [x] docker-compose.yml: mount init.sql vào PostgreSQL container
+
+\- [x] Tất cả service application.yml: đổi từ `POSTGRES\_DB` chung → service-specific `*\_DB\_NAME`
+
+\- [x] .env + .env.example: cập nhật với per-service DB name vars
+
+
+
+\### Recently Done ✅ (2026-05-24/25)
+
+\- [x] config-repo: 16 config files cho tất cả services + config-server wired
+
+\- [x] api-contracts: 7 OpenAPI 3.1 YAML specs (tất cả services)
+
+\- [x] ml-service: training trigger endpoint (POST /train, GET /train/{id}) + multi-item order bug fix
+
+\- [x] catalog-service: Kafka consumer `sales.order.completed` → auto-deduct inventory
+
+
+
+\## 14. Coding Conventions
+
+
+
+\### Java/Spring
+
+\- Package: `com.insightflow.{service}` (vd: `com.insightflow.auth`)
+
+\- Layered: `controller` → `service` → `repository` → `entity`
+
+\- DTOs riêng cho request/response, KHÔNG expose entity ra API
+
+\- Mapper: MapStruct
+
+\- Validation: Jakarta Bean Validation ở DTO
+
+\- Exception: Centralized handler với `@RestControllerAdvice`, return RFC 7807 Problem Details
+
+\- Lombok cho boilerplate (`@Data`, `@Builder`, `@RequiredArgsConstructor`)
+
+\- Repository: Spring Data JPA, custom queries với `@Query` hoặc JPQL
+
+\- OpenAPI: SpringDoc, mọi endpoint có `@Operation`, `@ApiResponse`
+
+
+
+\### Database
+
+\- Tên bảng: `snake\_case`, số nhiều (`users`, `products`)  
+
+\- Mọi FK có index
+
+\- UUID v4 cho primary key
+
+\- Migration: `V{version}\_\_{description}.sql` (Flyway convention)
+
+
+
+\### Git
+
+\- Branch: `feature/{ticket}-{short-desc}`, `fix/...`, `chore/...`
+
+\- Commit: Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`)
+
+\- PR: 1 service per PR khi có thể
+
+
+
+\### API Contract Discipline
+
+\- Breaking change API → bump version (vd: `/api/v1` → `/api/v2`)
+
+\- Update OpenAPI spec trong cùng PR với code change
+
+\- Notify frontend team qua channel chung khi spec đổi
+
+
+
+\## 15. Anti-patterns To Avoid
+
+
+
+\- ❌ Tạo service mới khi chưa có lý do scale/team riêng
+
+\- ❌ Cross-service database join hoặc shared schema
+
+\- ❌ Sync REST call khi có thể dùng event
+
+\- ❌ Quên `tenant\_id` trong query (sẽ leak data giữa tenants)
+
+\- ❌ Lưu credentials POS plaintext (phải encrypt với KMS hoặc Jasypt)
+
+\- ❌ Webhook handler không idempotent
+
+\- ❌ Train ML model phức tạp trước khi có data thật
+
+\- ❌ Breaking change API mà không bump version + notify frontend team
+
+\- ❌ Đưa logic UI/UX vào BFF (BFF chỉ aggregate + transform data)
+
+\- ❌ Commit `target/`, `.idea/`, `\*.iml` vào Git
+
+
+
+\## 16. When Asking AI For Help
+
+
+
+Provide:
+
+1\. Service bạn đang code (vd: auth-service)
+
+2\. Layer/file cụ thể (controller, service, repository, schema)  
+
+3\. Yêu cầu cụ thể (implement endpoint X, refactor Y, debug Z)
+
+4\. Snippet code hiện tại nếu có
+
+5\. Error message đầy đủ nếu debug
+
+
+
+Avoid:
+
+\- "Build cho tôi cả service" → quá rộng, dễ sai context
+
+\- Hỏi mà không reference file/folder cụ thể
+
+\- Đề cập đến frontend code (đó là repo khác, scope khác)
+
