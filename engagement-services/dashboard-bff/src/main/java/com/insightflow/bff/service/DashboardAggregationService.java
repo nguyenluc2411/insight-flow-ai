@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.Comparator;
 
 @Slf4j
 @Service
@@ -296,58 +297,60 @@ public class DashboardAggregationService {
     // -------------------------------------------------------------------------
 
     public ForecastSummaryResponse getForecastSummary(UserContext user) {
-        // Step 1: get top 5 variant IDs from recommendations
-        MlPagedRecommendationsResponse recsResult = mlClient.get()
-                .uri("/api/v1/ml/recommendations?size=5")
+        // Step 1: get active variants from catalog — no dependency on ML recommendations
+        PagedResponse<Map<String, Object>> variantsPage = catalogClient.get()
+                .uri("/api/v1/catalog/variants?size=20")
                 .headers(securityHeaders(user))
                 .retrieve()
-                .bodyToMono(MlPagedRecommendationsResponse.class)
+                .bodyToMono(new ParameterizedTypeReference<PagedResponse<Map<String, Object>>>() {})
                 .timeout(CALL_TIMEOUT)
                 .onErrorResume(ex -> {
-                    log.warn("ml recommendations for forecast unavailable: {}", ex.getMessage());
+                    log.warn("catalog variants unavailable for forecast: {}", ex.getMessage());
                     return Mono.empty();
                 })
                 .blockOptional(Duration.ofSeconds(12))
                 .orElse(null);
 
-        if (recsResult == null || recsResult.getItems() == null || recsResult.getItems().isEmpty()) {
+        List<Map<String, Object>> variants = variantsPage != null ? variantsPage.safeContent() : Collections.emptyList();
+
+        if (variants.isEmpty()) {
             return ForecastSummaryResponse.builder()
                     .categoryTrends(Collections.emptyList())
                     .topProducts(Collections.emptyList())
                     .overallConfidence(0.0)
-                    .partial(true)
+                    .partial(false)
+                    .hasColdStart(false)
+                    .message("Chưa có sản phẩm. Hãy thêm sản phẩm để xem dự báo.")
                     .lastUpdated(Instant.now())
                     .build();
         }
 
-        List<UUID> variantIds = recsResult.getItems().stream()
-                .map(MlRecommendationItem::getVariantId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .limit(5)
-                .collect(Collectors.toList());
+        // Step 2: forecast each variant individually — pass SKU for cold-start category hint
+        // Use Flux.fromIterable + flatMap for concurrent calls (max 5 parallel)
+        List<MlForecastResponse> forecasts = reactor.core.publisher.Flux.fromIterable(variants)
+                .flatMap(v -> {
+                    Object idObj = v.get("id");
+                    Object skuObj = v.get("sku");
+                    if (idObj == null) return reactor.core.publisher.Mono.empty();
 
-        // Step 2: batch forecast for those variants
-        Map<String, Object> batchRequest = Map.of(
-                "variantIds", variantIds,
-                "days", 30
-        );
-
-        List<MlForecastResponse> forecasts = mlClient.post()
-                .uri("/api/v1/ml/forecast/batch")
-                .headers(securityHeaders(user))
-                .header("Content-Type", "application/json")
-                .bodyValue(batchRequest)
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<List<MlForecastResponse>>() {})
-                .timeout(CALL_TIMEOUT)
-                .onErrorResume(ex -> {
-                    log.warn("ml batch forecast unavailable: {}", ex.getMessage());
-                    return Mono.empty();
-                })
-                .blockOptional(Duration.ofSeconds(12))
+                    String variantId = idObj.toString();
+                    String skuParam = skuObj != null ? "&sku=" + skuObj : "";
+                    return mlClient.get()
+                            .uri("/api/v1/ml/forecast/" + variantId + "?days=30" + skuParam)
+                            .headers(securityHeaders(user))
+                            .retrieve()
+                            .bodyToMono(MlForecastResponse.class)
+                            .timeout(CALL_TIMEOUT)
+                            .onErrorResume(ex -> {
+                                log.warn("ml forecast failed for variant={}: {}", variantId, ex.getMessage());
+                                return reactor.core.publisher.Mono.empty();
+                            });
+                }, 5)
+                .collectList()
+                .blockOptional(Duration.ofSeconds(20))
                 .orElse(Collections.emptyList());
 
+        // Step 3: build TopProduct list, sort by total forecast desc
         List<ForecastSummaryResponse.TopProduct> topProducts = forecasts.stream()
                 .map(f -> {
                     double totalQty = f.getPredictions() == null ? 0.0 :
@@ -361,9 +364,14 @@ public class DashboardAggregationService {
                             .confidence(f.getConfidence())
                             .build();
                 })
+                .sorted(Comparator.comparingDouble(
+                        (ForecastSummaryResponse.TopProduct p) -> p.getForecastDays30() != null ? p.getForecastDays30() : 0.0
+                ).reversed())
                 .collect(Collectors.toList());
 
-        // Overall confidence: map string confidence to numeric, compute average
+        boolean hasColdStart = forecasts.stream()
+                .anyMatch(f -> "low".equals(f.getConfidence()));
+
         double avgConfidence = forecasts.stream()
                 .mapToDouble(f -> confidenceScore(f.getConfidence()))
                 .average()
@@ -374,6 +382,7 @@ public class DashboardAggregationService {
                 .topProducts(topProducts)
                 .overallConfidence(Math.round(avgConfidence * 10.0) / 10.0)
                 .partial(false)
+                .hasColdStart(hasColdStart)
                 .lastUpdated(Instant.now())
                 .build();
     }

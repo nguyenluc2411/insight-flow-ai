@@ -22,9 +22,17 @@ _COLD_START_WARNING = (
 _NO_BASE_WARNING = "Chưa có dữ liệu bán hàng và chưa có mô hình nền cho nhóm hàng này."
 
 
+_GENERIC_COLD_START_WARNING = (
+    "Sản phẩm chưa có danh mục. Dự báo dựa trên xu hướng thị trường thời trang HCM chung. "
+    "Gán danh mục cho sản phẩm để có dự báo chính xác hơn."
+)
+
+
 def _cold_start_warning(basis: str) -> str | None:
     if basis == "market_trends_hcm":
         return _COLD_START_WARNING
+    if basis == "market_trends_hcm_generic":
+        return _GENERIC_COLD_START_WARNING
     if basis == "no_base_model":
         return _NO_BASE_WARNING
     return None
@@ -39,10 +47,14 @@ def get_forecast(
         default=None,
         description="Fashion category key for cold-start base model (e.g. ao_so_mi).",
     ),
+    sku: str | None = Query(
+        default=None,
+        description="Variant SKU — used to guess category when no explicit mapping exists.",
+    ),
     db: Session = Depends(get_db),
 ) -> ForecastResponse:
     predictions, confidence, basis = forecaster.predict(
-        db, x_tenant_id, variant_id, days, category_key=category
+        db, x_tenant_id, variant_id, days, category_key=category, sku=sku
     )
     return ForecastResponse(
         variant_id=variant_id,

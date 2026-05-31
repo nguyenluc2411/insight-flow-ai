@@ -17,6 +17,8 @@ public class ForecastSummaryResponse {
     private List<TopProduct> topProducts;
     private Double overallConfidence;
     private boolean partial;
+    private Boolean hasColdStart;
+    private String message;
     private Instant lastUpdated;
 
     @Data

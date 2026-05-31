@@ -191,4 +191,10 @@ public class ProductService {
         log.debug("Created variant id={} productId={} tenantId={}", saved.getId(), productId, tenantId);
         return variantMapper.toResponse(saved);
     }
+
+    @Transactional(readOnly = true)
+    public Page<VariantResponse> getActiveVariants(UUID tenantId, Pageable pageable) {
+        return variantRepository.findByTenantIdAndStatus(tenantId, "active", pageable)
+                .map(variantMapper::toResponse);
+    }
 }

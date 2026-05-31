@@ -25,7 +25,7 @@ class ForecastResponse(BaseModel):
     tenant_id: UUID = Field(..., alias="tenantId")
     forecast_days: int = Field(..., alias="forecastDays")
     confidence: Literal["high", "medium", "low", "none"]
-    basis: Literal["variant", "market_trends_hcm", "no_base_model"]
+    basis: Literal["variant", "market_trends_hcm", "market_trends_hcm_generic", "no_base_model"]
     predictions: list[ForecastPoint]
     generated_at: datetime = Field(..., alias="generatedAt")
     warning: Optional[str] = None

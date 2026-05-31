@@ -96,6 +96,7 @@ class ProphetForecaster:
         variant_id: UUID,
         days: int = 30,
         category_key: str | None = None,
+        sku: str | None = None,
     ) -> tuple[list[ForecastPoint], str, str]:
         """Return (predictions, confidence, basis).
 
@@ -107,13 +108,13 @@ class ProphetForecaster:
         latest_key = _find_latest_model_key(tenant_id, variant_id)
         if latest_key is None:
             logger.info("No model found, using category fallback for variant=%s", variant_id)
-            return self._category_fallback(db, tenant_id, variant_id, days, category_key)
+            return self._category_fallback(db, tenant_id, variant_id, days, category_key, sku)
 
         try:
             model = load_model(latest_key)
         except (FileNotFoundError, OSError):
             logger.warning("Failed to load model %s, falling back", latest_key, exc_info=True)
-            return self._category_fallback(db, tenant_id, variant_id, days, category_key)
+            return self._category_fallback(db, tenant_id, variant_id, days, category_key, sku)
 
         future = model.make_future_dataframe(periods=days)
         forecast_df = model.predict(future)
@@ -137,28 +138,51 @@ class ProphetForecaster:
         variant_id: UUID,
         days: int,
         category_key: str | None = None,
+        sku: str | None = None,
     ) -> tuple[list[ForecastPoint], str, str]:
         """Cold-start: forecast from the HCM market base model for the category.
 
-        A brand-new shop has no per-variant history, so we use the pre-trained
-        category base model (Google Trends, geo=VN-SG — see
-        scripts/build_base_model.py) as the prior. Returns zeros only when the
-        category is unknown or no base model has been built yet.
+        Resolution order:
+        1. Explicit category_key from API caller (most accurate).
+        2. DB mapping from catalog.inventory.updated event.
+        3. SKU prefix hint (e.g. "AT-" → ao_thun).
+        4. Generic fallback to ao_thun (most common category, reasonable seasonal shape).
 
-        Base-model predictions reflect the seasonal SHAPE (relative Google Trends
-        index, 0–100), NOT absolute units; the level is calibrated later once the
-        shop accumulates real POS sales.
+        Returns zeros only when no base model file exists at all.
         """
+        basis = "market_trends_hcm"
+
+        # Step 1 & 2: explicit param or DB mapping
         if category_key is None:
             category_key = _resolve_category_key(db, tenant_id, variant_id)
+
+        # Step 3: SKU prefix hint
+        if category_key is None and sku:
+            category_key = self._guess_category_from_sku(sku)
+            if category_key:
+                logger.info("Cold-start SKU hint: sku=%s → category=%s for variant=%s", sku, category_key, variant_id)
+
+        # Step 4: generic fallback — ao_thun is the safest default (common, smooth seasonality)
         if category_key is None:
-            logger.info("Cold-start with unknown category for variant=%s — no base model", variant_id)
-            return self._zeros(days), "none", "no_base_model"
+            category_key = "ao_thun"
+            basis = "market_trends_hcm_generic"
+            logger.info("Cold-start generic fallback (ao_thun) for variant=%s", variant_id)
 
         base_key = _base_key(category_key)
         if not model_exists(base_key):
-            logger.warning("No base model for category=%s (variant=%s)", category_key, variant_id)
-            return self._zeros(days), "none", "no_base_model"
+            # Try generic fallback model before giving up
+            if basis != "market_trends_hcm_generic":
+                fallback_key = _base_key("ao_thun")
+                if model_exists(fallback_key):
+                    base_key = fallback_key
+                    basis = "market_trends_hcm_generic"
+                    logger.info("No base model for category=%s, using ao_thun generic", category_key)
+                else:
+                    logger.warning("No base model for category=%s or generic (variant=%s)", category_key, variant_id)
+                    return self._zeros(days), "none", "no_base_model"
+            else:
+                logger.warning("No generic base model available for variant=%s", variant_id)
+                return self._zeros(days), "none", "no_base_model"
 
         try:
             model = load_model(base_key)
@@ -179,8 +203,33 @@ class ProphetForecaster:
             )
             for row in tail.itertuples(index=False)
         ]
-        logger.info("Cold-start forecast from base model category=%s for variant=%s", category_key, variant_id)
-        return predictions, "low", "market_trends_hcm"
+        logger.info("Cold-start from base model category=%s basis=%s variant=%s", category_key, basis, variant_id)
+        return predictions, "low", basis
+
+    @staticmethod
+    def _guess_category_from_sku(sku: str) -> str | None:
+        """Map SKU prefix to a category_key using naming conventions."""
+        sku_upper = sku.upper()
+        SKU_HINTS = {
+            "ASM": "ao_so_mi", "SHIRT": "ao_so_mi",
+            "VD": "vay_dam", "DRESS": "vay_dam",
+            "QJ": "quan_jeans", "JEAN": "quan_jeans", "DENIM": "quan_jeans",
+            "AT": "ao_thun", "THUN": "ao_thun", "TSHIRT": "ao_thun",
+            "GS": "giay_sneaker", "SHOE": "giay_sneaker", "SNEAKER": "giay_sneaker",
+            "AK": "ao_khoac", "JACKET": "ao_khoac", "HOODIE": "ao_khoac",
+            "TX": "tui_xach", "BAG": "tui_xach", "TOTE": "tui_xach",
+            "AD": "ao_dai", "AODAI": "ao_dai",
+            "CV": "chan_vay", "SKIRT": "chan_vay",
+            "QA": "quan_au", "TROUSER": "quan_au",
+            "DT": "do_the_thao", "SPORT": "do_the_thao",
+            "DM": "dam_maxi", "MAXI": "dam_maxi",
+            "CS": "dam_cong_so", "OFFICE": "dam_cong_so",
+            "PK": "phu_kien", "ACC": "phu_kien",
+        }
+        for prefix, key in SKU_HINTS.items():
+            if sku_upper.startswith(prefix):
+                return key
+        return None
 
     def _zeros(self, days: int) -> list[ForecastPoint]:
         """Empty forecast used when no model or base model is available."""

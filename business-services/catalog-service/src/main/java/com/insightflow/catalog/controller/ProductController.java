@@ -32,6 +32,17 @@ public class ProductController {
 
     private final ProductService productService;
 
+    @GetMapping("/variants")
+    @RequiresPermission("catalog:read")
+    @Operation(summary = "List all active variants for tenant",
+               description = "Flat list of active variants — used by BFF for forecast without requiring ML recommendations first.")
+    @ApiResponse(responseCode = "200", description = "Paged variant list")
+    public Page<VariantResponse> listAllVariants(
+            @CurrentUser UserContext user,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return productService.getActiveVariants(user.tenantId(), pageable);
+    }
+
     @GetMapping
     @RequiresPermission("catalog:read")
     @Operation(summary = "List products", description = "Paginated product list for the tenant")
