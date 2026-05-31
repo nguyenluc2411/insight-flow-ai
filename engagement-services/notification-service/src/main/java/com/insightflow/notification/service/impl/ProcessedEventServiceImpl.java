@@ -11,6 +11,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -22,19 +25,39 @@ public class ProcessedEventServiceImpl implements ProcessedEventService {
     @Override
     @Transactional
     public boolean recordIfNotProcessed(IncomingNotificationEvent event, String sourceTopic) {
+        return recordIfNotProcessed(
+                event.eventId(),
+                event.eventType(),
+                event.correlationId(),
+                event.sourceService(),
+                event.timestamp(),
+                event,
+                sourceTopic);
+    }
+
+    @Override
+    @Transactional
+    public boolean recordIfNotProcessed(
+            UUID eventId,
+            String eventType,
+            UUID correlationId,
+            String sourceService,
+            Instant processedAt,
+            Object payload,
+            String sourceTopic) {
         ProcessedEvent processedEvent = new ProcessedEvent();
-        processedEvent.setEventId(event.eventId());
-        processedEvent.setEventType(event.eventType());
-        processedEvent.setCorrelationId(event.correlationId());
-        processedEvent.setSourceService(event.sourceService());
-        processedEvent.setPayloadHash(payloadHashService.hash(event));
-        processedEvent.setProcessedAt(event.timestamp() != null ? event.timestamp() : processedEvent.getProcessedAt());
+        processedEvent.setEventId(eventId);
+        processedEvent.setEventType(eventType);
+        processedEvent.setCorrelationId(correlationId);
+        processedEvent.setSourceService(sourceService);
+        processedEvent.setPayloadHash(payloadHashService.hash(payload));
+        processedEvent.setProcessedAt(processedAt != null ? processedAt : processedEvent.getProcessedAt());
 
         try {
             processedEventRepository.save(processedEvent);
             return true;
         } catch (DataIntegrityViolationException ex) {
-            log.debug("Duplicate event ignored topic={} eventId={}", sourceTopic, event.eventId());
+            log.debug("Duplicate event ignored topic={} eventId={}", sourceTopic, eventId);
             return false;
         }
     }

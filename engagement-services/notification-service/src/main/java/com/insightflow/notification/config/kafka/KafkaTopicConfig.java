@@ -99,6 +99,22 @@ public class KafkaTopicConfig {
                 .replicas(DEFAULT_REPLICAS)
                 .build();
     }
+
+    @Bean
+    public NewTopic notificationsCreatedTopic() {
+        return TopicBuilder.name(NotificationKafkaTopics.OUTGOING_NOTIFICATION_EVENT)
+                .partitions(DEFAULT_PARTITIONS)
+                .replicas(DEFAULT_REPLICAS)
+                .build();
+    }
+
+    @Bean
+    public NewTopic notificationsOutgoingDlqTopic() {
+        return TopicBuilder.name(NotificationKafkaTopics.OUTGOING_DLQ)
+                .partitions(DEFAULT_PARTITIONS)
+                .replicas(DEFAULT_REPLICAS)
+                .build();
+    }
 }
 
 

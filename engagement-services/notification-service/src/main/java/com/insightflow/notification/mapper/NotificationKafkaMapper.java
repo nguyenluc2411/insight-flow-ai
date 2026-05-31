@@ -4,6 +4,7 @@ import com.insightflow.notification.entity.Notification;
 import com.insightflow.notification.enums.FailureType;
 import com.insightflow.notification.enums.NotificationChannel;
 import com.insightflow.common.events.notification.NotificationBroadcastEvent;
+import com.insightflow.common.events.notification.NotificationCreatedEvent;
 import com.insightflow.common.events.notification.NotificationDlqEvent;
 import com.insightflow.common.events.notification.NotificationFailedEvent;
 import com.insightflow.common.events.notification.NotificationRetryEvent;
@@ -65,6 +66,16 @@ public interface NotificationKafkaMapper {
     @Mapping(target = "correlationId", source = "notification.correlationId")
     @Mapping(target = "timestamp", expression = "java(Instant.now())")
     NotificationBroadcastEvent toBroadcastEvent(Notification notification);
+
+    @Mapping(target = "eventId", expression = "java(UUID.randomUUID())")
+    @Mapping(target = "eventType", expression = "java(NotificationCreatedEvent.TYPE)")
+    @Mapping(target = "notificationId", source = "notification.id")
+    @Mapping(target = "notificationType", source = "notification.notificationType")
+    @Mapping(target = "recipientId", source = "notification.recipientId")
+    @Mapping(target = "recipientEmail", source = "notification.recipientEmail")
+    @Mapping(target = "correlationId", source = "notification.correlationId")
+    @Mapping(target = "timestamp", expression = "java(Instant.now())")
+    NotificationCreatedEvent toCreatedEvent(Notification notification);
 
     @Mapping(target = "eventId", expression = "java(UUID.randomUUID())")
     @Mapping(target = "eventType", expression = "java(NotificationDlqEvent.TYPE)")

@@ -1,6 +1,7 @@
 package com.insightflow.notification.config.kafka;
 
 import com.insightflow.common.events.notification.IncomingNotificationEvent;
+import com.insightflow.common.events.notification.NotificationCreatedEvent;
 import com.insightflow.common.events.notification.NotificationRetryEvent;
 import com.insightflow.notification.service.retry.RetryTopicRoutingService;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -64,6 +65,24 @@ public class KafkaListenerConfig {
             DefaultErrorHandler notificationErrorHandler) {
 
         return buildListenerFactory(kafkaProperties, notificationErrorHandler, Object.class);
+    }
+
+    @Bean
+    public DefaultErrorHandler notificationCreatedErrorHandler(
+            KafkaTemplate<String, Object> notificationKafkaTemplate) {
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+                notificationKafkaTemplate,
+                (record, ex) -> new TopicPartition(NotificationKafkaTopics.OUTGOING_DLQ, record.partition()));
+        return new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 2L));
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, NotificationCreatedEvent>
+    notificationCreatedKafkaListenerContainerFactory(
+            KafkaProperties kafkaProperties,
+            DefaultErrorHandler notificationCreatedErrorHandler) {
+
+        return buildListenerFactory(kafkaProperties, notificationCreatedErrorHandler, NotificationCreatedEvent.class);
     }
 
     private <T> ConcurrentKafkaListenerContainerFactory<String, T> buildListenerFactory(

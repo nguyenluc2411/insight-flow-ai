@@ -8,14 +8,11 @@ import com.insightflow.notification.mapper.NotificationMapper;
 import com.insightflow.notification.producer.KafkaEventPublisher;
 import com.insightflow.notification.repository.NotificationRepository;
 import com.insightflow.notification.service.aggregation.AggregationService;
-import com.insightflow.notification.service.email.EmailNotificationService;
 import com.insightflow.notification.service.interfaces.ProcessedEventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +25,6 @@ public class NotificationOrchestrator {
     private final NotificationRepository notificationRepository;
     private final KafkaEventPublisher kafkaPublisher;
     private final NotificationKafkaMapper kafkaMapper;
-    private final EmailNotificationService emailNotificationService;
 
     @Transactional
     public void orchestrate(IncomingNotificationEvent event) {
@@ -73,41 +69,20 @@ public class NotificationOrchestrator {
                 notification.getNotificationType(),
                 notification.getRecipientEmail());
 
-        Notification saved;
-        try {
-            saved = notificationRepository.saveAndFlush(notification);
-        } catch (Exception ex) {
-            log.error("[ORCH] SAVE_FAILED eventId={} recipientEmail={} error={}",
-                    event.eventId(),
-                    notification.getRecipientEmail(),
-                    ex.getMessage(),
-                    ex);
-            throw ex;
-        }
+        Notification saved = notificationRepository.save(notification);
 
         log.info("[ORCH] SAVED notificationId={} recipientId={}",
                 saved.getId(),
                 saved.getRecipientId());
 
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            Notification notificationToSend = saved;
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    log.info("[EMAIL] SENDING notificationId={} to={} recipientEmail={}",
-                            notificationToSend.getId(),
-                            notificationToSend.getRecipientId(),
-                            notificationToSend.getRecipientEmail());
-                    emailNotificationService.sendEmail(notificationToSend);
-                }
-            });
-        } else {
-            log.info("[EMAIL] SENDING notificationId={} to={} recipientEmail={}",
-                    saved.getId(),
-                    saved.getRecipientId(),
-                    saved.getRecipientEmail());
-            emailNotificationService.sendEmail(saved);
-        }
+        kafkaPublisher.publish(
+                NotificationKafkaTopics.OUTGOING_NOTIFICATION_EVENT,
+                saved.getId().toString(),
+                kafkaMapper.toCreatedEvent(saved)
+        );
+        log.info("[KAFKA] created published notificationId={} recipientEmail={}",
+                saved.getId(),
+                saved.getRecipientEmail());
 
         // ================= KAFKA =================
         try {
