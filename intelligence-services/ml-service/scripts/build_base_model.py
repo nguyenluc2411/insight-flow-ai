@@ -45,6 +45,7 @@ Limitations of Google Trends (IMPORTANT):
 """
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import pickle
@@ -67,7 +68,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("build_base_model")
 
 # --- Collection / validation parameters ---
-GEO = "VN-SG"  # Ho Chi Minh City region — do NOT use plain "VN"
+GEO = "VN-SG"          # Ho Chi Minh City — primary geo
+GEO_FALLBACK = "VN"   # nationwide fallback when VN-SG signal is too sparse
 TIMEFRAME = "today 5-y"  # 5 years to cover several seasonal cycles
 MIN_DATA_POINTS = 104  # ~2 years of weekly Google Trends points
 MAX_GAP_WEEKS = 8  # reject a series with > 8 consecutive empty weeks
@@ -82,20 +84,26 @@ FASHION_CATEGORIES: dict[str, list[str]] = {
     # --- Nhóm cơ bản ---
     "ao_so_mi":     ["áo sơ mi", "áo sơ mi nam", "áo sơ mi nữ"],
     "vay_dam":      ["váy đầm", "đầm dự tiệc", "váy midi"],
-    "quan_jeans":   ["quần jeans", "quần denim"],
+    # "quần jean" (không có 's') là cách viết phổ biến hơn trên Google VN-SG.
+    # Fallback geo=VN nếu VN-SG vẫn sparse.
+    "quan_jeans":   ["quần jean", "quần denim", "jeans nam nữ"],
     "ao_thun":      ["áo thun", "áo phông"],
     "giay_sneaker": ["giày sneaker", "giày thể thao"],
     "ao_khoac":     ["áo khoác", "áo hoodie", "áo bomber"],
     "tui_xach":     ["túi xách", "túi tote", "túi đeo chéo"],
-    "dam_maxi":     ["đầm maxi", "váy maxi", "đầm dài"],
-    "quan_au":      ["quần âu nam", "quần tây"],
+    # "váy dài nữ" là query phổ biến hơn "đầm maxi" trên VN-SG; maxi là thuật ngữ
+    # thời trang niche. Fallback geo=VN nếu cần.
+    "dam_maxi":     ["váy dài nữ", "đầm dài nữ", "đầm maxi"],
+    # "quần âu" (bỏ "nam") và "quần tây" có volume cao hơn "quần âu nam" trên Trends.
+    "quan_au":      ["quần âu", "quần tây", "quần âu nam"],
     "do_the_thao":  ["đồ thể thao", "quần short thể thao"],
 
     # --- Nhóm bổ sung đặc thù thị trường HCM ---
     # Nguồn: Vietnam e-commerce retail data Q3 2024
     # (sospgroup.com/post/expanding-your-retail-business-into-vietnam)
     # Women's fashion dẫn đầu thị trường VN: dresses, tops, shoes, accessories
-    "dam_cong_so":  ["đầm công sở", "váy công sở", "áo kiểu công sở"],
+    # "thời trang công sở" rộng hơn "đầm công sở", bắt được search intent toàn phân khúc.
+    "dam_cong_so":  ["thời trang công sở", "đầm công sở", "váy công sở"],
     # Lý do: phân khúc lớn riêng biệt tại HCM, mùa vụ khác vay_dam tiệc;
     # tăng đầu năm (mùa tuyển dụng), giảm hè, tăng lại tháng 9-10.
 
@@ -108,7 +116,8 @@ FASHION_CATEGORIES: dict[str, list[str]] = {
     # Lý do: sản phẩm riêng biệt không nằm trong vay_dam; phổ biến Shopee HCM,
     # tăng mùa hè và công sở.
 
-    "phu_kien":     ["phụ kiện thời trang", "thắt lưng nữ", "mũ thời trang"],
+    # "phụ kiện" (ngắn) có search volume cao hơn "phụ kiện thời trang" trên Trends VN.
+    "phu_kien":     ["phụ kiện", "phụ kiện thời trang nữ", "trang sức thời trang"],
     # Lý do: chu kỳ mua khác quần áo, tăng mạnh dịp lễ và đầu hè.
     # Nguồn: Vietnam Clothing Market Size & Share Growth Report 2035
     # (expertmarketresearch.com)
@@ -119,12 +128,14 @@ class DataCollectionError(Exception):
     """Raised when Google Trends data cannot be collected after all retries."""
 
 
-def collect_trends(category_key: str, keywords: list[str]) -> pd.DataFrame:
+def collect_trends(category_key: str, keywords: list[str], geo: str = GEO) -> pd.DataFrame:
     """Fetch weekly Google Trends interest for a category's representative keyword.
 
     Args:
         category_key: Internal category identifier (used for logging).
         keywords: Keyword variants; only ``keywords[0]`` is queried.
+        geo: Google Trends geo code. Defaults to ``GEO`` (VN-SG). Pass
+            ``GEO_FALLBACK`` ("VN") for a nationwide retry when VN-SG is sparse.
 
     Returns:
         DataFrame with Prophet columns ``ds`` (date) and ``y`` (interest 0–100).
@@ -138,10 +149,10 @@ def collect_trends(category_key: str, keywords: list[str]) -> pd.DataFrame:
 
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
-            pytrends.build_payload([keyword], timeframe=TIMEFRAME, geo=GEO)
+            pytrends.build_payload([keyword], timeframe=TIMEFRAME, geo=geo)
             raw = pytrends.interest_over_time()
             if raw is None or raw.empty:
-                raise DataCollectionError(f"Empty Trends response for '{keyword}'")
+                raise DataCollectionError(f"Empty Trends response for '{keyword}' (geo={geo})")
             if "isPartial" in raw.columns:
                 raw = raw[raw["isPartial"] == False].drop(columns=["isPartial"])  # noqa: E712
             series = pd.DataFrame(
@@ -154,14 +165,14 @@ def collect_trends(category_key: str, keywords: list[str]) -> pd.DataFrame:
         except Exception as exc:  # noqa: BLE001 — retry on any pytrends failure
             last_error = exc
             logger.warning(
-                "[%s] Trends attempt %d/%d failed: %s",
-                category_key, attempt, RETRY_ATTEMPTS, exc,
+                "[%s] Trends attempt %d/%d failed (geo=%s): %s",
+                category_key, attempt, RETRY_ATTEMPTS, geo, exc,
             )
             if attempt < RETRY_ATTEMPTS:
                 time.sleep(RETRY_SLEEP_SECONDS)
 
     raise DataCollectionError(
-        f"Failed to collect Google Trends for '{keyword}' (category={category_key}) "
+        f"Failed to collect Google Trends for '{keyword}' (category={category_key}, geo={geo}) "
         f"after {RETRY_ATTEMPTS} attempts: {last_error}"
     )
 
@@ -196,7 +207,7 @@ def validate_series(category_key: str, df: pd.DataFrame) -> bool:
     return True
 
 
-def train_base_model(category_key: str, df: pd.DataFrame) -> None:
+def train_base_model(category_key: str, df: pd.DataFrame, geo_used: str = GEO) -> None:
     """Train a category base Prophet model and persist it with metadata."""
     model = Prophet(
         yearly_seasonality=True,       # Bắt buộc: thời trang có chu kỳ năm rõ rệt
@@ -222,7 +233,9 @@ def train_base_model(category_key: str, df: pd.DataFrame) -> None:
         "data_points": int(len(df)),
         "date_range_start": df["ds"].min().date().isoformat(),
         "date_range_end": df["ds"].max().date().isoformat(),
-        "geo": GEO,
+        "geo": geo_used,
+        "geo_note": "VN-SG preferred; VN used as fallback when VN-SG signal was too sparse"
+        if geo_used == GEO_FALLBACK else "primary geo (Ho Chi Minh City)",
         "source": "Google Trends (pytrends)",
         "algorithm": "Prophet",
         "paper_citation": PAPER_CITATION,
@@ -238,23 +251,58 @@ def train_base_model(category_key: str, df: pd.DataFrame) -> None:
 
 
 def main() -> int:
-    """Build base models for every fashion category; resilient to per-category failures."""
+    """Build base models for fashion categories; resilient to per-category failures.
+
+    Geo strategy: try VN-SG (Ho Chi Minh City) first. If the series fails
+    validation (too sparse / too many empty weeks), retry with VN-wide geo.
+    This is common for niche fashion terms that have low regional search volume.
+    """
+    parser = argparse.ArgumentParser(description="Build Prophet base models from Google Trends.")
+    parser.add_argument(
+        "--categories",
+        nargs="+",
+        metavar="KEY",
+        help="Category keys to build (default: all). E.g. --categories quan_jeans dam_maxi",
+    )
+    args = parser.parse_args()
+
+    if args.categories:
+        unknown = set(args.categories) - set(FASHION_CATEGORIES)
+        if unknown:
+            logger.error("Unknown category key(s): %s. Valid: %s", unknown, list(FASHION_CATEGORIES))
+            return 1
+        target = {k: FASHION_CATEGORIES[k] for k in args.categories}
+    else:
+        target = FASHION_CATEGORIES
+
     trained = skipped = failed = 0
 
-    for category_key, keywords in FASHION_CATEGORIES.items():
+    for category_key, keywords in target.items():
+        geo_used = GEO
         try:
-            df = collect_trends(category_key, keywords)
+            df = collect_trends(category_key, keywords, geo=GEO)
         except DataCollectionError as exc:
-            logger.error("[%s] data collection failed: %s", category_key, exc)
+            logger.error("[%s] data collection failed (geo=%s): %s", category_key, GEO, exc)
             failed += 1
             continue
 
         if not validate_series(category_key, df):
-            skipped += 1
-            continue
+            # Primary geo too sparse — try nationwide fallback.
+            logger.info("[%s] VN-SG signal sparse → retrying with geo=%s", category_key, GEO_FALLBACK)
+            try:
+                df = collect_trends(category_key, keywords, geo=GEO_FALLBACK)
+                geo_used = GEO_FALLBACK
+            except DataCollectionError as exc:
+                logger.error("[%s] fallback geo=%s also failed: %s", category_key, GEO_FALLBACK, exc)
+                failed += 1
+                continue
+            if not validate_series(category_key, df):
+                logger.warning("[%s] still sparse after geo=%s fallback — skipping", category_key, GEO_FALLBACK)
+                skipped += 1
+                continue
 
         try:
-            train_base_model(category_key, df)
+            train_base_model(category_key, df, geo_used=geo_used)
             trained += 1
         except Exception:  # noqa: BLE001 — one bad category must not abort the run
             logger.exception("[%s] training failed", category_key)
