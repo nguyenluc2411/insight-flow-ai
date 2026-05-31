@@ -2,20 +2,23 @@ package com.insightflow.bff.service;
 
 import com.insightflow.bff.dto.downstream.*;
 import com.insightflow.bff.dto.response.*;
+import com.insightflow.security.InternalHeaders;
+import com.insightflow.security.UserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -33,12 +36,10 @@ public class DashboardAggregationService {
     // Overview
     // -------------------------------------------------------------------------
 
-    public DashboardOverviewResponse getOverview(UUID tenantId) {
-        String tenantHeader = tenantId.toString();
-
+    public DashboardOverviewResponse getOverview(UserContext user) {
         Mono<Long> totalSKU = catalogClient.get()
                 .uri("/api/v1/catalog/products?size=1")
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<PagedResponse<Map<String, Object>>>() {})
                 .map(PagedResponse::totalCount)
@@ -55,7 +56,7 @@ public class DashboardAggregationService {
                         .queryParam("today", "true")
                         .queryParam("size", "200")
                         .build())
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<PagedResponse<SalesOrderItem>>() {})
                 .map(p -> {
@@ -75,7 +76,7 @@ public class DashboardAggregationService {
 
         Mono<Long> highPriorityAlerts = mlClient.get()
                 .uri("/api/v1/ml/recommendations?priority=HIGH&size=1")
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(MlPagedRecommendationsResponse.class)
                 .map(r -> r.getTotal())
@@ -137,12 +138,10 @@ public class DashboardAggregationService {
     // Health Summary
     // -------------------------------------------------------------------------
 
-    public HealthSummaryResponse getHealthSummary(UUID tenantId) {
-        String tenantHeader = tenantId.toString();
-
+    public HealthSummaryResponse getHealthSummary(UserContext user) {
         Mono<PagedResponse<CatalogProductItem>> products = catalogClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/api/v1/catalog/products").queryParam("size", "100").build())
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<PagedResponse<CatalogProductItem>>() {})
                 .timeout(CALL_TIMEOUT)
@@ -153,7 +152,7 @@ public class DashboardAggregationService {
 
         Mono<MlPagedRecommendationsResponse> slowMoving = mlClient.get()
                 .uri("/api/v1/ml/recommendations?action=CLEARANCE&size=200")
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(MlPagedRecommendationsResponse.class)
                 .timeout(CALL_TIMEOUT)
@@ -207,12 +206,10 @@ public class DashboardAggregationService {
     // Recommendations Summary
     // -------------------------------------------------------------------------
 
-    public RecommendationsSummaryResponse getRecommendationsSummary(UUID tenantId) {
-        String tenantHeader = tenantId.toString();
-
+    public RecommendationsSummaryResponse getRecommendationsSummary(UserContext user) {
         Mono<MlPagedRecommendationsResponse> highPriorityRecs = mlClient.get()
                 .uri("/api/v1/ml/recommendations?priority=HIGH&size=3")
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(MlPagedRecommendationsResponse.class)
                 .timeout(CALL_TIMEOUT)
@@ -223,7 +220,7 @@ public class DashboardAggregationService {
 
         Mono<MlPagedRecommendationsResponse> allRecs = mlClient.get()
                 .uri("/api/v1/ml/recommendations?size=200")
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(MlPagedRecommendationsResponse.class)
                 .timeout(CALL_TIMEOUT)
@@ -298,13 +295,11 @@ public class DashboardAggregationService {
     // Forecast Summary
     // -------------------------------------------------------------------------
 
-    public ForecastSummaryResponse getForecastSummary(UUID tenantId) {
-        String tenantHeader = tenantId.toString();
-
+    public ForecastSummaryResponse getForecastSummary(UserContext user) {
         // Step 1: get top 5 variant IDs from recommendations
         MlPagedRecommendationsResponse recsResult = mlClient.get()
                 .uri("/api/v1/ml/recommendations?size=5")
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(MlPagedRecommendationsResponse.class)
                 .timeout(CALL_TIMEOUT)
@@ -340,7 +335,7 @@ public class DashboardAggregationService {
 
         List<MlForecastResponse> forecasts = mlClient.post()
                 .uri("/api/v1/ml/forecast/batch")
-                .header("X-Tenant-Id", tenantHeader)
+                .headers(securityHeaders(user))
                 .header("Content-Type", "application/json")
                 .bodyValue(batchRequest)
                 .retrieve()
@@ -390,6 +385,22 @@ public class DashboardAggregationService {
             case "medium" -> 0.6;
             case "low" -> 0.3;
             default -> 0.0;
+        };
+    }
+
+    /**
+     * Builds a header consumer that propagates all gateway-injected security headers
+     * from the caller's UserContext to downstream service calls.
+     * Ensures @RequiresPermission checks pass without re-routing through the gateway.
+     */
+    private Consumer<HttpHeaders> securityHeaders(UserContext user) {
+        return h -> {
+            if (user.userId() != null)    h.set(InternalHeaders.X_USER_ID,          user.userId().toString());
+            if (user.tenantId() != null)  h.set(InternalHeaders.X_TENANT_ID,        user.tenantId().toString());
+            if (user.tenantSlug() != null) h.set(InternalHeaders.X_TENANT_SLUG,     user.tenantSlug());
+            if (user.plan() != null)      h.set(InternalHeaders.X_TENANT_PLAN,      user.plan());
+            if (!user.roles().isEmpty())  h.set(InternalHeaders.X_USER_ROLES,       String.join(",", user.roles()));
+            if (!user.permissions().isEmpty()) h.set(InternalHeaders.X_USER_PERMISSIONS, String.join(",", user.permissions()));
         };
     }
 }
