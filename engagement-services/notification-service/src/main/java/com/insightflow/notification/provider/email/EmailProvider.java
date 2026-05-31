@@ -6,3 +6,4 @@ public interface EmailProvider {
 
     void send(UUID recipientId, String subject, String body, String html);
 }
+

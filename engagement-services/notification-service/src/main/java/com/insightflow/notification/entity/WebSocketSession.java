@@ -74,3 +74,4 @@ public class WebSocketSession {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+

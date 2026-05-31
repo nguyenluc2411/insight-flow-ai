@@ -15,3 +15,4 @@ public class WebSocketUserPrincipal implements Principal {
         return name;
     }
 }
+

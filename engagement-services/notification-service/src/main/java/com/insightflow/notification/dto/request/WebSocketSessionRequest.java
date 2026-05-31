@@ -33,3 +33,4 @@ public class WebSocketSessionRequest {
     @Size(max = 255)
     private String userAgent;
 }
+

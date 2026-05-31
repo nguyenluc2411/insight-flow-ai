@@ -9,3 +9,4 @@ public interface NotificationChannelRouter {
 
     List<NotificationChannel> resolveChannels(Notification notification);
 }
+

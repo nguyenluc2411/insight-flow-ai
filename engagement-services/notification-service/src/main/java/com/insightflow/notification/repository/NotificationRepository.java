@@ -61,3 +61,4 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             "where n.recipientId = :recipientId and n.inboxStatus = :unreadStatus and n.deleted = false")
     int markAllAsRead(UUID recipientId, InboxStatus unreadStatus, InboxStatus readStatus, Instant readAt);
 }
+

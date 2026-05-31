@@ -15,3 +15,4 @@ public class WebSocketUnreadCountPayload {
     private long unreadCount;
     private Instant timestamp;
 }
+

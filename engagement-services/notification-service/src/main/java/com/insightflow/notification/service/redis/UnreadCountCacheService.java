@@ -14,3 +14,4 @@ public interface UnreadCountCacheService {
 
     void evict(UUID userId);
 }
+

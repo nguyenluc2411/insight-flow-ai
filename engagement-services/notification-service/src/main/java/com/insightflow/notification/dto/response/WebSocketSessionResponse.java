@@ -21,3 +21,4 @@ public class WebSocketSessionResponse {
     private Instant lastHeartbeatAt;
     private Instant updatedAt;
 }
+

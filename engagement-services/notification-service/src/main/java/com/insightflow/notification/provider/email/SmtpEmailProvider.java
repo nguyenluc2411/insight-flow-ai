@@ -21,7 +21,7 @@ public class SmtpEmailProvider implements EmailProvider {
     public void send(UUID recipientId, String subject, String body, String html) {
         String to = System.getenv("DEFAULT_NOTIFICATION_EMAIL");
         if (to == null || to.isEmpty()) {
-            to = "ops@example.com";
+            to = "huyhvse180722@fpt.edu.vn";
         }
 
         MimeMessage msg = mailSender.createMimeMessage();
@@ -42,3 +42,4 @@ public class SmtpEmailProvider implements EmailProvider {
         }
     }
 }
+

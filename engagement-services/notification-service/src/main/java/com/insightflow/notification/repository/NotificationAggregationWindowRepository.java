@@ -21,3 +21,4 @@ public interface NotificationAggregationWindowRepository extends JpaRepository<N
 
     boolean existsByAggregationKeyAndActiveTrue(String aggregationKey);
 }
+

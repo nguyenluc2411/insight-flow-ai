@@ -4,12 +4,14 @@ import com.insightflow.notification.entity.Notification;
 import com.insightflow.notification.entity.NotificationDeliveryHistory;
 import com.insightflow.notification.enums.DeliveryStatus;
 import com.insightflow.notification.enums.NotificationChannel;
+import com.insightflow.notification.config.kafka.NotificationKafkaTopics;
+import com.insightflow.notification.enums.NotificationStatus;
 import com.insightflow.notification.mapper.NotificationKafkaMapper;
 import com.insightflow.notification.producer.KafkaEventPublisher;
 import com.insightflow.notification.provider.email.EmailProvider;
 import com.insightflow.notification.repository.NotificationDeliveryHistoryRepository;
-import com.insightflow.notification.repository.NotificationRetryRepository;
 import com.insightflow.notification.repository.NotificationRepository;
+import com.insightflow.notification.service.retry.RetryOrchestrator;
 import com.insightflow.notification.service.template.NotificationTemplateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +32,6 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationTemplateService templateService;
     private final EmailProvider emailProvider;
-    private final NotificationRetryRepository retryRepository;
     private final NotificationKafkaMapper kafkaMapper;
     private final KafkaEventPublisher kafkaPublisher;
 
@@ -38,6 +39,7 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     @Async
     @Transactional
     public void sendEmail(Notification notification) {
+
         if (notification == null) return;
 
         NotificationDeliveryHistory history = new NotificationDeliveryHistory();
@@ -47,48 +49,45 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
         history.setCreatedAt(Instant.now());
         deliveryRepository.save(history);
 
-        try {
-            String templateKey = notification.getAggregationKey() != null ? notification.getAggregationKey() : notification.getNotificationType().name();
-            var templateOpt = templateService.findActiveTemplate(templateKey);
-            Map<String, Object> model = new HashMap<>();
-            model.putAll(notification.getPayload() != null ? notification.getPayload() : Map.of());
-            model.put("title", notification.getTitle());
-            model.put("message", notification.getMessage());
+        // ❌ KHÔNG try/catch ở đây nữa
 
-            String body = templateOpt.map(t -> templateService.renderTemplateBody(t, model)).orElse(notification.getMessage());
-            String html = templateOpt.map(t -> templateService.renderTemplateHtml(t, model)).orElse(null);
+        String templateKey = notification.getAggregationKey() != null
+                ? notification.getAggregationKey()
+                : notification.getNotificationType().name();
 
-            emailProvider.send(notification.getRecipientId(), notification.getTitle(), body, html);
+        var templateOpt = templateService.findActiveTemplate(templateKey);
 
-            history.setDeliveryStatus(DeliveryStatus.DELIVERED);
-            history.setDeliveredAt(Instant.now());
-            deliveryRepository.save(history);
+        Map<String, Object> model = new HashMap<>();
+        model.putAll(notification.getPayload() != null ? notification.getPayload() : Map.of());
+        model.put("title", notification.getTitle());
+        model.put("message", notification.getMessage());
 
-            notification.setStatus(com.insightflow.notification.enums.NotificationStatus.SENT);
-            notificationRepository.save(notification);
+        String body = templateOpt.map(t -> templateService.renderTemplateBody(t, model))
+                .orElse(notification.getMessage());
 
-            var sentEvent = kafkaMapper.toSentEvent(notification, NotificationChannel.EMAIL);
-            kafkaPublisher.publish("notifications.outgoing.sent", notification.getId().toString(), sentEvent);
+        String html = templateOpt.map(t -> templateService.renderTemplateHtml(t, model))
+                .orElse(null);
 
-            log.info("Email sent notificationId={} recipient={} eventId={}", notification.getId(), notification.getRecipientId(), notification.getEventId());
-        } catch (Exception ex) {
-            log.error("Email send failed notificationId={} recipient={} error={}", notification.getId(), notification.getRecipientId(), ex.getMessage());
-            history.setDeliveryStatus(DeliveryStatus.FAILED);
-            history.setFailureReason(ex.getMessage());
-            deliveryRepository.save(history);
+        // gửi email
+        emailProvider.send(notification.getRecipientId(), notification.getTitle(), body, html);
 
-            var retry = new com.insightflow.notification.entity.NotificationRetry();
-            retry.setNotification(notification);
-            retry.setChannel(NotificationChannel.EMAIL);
-            retry.setRetryAttempt(1);
-            retry.setNextRetryAt(Instant.now().plusSeconds(30));
-            retryRepository.save(retry);
+        // update success
+        history.setDeliveryStatus(DeliveryStatus.DELIVERED);
+        history.setDeliveredAt(Instant.now());
+        deliveryRepository.save(history);
 
-            notification.setStatus(com.insightflow.notification.enums.NotificationStatus.RETRYING);
-            notificationRepository.save(notification);
+        notification.setStatus(NotificationStatus.SENT);
+        notificationRepository.save(notification);
 
-            var retryEvent = kafkaMapper.toRetryEvent(notification, NotificationChannel.EMAIL, 1, retry.getNextRetryAt(), ex.getMessage());
-            kafkaPublisher.publish("notifications.outgoing.retry", notification.getId().toString(), retryEvent);
-        }
+        kafkaPublisher.publish(
+                NotificationKafkaTopics.OUTGOING_SENT,
+                notification.getId().toString(),
+                kafkaMapper.toSentEvent(notification, NotificationChannel.EMAIL)
+        );
+
+        log.info("Email sent notificationId={} recipient={}",
+                notification.getId(),
+                notification.getRecipientId());
     }
 }
+

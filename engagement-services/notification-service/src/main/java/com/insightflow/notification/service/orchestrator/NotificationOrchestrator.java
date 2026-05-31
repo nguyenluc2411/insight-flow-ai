@@ -1,24 +1,20 @@
 package com.insightflow.notification.service.orchestrator;
 
-import com.insightflow.notification.dto.kafka.IncomingNotificationEventDto;
+import com.insightflow.common.events.notification.IncomingNotificationEvent;
 import com.insightflow.notification.entity.Notification;
-import com.insightflow.notification.enums.NotificationChannel;
-import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
+import com.insightflow.notification.config.kafka.NotificationKafkaTopics;
 import com.insightflow.notification.mapper.NotificationKafkaMapper;
 import com.insightflow.notification.mapper.NotificationMapper;
 import com.insightflow.notification.producer.KafkaEventPublisher;
 import com.insightflow.notification.repository.NotificationRepository;
 import com.insightflow.notification.service.aggregation.AggregationService;
 import com.insightflow.notification.service.email.EmailNotificationService;
-import com.insightflow.notification.service.interfaces.NotificationChannelRouter;
 import com.insightflow.notification.service.interfaces.ProcessedEventService;
-import com.insightflow.notification.service.websocket.RealtimeNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -30,73 +26,74 @@ public class NotificationOrchestrator {
     private final AggregationService aggregationService;
     private final NotificationMapper notificationMapper;
     private final NotificationRepository notificationRepository;
-    private final NotificationChannelRouter channelRouter;
-    private final EmailNotificationService emailService;
-    private final RealtimeNotificationService realtimeNotificationService;
     private final KafkaEventPublisher kafkaPublisher;
     private final NotificationKafkaMapper kafkaMapper;
+    private final EmailNotificationService emailNotificationService;
 
     @Transactional
-    public void orchestrate(IncomingNotificationEventDto event) {
+    public void orchestrate(IncomingNotificationEvent event) {
+
         if (event == null) return;
 
-        log.info("orchestrate: eventId={} correlationId={}", event.getEventId(), event.getCorrelationId());
+        log.info("[ORCH] START eventId={} correlationId={}",
+                event.eventId(),
+                event.correlationId());
 
-        IncomingNotificationEvent incomingEvent = IncomingNotificationEvent.builder()
-                .eventId(event.getEventId())
-                .eventType(event.getEventType())
-                .timestamp(event.getTimestamp())
-                .recipientId(event.getRecipientId())
-                .severity(event.getSeverity())
-                .title(event.getTitle())
-                .message(event.getMessage())
-                .productId(event.getProductId())
-                .warehouseId(event.getWarehouseId())
-                .correlationId(event.getCorrelationId())
-                .sourceService(event.getSourceService())
-                .payload(event.getPayload())
-                .build();
-
-        boolean first = processedEventService.recordIfNotProcessed(incomingEvent, "orchestrator");
+        boolean first = processedEventService.recordIfNotProcessed(event, "orchestrator");
         if (!first) {
-            log.info("Duplicate event skipped eventId={}", event.getEventId());
+            log.info("[ORCH] DUPLICATE skipped eventId={}", event.eventId());
             return;
         }
 
-        boolean suppressed = aggregationService.tryAggregate(incomingEvent);
+        boolean suppressed = aggregationService.tryAggregate(event);
         if (suppressed) {
-            log.info("Event aggregated/suppressed eventId={}", event.getEventId());
+            log.info("[ORCH] SUPPRESSED eventId={}", event.eventId());
             return;
         }
 
-        Notification notif = notificationMapper.fromIncomingEvent(event);
-        notif.setId(UUID.randomUUID());
-        Notification saved = notificationRepository.save(notif);
+        Notification notification = notificationMapper.fromIncomingEvent(event);
+        notification.setId(UUID.randomUUID());
 
-        List<NotificationChannel> channels = channelRouter.resolveChannels(saved);
+        Notification saved = notificationRepository.save(notification);
 
-        for (NotificationChannel ch : channels) {
-            try {
-                switch (ch) {
-                    case EMAIL:
-                        emailService.sendEmail(saved);
-                        break;
-                    case WEBSOCKET:
-                        realtimeNotificationService.pushNotification(saved);
-                        break;
-                    default:
-                        log.warn("Unsupported channel {} for notification {}", ch, saved.getId());
-                }
-            } catch (Exception ex) {
-                log.error("Delivery failure channel={} notificationId={} error={}", ch, saved.getId(), ex.getMessage());
-            }
-        }
+        log.info("[ORCH] SAVED notificationId={} recipientId={}",
+                saved.getId(),
+                saved.getRecipientId());
 
+        // ================= EMAIL DEBUG =================
         try {
-            var out = kafkaMapper.toBroadcastEvent(saved);
-            kafkaPublisher.publish("notifications.outgoing.broadcast", saved.getId().toString(), out);
+            log.info("[EMAIL] sending notificationId={} to={}",
+                    saved.getId(),
+                    saved.getRecipientId());
+
+            emailNotificationService.sendEmail(
+                    saved
+            );
+
+            log.info("[EMAIL] SENT SUCCESS notificationId={}", saved.getId());
+
         } catch (Exception ex) {
-            log.error("Failed to publish broadcast event notificationId={} error={}", saved.getId(), ex.getMessage());
+            log.error("[EMAIL] FAILED notificationId={} error={}",
+                    saved.getId(),
+                    ex.getMessage(),
+                    ex);
         }
+
+        // ================= KAFKA =================
+        try {
+            kafkaPublisher.publish(
+                    NotificationKafkaTopics.OUTGOING_BROADCAST,
+                    saved.getId().toString(),
+                    kafkaMapper.toBroadcastEvent(saved)
+            );
+
+            log.info("[KAFKA] broadcast published notificationId={}", saved.getId());
+
+        } catch (Exception ex) {
+            log.error("[KAFKA] broadcast failed notificationId={}", saved.getId(), ex);
+        }
+
+        log.info("[ORCH] END notificationId={}", saved.getId());
     }
 }
+

@@ -24,3 +24,4 @@ public class UserNotificationPreferenceResponse {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

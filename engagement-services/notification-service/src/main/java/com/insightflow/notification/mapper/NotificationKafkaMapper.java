@@ -1,11 +1,13 @@
 package com.insightflow.notification.mapper;
 
 import com.insightflow.notification.entity.Notification;
+import com.insightflow.notification.enums.FailureType;
 import com.insightflow.notification.enums.NotificationChannel;
-import com.insightflow.notification.event.outgoing.NotificationBroadcastEvent;
-import com.insightflow.notification.event.outgoing.NotificationFailedEvent;
-import com.insightflow.notification.event.outgoing.NotificationRetryEvent;
-import com.insightflow.notification.event.outgoing.NotificationSentEvent;
+import com.insightflow.common.events.notification.NotificationBroadcastEvent;
+import com.insightflow.common.events.notification.NotificationDlqEvent;
+import com.insightflow.common.events.notification.NotificationFailedEvent;
+import com.insightflow.common.events.notification.NotificationRetryEvent;
+import com.insightflow.common.events.notification.NotificationSentEvent;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -14,7 +16,8 @@ import java.util.UUID;
 
 @Mapper(componentModel = "spring", imports = {Instant.class, UUID.class,
         NotificationSentEvent.class, NotificationFailedEvent.class,
-        NotificationRetryEvent.class, NotificationBroadcastEvent.class})
+        NotificationRetryEvent.class, NotificationBroadcastEvent.class,
+        NotificationDlqEvent.class})
 public interface NotificationKafkaMapper {
 
     @Mapping(target = "eventId", expression = "java(UUID.randomUUID())")
@@ -62,4 +65,23 @@ public interface NotificationKafkaMapper {
     @Mapping(target = "correlationId", source = "notification.correlationId")
     @Mapping(target = "timestamp", expression = "java(Instant.now())")
     NotificationBroadcastEvent toBroadcastEvent(Notification notification);
+
+    @Mapping(target = "eventId", expression = "java(UUID.randomUUID())")
+    @Mapping(target = "eventType", expression = "java(NotificationDlqEvent.TYPE)")
+    @Mapping(target = "notificationId", source = "notification.id")
+    @Mapping(target = "notificationType", source = "notification.notificationType")
+    @Mapping(target = "recipientId", source = "notification.recipientId")
+    @Mapping(target = "correlationId", source = "notification.correlationId")
+    @Mapping(target = "channel", source = "channel")
+    @Mapping(target = "retryCount", source = "retryCount")
+    @Mapping(target = "failureType", source = "failureType")
+    @Mapping(target = "failureReason", source = "failureReason")
+    @Mapping(target = "timestamp", expression = "java(Instant.now())")
+    NotificationDlqEvent toDlqEvent(
+            Notification notification,
+            NotificationChannel channel,
+            int retryCount,
+            FailureType failureType,
+            String failureReason);
 }
+

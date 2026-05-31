@@ -20,3 +20,4 @@ public class NotificationBroadcastPayload {
     private String message;
     private Instant timestamp;
 }
+

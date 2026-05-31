@@ -12,3 +12,4 @@ public interface NotificationUnreadCounterService {
 
     long resetUnread(UUID recipientId);
 }
+

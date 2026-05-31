@@ -27,3 +27,4 @@ public class RealtimeNotificationPayload {
     private Map<String, Object> payload;
     private Instant createdAt;
 }
+

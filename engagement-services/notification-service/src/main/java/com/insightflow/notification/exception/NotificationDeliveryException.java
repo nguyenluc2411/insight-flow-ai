@@ -12,3 +12,4 @@ public class NotificationDeliveryException extends BusinessException {
         super(message, "NOTIFICATION_DELIVERY_FAILED", HttpStatus.BAD_GATEWAY, cause);
     }
 }
+

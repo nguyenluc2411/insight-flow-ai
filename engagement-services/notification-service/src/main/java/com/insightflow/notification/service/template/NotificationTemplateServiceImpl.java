@@ -2,6 +2,7 @@ package com.insightflow.notification.service.template;
 
 import com.insightflow.notification.entity.NotificationTemplate;
 import com.insightflow.notification.repository.NotificationTemplateRepository;
+import com.insightflow.notification.enums.NotificationChannel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
 
     @Override
     public Optional<NotificationTemplate> findActiveTemplate(String templateKey) {
-        return templateRepository.findByTemplateKeyAndChannelAndActiveTrue(templateKey, com.insightflow.notification.enums.NotificationChannel.EMAIL)
+        return templateRepository.findByTemplateKeyAndChannelAndActiveTrue(templateKey, NotificationChannel.EMAIL)
                 .map(t -> t);
     }
 
@@ -43,3 +44,4 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         return templateEngine.process(template.getHtmlBody(), ctx);
     }
 }
+

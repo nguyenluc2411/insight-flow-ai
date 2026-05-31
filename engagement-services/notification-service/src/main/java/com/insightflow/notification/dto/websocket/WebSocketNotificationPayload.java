@@ -25,3 +25,4 @@ public class WebSocketNotificationPayload {
     private Map<String, Object> payload;
     private Instant createdAt;
 }
+

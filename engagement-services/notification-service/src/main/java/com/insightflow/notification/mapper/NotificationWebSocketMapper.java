@@ -12,3 +12,4 @@ public interface NotificationWebSocketMapper {
     @Mapping(target = "type", source = "notificationType")
     RealtimeNotificationPayload toPayload(Notification notification);
 }
+

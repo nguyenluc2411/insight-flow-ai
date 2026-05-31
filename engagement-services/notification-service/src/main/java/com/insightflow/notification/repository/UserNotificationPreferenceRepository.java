@@ -29,3 +29,4 @@ public interface UserNotificationPreferenceRepository extends JpaRepository<User
             NotificationType notificationType,
             NotificationChannel channel);
 }
+

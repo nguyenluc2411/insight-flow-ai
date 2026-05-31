@@ -18,3 +18,4 @@ public interface UserNotificationPreferenceMapper {
 
     UserNotificationPreferenceResponse toResponse(UserNotificationPreference preference);
 }
+

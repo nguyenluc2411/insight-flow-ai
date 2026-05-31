@@ -1,7 +1,7 @@
 package com.insightflow.notification.consumer;
 
 import com.insightflow.notification.config.kafka.NotificationKafkaTopics;
-import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
+import com.insightflow.common.events.notification.IncomingNotificationEvent;
 import com.insightflow.notification.service.interfaces.NotificationEventProcessingService;
 import com.insightflow.notification.service.retry.RetryTopicRoutingService;
 import lombok.RequiredArgsConstructor;
@@ -46,3 +46,4 @@ public class NotificationEventConsumer {
         processingService.process(event, topic);
     }
 }
+

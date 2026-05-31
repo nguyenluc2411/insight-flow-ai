@@ -1,7 +1,8 @@
 package com.insightflow.notification.producer;
 
 import com.insightflow.notification.config.kafka.NotificationKafkaTopics;
-import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
+import com.insightflow.common.events.notification.IncomingNotificationEvent;
+import com.insightflow.notification.enums.NotificationSeverity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -18,7 +19,7 @@ public class NotificationEventProducer {
             throw new IllegalArgumentException("event is required");
         }
 
-        String topic = NotificationKafkaTopics.resolvePriorityTopic(event.severity());
+        String topic = NotificationKafkaTopics.resolvePriorityTopic(NotificationSeverity.fromCode(event.severity()));
         String key = resolveKey(event);
         kafkaEventPublisher.publish(topic, key, event);
     }
@@ -28,3 +29,4 @@ public class NotificationEventProducer {
         return key != null ? key.toString() : null;
     }
 }
+

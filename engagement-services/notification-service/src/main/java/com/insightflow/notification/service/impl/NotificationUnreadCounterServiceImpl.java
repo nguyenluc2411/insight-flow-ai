@@ -52,3 +52,4 @@ public class NotificationUnreadCounterServiceImpl implements NotificationUnreadC
         return count;
     }
 }
+

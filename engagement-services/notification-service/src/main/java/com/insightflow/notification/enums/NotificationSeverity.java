@@ -40,3 +40,4 @@ public enum NotificationSeverity {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown NotificationSeverity code: " + code));
     }
 }
+

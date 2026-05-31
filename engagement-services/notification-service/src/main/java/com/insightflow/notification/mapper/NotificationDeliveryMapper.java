@@ -11,3 +11,4 @@ public interface NotificationDeliveryMapper {
     @Mapping(target = "notificationId", source = "notification.id")
     NotificationDeliveryResponse toResponse(NotificationDeliveryHistory history);
 }
+

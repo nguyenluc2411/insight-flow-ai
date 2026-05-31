@@ -1,6 +1,7 @@
 package com.insightflow.notification.entity;
 
 import com.insightflow.notification.enums.DeliveryStatus;
+import com.insightflow.notification.enums.FailureType;
 import com.insightflow.notification.enums.NotificationChannel;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -58,6 +59,10 @@ public class NotificationDeliveryHistory {
     @Column(name = "failure_reason", columnDefinition = "TEXT")
     private String failureReason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "failure_type", length = 20)
+    private FailureType failureType;
+
     @Column(name = "delivered_at")
     private Instant deliveredAt;
 
@@ -68,3 +73,4 @@ public class NotificationDeliveryHistory {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+

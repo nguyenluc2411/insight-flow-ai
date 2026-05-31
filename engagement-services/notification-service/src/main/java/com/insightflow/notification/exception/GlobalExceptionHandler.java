@@ -56,3 +56,4 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.failure("An unexpected error occurred", data));
     }
 }
+

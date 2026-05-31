@@ -30,3 +30,4 @@ public class WebSocketGateway {
         log.info("WebSocket broadcast destination={}", destination);
     }
 }
+

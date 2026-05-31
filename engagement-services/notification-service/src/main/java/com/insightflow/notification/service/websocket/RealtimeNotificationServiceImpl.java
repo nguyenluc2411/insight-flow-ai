@@ -104,3 +104,4 @@ public class RealtimeNotificationServiceImpl implements RealtimeNotificationServ
         redisNotificationPublisher.publish(event);
     }
 }
+

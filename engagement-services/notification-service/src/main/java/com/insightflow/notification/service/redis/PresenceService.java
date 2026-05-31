@@ -13,3 +13,4 @@ public interface PresenceService {
 
     Set<String> getActiveSessions(UUID userId);
 }
+

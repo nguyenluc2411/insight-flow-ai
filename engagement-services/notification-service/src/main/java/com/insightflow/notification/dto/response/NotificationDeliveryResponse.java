@@ -23,3 +23,4 @@ public class NotificationDeliveryResponse {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

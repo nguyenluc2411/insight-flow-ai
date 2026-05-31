@@ -1,5 +1,6 @@
 package com.insightflow.notification.entity;
 
+import com.insightflow.notification.enums.FailureType;
 import com.insightflow.notification.enums.NotificationChannel;
 import com.insightflow.notification.enums.RetryStatus;
 import jakarta.persistence.Column;
@@ -61,6 +62,10 @@ public class NotificationRetry {
     @Column(name = "last_failure_reason", columnDefinition = "TEXT")
     private String lastFailureReason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "failure_type", length = 20)
+    private FailureType failureType;
+
     @Column(name = "last_tried_at")
     private Instant lastTriedAt;
 
@@ -71,3 +76,4 @@ public class NotificationRetry {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+

@@ -21,3 +21,4 @@ public interface ProcessedEventRepository extends JpaRepository<ProcessedEvent, 
 
     long deleteByProcessedAtBefore(Instant cutoff);
 }
+

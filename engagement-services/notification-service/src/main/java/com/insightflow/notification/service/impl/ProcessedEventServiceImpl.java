@@ -1,7 +1,7 @@
 package com.insightflow.notification.service.impl;
 
 import com.insightflow.notification.entity.ProcessedEvent;
-import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
+import com.insightflow.common.events.notification.IncomingNotificationEvent;
 import com.insightflow.notification.repository.ProcessedEventRepository;
 import com.insightflow.notification.service.interfaces.ProcessedEventService;
 import com.insightflow.notification.util.PayloadHashService;
@@ -27,7 +27,7 @@ public class ProcessedEventServiceImpl implements ProcessedEventService {
         processedEvent.setEventType(event.eventType());
         processedEvent.setCorrelationId(event.correlationId());
         processedEvent.setSourceService(event.sourceService());
-        processedEvent.setPayloadHash(payloadHashService.hash(event.payload()));
+        processedEvent.setPayloadHash(payloadHashService.hash(event));
         processedEvent.setProcessedAt(event.timestamp() != null ? event.timestamp() : processedEvent.getProcessedAt());
 
         try {
@@ -39,3 +39,4 @@ public class ProcessedEventServiceImpl implements ProcessedEventService {
         }
     }
 }
+

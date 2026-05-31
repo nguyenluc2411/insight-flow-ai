@@ -25,3 +25,4 @@ public interface NotificationTemplateRepository extends JpaRepository<Notificati
 
     Page<NotificationTemplate> findByActiveTrue(Pageable pageable);
 }
+

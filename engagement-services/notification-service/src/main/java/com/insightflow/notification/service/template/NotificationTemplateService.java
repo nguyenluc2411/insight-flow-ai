@@ -13,3 +13,4 @@ public interface NotificationTemplateService {
 
     String renderTemplateHtml(NotificationTemplate template, Map<String, Object> model);
 }
+

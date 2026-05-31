@@ -6,3 +6,4 @@ public enum RedisRealtimeEventType {
     PRESENCE,
     BROADCAST
 }
+

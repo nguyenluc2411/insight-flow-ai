@@ -37,3 +37,4 @@ public enum NotificationStatus {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown NotificationStatus code: " + code));
     }
 }
+

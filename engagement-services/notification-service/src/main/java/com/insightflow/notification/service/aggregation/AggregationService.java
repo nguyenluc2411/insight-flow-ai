@@ -1,6 +1,6 @@
 package com.insightflow.notification.service.aggregation;
 
-import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
+import com.insightflow.common.events.notification.IncomingNotificationEvent;
 
 import java.util.Optional;
 
@@ -10,3 +10,4 @@ public interface AggregationService {
 
     Optional<Long> getAggregatedCount(String aggregationKey);
 }
+

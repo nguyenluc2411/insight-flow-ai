@@ -14,3 +14,4 @@ public class UpdateInboxStatusRequest {
     @NotNull
     private InboxStatus inboxStatus;
 }
+

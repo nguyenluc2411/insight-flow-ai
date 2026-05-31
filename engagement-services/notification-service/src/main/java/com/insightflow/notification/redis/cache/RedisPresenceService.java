@@ -78,3 +78,4 @@ public class RedisPresenceService implements PresenceService {
         return members.stream().map(Object::toString).collect(java.util.stream.Collectors.toSet());
     }
 }
+

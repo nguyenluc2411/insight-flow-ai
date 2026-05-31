@@ -24,3 +24,4 @@ public class NotificationAggregationWindowResponse {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

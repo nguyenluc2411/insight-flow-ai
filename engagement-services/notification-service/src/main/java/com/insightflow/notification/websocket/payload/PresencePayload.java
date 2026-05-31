@@ -18,3 +18,4 @@ public class PresencePayload {
     private boolean online;
     private Instant timestamp;
 }
+

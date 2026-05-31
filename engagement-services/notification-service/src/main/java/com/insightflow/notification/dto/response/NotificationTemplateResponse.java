@@ -24,3 +24,4 @@ public class NotificationTemplateResponse {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

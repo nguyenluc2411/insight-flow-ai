@@ -8,3 +8,4 @@ public class ResourceNotFoundException extends BusinessException {
         super(resource + " not found: " + id, "RESOURCE_NOT_FOUND", HttpStatus.NOT_FOUND);
     }
 }
+

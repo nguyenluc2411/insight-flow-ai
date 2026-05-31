@@ -1,7 +1,8 @@
 package com.insightflow.notification.service.impl;
 
 import com.insightflow.notification.entity.NotificationAggregationWindow;
-import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
+import com.insightflow.notification.enums.NotificationSeverity;
+import com.insightflow.common.events.notification.IncomingNotificationEvent;
 import com.insightflow.notification.repository.NotificationAggregationWindowRepository;
 import com.insightflow.notification.service.aggregation.AggregationService;
 import lombok.RequiredArgsConstructor;
@@ -29,50 +30,72 @@ public class AggregationServiceImpl implements AggregationService {
     @Override
     @Transactional
     public boolean tryAggregate(IncomingNotificationEvent event) {
-        if (event == null) {
+
+        if (event == null) return false;
+
+        NotificationSeverity severity = NotificationSeverity.fromCode(event.severity());
+        if (severity == NotificationSeverity.HIGH) {
+            log.info("HIGH severity bypass aggregation eventId={}", event.eventId());
             return false;
         }
 
-        String key = null;
-        if (event.payload() != null && event.payload().get("aggregationKey") != null) {
-            key = event.payload().get("aggregationKey").toString();
-        }
-
-        if (key == null && event.correlationId() != null) {
-            key = event.correlationId().toString();
-        }
-
-        if (key == null) {
+        if (threshold <= 1) {
+            log.info("Aggregation threshold <= 1, allowing immediate send key={} eventId={}",
+                    event.recipientId() + "|" + event.eventType() + "|" + severity,
+                    event.eventId());
             return false;
         }
 
-        Optional<NotificationAggregationWindow> existing = windowRepository.findFirstByAggregationKeyAndActiveTrue(key);
+        String key = event.recipientId() + "|" + event.eventType() + "|" + severity;
+
+        Optional<NotificationAggregationWindow> existing =
+                windowRepository.findFirstByAggregationKeyAndActiveTrue(key);
 
         if (existing.isPresent()) {
+
             NotificationAggregationWindow w = existing.get();
-            if (w.getWindowEnd() != null && w.getWindowEnd().isAfter(Instant.now())) {
-                w.setAggregatedCount(w.getAggregatedCount() + 1);
+
+            if (w.getWindowEnd() != null && Instant.now().isBefore(w.getWindowEnd())) {
+
+                int newCount = w.getAggregatedCount() + 1;
+                w.setAggregatedCount(newCount);
                 windowRepository.save(w);
-                log.info("Aggregated event into window key={} count={}", key, w.getAggregatedCount());
-                // suppress until threshold reached
-                return w.getAggregatedCount() < threshold;
+
+                log.info("Aggregated event key={} count={}", key, newCount);
+
+                if (newCount < threshold) {
+                    return true; // suppress until threshold is reached
+                }
+
+                w.setActive(false);
+                windowRepository.save(w);
+
+                log.info("Threshold reached → allow sending key={}", key);
+                return false; // allow send
             }
+
+            windowRepository.delete(w);
         }
 
         NotificationAggregationWindow window = new NotificationAggregationWindow();
         window.setAggregationKey(key);
-        window.setNotificationType(event.payload() != null && event.payload().get("notificationType") != null
-                ? com.insightflow.notification.enums.NotificationType.fromCode(event.payload().get("notificationType").toString())
-                : com.insightflow.notification.enums.NotificationType.DASHBOARD_ALERT);
-        window.setSeverity(event.severity());
+        window.setNotificationType(
+                event.eventType() != null
+                        ? com.insightflow.notification.enums.NotificationType.fromCode(event.eventType())
+                        : com.insightflow.notification.enums.NotificationType.DASHBOARD_ALERT
+        );
+
+        window.setSeverity(severity);
         window.setWindowStart(Instant.now());
         window.setWindowEnd(Instant.now().plusSeconds(windowSeconds));
         window.setAggregatedCount(1);
         window.setActive(true);
-        windowRepository.save(window);
-        log.info("Created aggregation window key={} windowSeconds={} threshold={}", key, windowSeconds, threshold);
 
-        return threshold > 1;
+        windowRepository.save(window);
+
+        log.info("Created aggregation window key={}", key);
+
+        return true; // first event is suppressed until threshold is reached
     }
 
     @Override
@@ -81,3 +104,4 @@ public class AggregationServiceImpl implements AggregationService {
                 .map(w -> (long) w.getAggregatedCount());
     }
 }
+

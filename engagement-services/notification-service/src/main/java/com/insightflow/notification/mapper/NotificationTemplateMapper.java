@@ -18,3 +18,4 @@ public interface NotificationTemplateMapper {
 
     NotificationTemplateResponse toResponse(NotificationTemplate template);
 }
+

@@ -8,3 +8,4 @@ import lombok.Getter;
 public class UnreadCountResponse {
     private long unreadCount;
 }
+

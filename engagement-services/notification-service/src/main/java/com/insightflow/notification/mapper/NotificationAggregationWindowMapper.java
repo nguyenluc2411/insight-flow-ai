@@ -9,3 +9,4 @@ public interface NotificationAggregationWindowMapper {
 
     NotificationAggregationWindowResponse toResponse(NotificationAggregationWindow window);
 }
+

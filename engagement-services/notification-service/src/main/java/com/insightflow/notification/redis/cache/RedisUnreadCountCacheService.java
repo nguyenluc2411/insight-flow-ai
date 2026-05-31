@@ -78,3 +78,4 @@ public class RedisUnreadCountCacheService implements UnreadCountCacheService {
         redisTemplate.delete(RedisKeys.unreadKey(userId));
     }
 }
+

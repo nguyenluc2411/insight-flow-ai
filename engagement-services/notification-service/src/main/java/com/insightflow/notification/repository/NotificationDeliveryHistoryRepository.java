@@ -28,3 +28,4 @@ public interface NotificationDeliveryHistoryRepository extends JpaRepository<Not
             DeliveryStatus deliveryStatus,
             Instant cutoff);
 }
+

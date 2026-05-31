@@ -4,3 +4,4 @@ public interface KafkaEventPublisher {
 
     <T> void publish(String topic, String key, T event);
 }
+

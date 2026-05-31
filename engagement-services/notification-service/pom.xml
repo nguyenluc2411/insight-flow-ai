@@ -163,6 +163,12 @@
         <artifactId>jackson-datatype-jsr310</artifactId>
     </dependency>
 
+    <dependency>
+        <groupId>com.insightflow</groupId>
+        <artifactId>common-events</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+
     <!-- ============================================================
          TEST
          ============================================================ -->

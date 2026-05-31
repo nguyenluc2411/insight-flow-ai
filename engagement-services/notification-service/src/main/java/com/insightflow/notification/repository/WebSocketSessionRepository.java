@@ -22,3 +22,4 @@ public interface WebSocketSessionRepository extends JpaRepository<WebSocketSessi
 
     List<WebSocketSession> findByLastHeartbeatAtBefore(Instant cutoff);
 }
+

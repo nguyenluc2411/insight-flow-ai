@@ -2,9 +2,11 @@ package com.insightflow.notification.controller;
 
 import com.insightflow.notification.dto.request.NotificationInboxFilterRequest;
 import com.insightflow.notification.dto.response.ApiResponse;
+import com.insightflow.notification.dto.response.DlqReplayResponse;
 import com.insightflow.notification.dto.response.NotificationResponse;
 import com.insightflow.notification.dto.response.UnreadCountResponse;
 import com.insightflow.notification.service.interfaces.NotificationInboxService;
+import com.insightflow.notification.service.retry.DlqReplayService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,6 +37,7 @@ import java.util.UUID;
 public class NotificationController {
 
     private final NotificationInboxService notificationInboxService;
+    private final DlqReplayService dlqReplayService;
 
     @GetMapping("/inbox")
     public ApiResponse<Page<NotificationResponse>> getInbox(
@@ -85,4 +89,13 @@ public class NotificationController {
         NotificationResponse response = notificationInboxService.delete(id, recipientId);
         return ApiResponse.success(response, "Notification deleted");
     }
+
+    @PostMapping("/dlq/{notificationId}/replay")
+    public ApiResponse<DlqReplayResponse> replayDlq(
+            @RequestHeader(value = "X-Admin", defaultValue = "false") boolean admin,
+            @PathVariable UUID notificationId) {
+        DlqReplayResponse response = dlqReplayService.replay(notificationId, admin);
+        return ApiResponse.success(response, "DLQ replay scheduled");
+    }
 }
+

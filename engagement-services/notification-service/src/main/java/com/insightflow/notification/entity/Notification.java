@@ -1,8 +1,8 @@
 package com.insightflow.notification.entity;
 
 import com.insightflow.notification.enums.InboxStatus;
-import com.insightflow.notification.enums.NotificationSeverity;
 import com.insightflow.notification.enums.NotificationStatus;
+import com.insightflow.notification.enums.NotificationSeverity;
 import com.insightflow.notification.enums.NotificationType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -116,3 +116,4 @@ public class Notification {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+

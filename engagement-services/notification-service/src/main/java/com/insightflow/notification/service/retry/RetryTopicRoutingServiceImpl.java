@@ -70,3 +70,4 @@ public class RetryTopicRoutingServiceImpl implements RetryTopicRoutingService {
         return !(exception instanceof IllegalArgumentException);
     }
 }
+

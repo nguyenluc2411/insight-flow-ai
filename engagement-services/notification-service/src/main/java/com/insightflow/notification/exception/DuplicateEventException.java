@@ -8,3 +8,4 @@ public class DuplicateEventException extends BusinessException {
         super("Duplicate event detected: " + eventId, "DUPLICATE_EVENT", HttpStatus.CONFLICT);
     }
 }
+

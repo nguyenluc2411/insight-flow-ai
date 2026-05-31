@@ -15,3 +15,4 @@ public interface RealtimeNotificationService {
 
     void broadcast(NotificationBroadcastPayload payload);
 }
+

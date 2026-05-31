@@ -37,3 +37,4 @@ public enum NotificationType {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown NotificationType code: " + code));
     }
 }
+

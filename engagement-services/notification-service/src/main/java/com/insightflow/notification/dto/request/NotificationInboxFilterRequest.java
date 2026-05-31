@@ -11,3 +11,4 @@ public class NotificationInboxFilterRequest {
     private NotificationSeverity severity;
     private NotificationChannel channel;
 }
+

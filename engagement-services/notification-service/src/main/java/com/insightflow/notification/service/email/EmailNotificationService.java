@@ -6,3 +6,4 @@ public interface EmailNotificationService {
 
     void sendEmail(Notification notification);
 }
+

@@ -1,6 +1,7 @@
 package com.insightflow.notification.config.kafka;
 
-import com.insightflow.notification.event.incoming.IncomingNotificationEvent;
+import com.insightflow.common.events.notification.IncomingNotificationEvent;
+import com.insightflow.common.events.notification.NotificationRetryEvent;
 import com.insightflow.notification.service.retry.RetryTopicRoutingService;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -47,6 +48,24 @@ public class KafkaListenerConfig {
         return buildListenerFactory(kafkaProperties, notificationErrorHandler, IncomingNotificationEvent.class);
     }
 
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, NotificationRetryEvent>
+    retryKafkaListenerContainerFactory(
+            KafkaProperties kafkaProperties,
+            DefaultErrorHandler notificationErrorHandler) {
+
+        return buildListenerFactory(kafkaProperties, notificationErrorHandler, NotificationRetryEvent.class);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, Object>
+    dlqKafkaListenerContainerFactory(
+            KafkaProperties kafkaProperties,
+            DefaultErrorHandler notificationErrorHandler) {
+
+        return buildListenerFactory(kafkaProperties, notificationErrorHandler, Object.class);
+    }
+
     private <T> ConcurrentKafkaListenerContainerFactory<String, T> buildListenerFactory(
             KafkaProperties kafkaProperties,
             DefaultErrorHandler notificationErrorHandler,
@@ -57,7 +76,7 @@ public class KafkaListenerConfig {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
         JsonDeserializer<T> valueDeserializer = new JsonDeserializer<>(targetType, false);
-        valueDeserializer.addTrustedPackages("com.insightflow.notification.event");
+        valueDeserializer.addTrustedPackages("com.insightflow.common.events.notification");
         valueDeserializer.setUseTypeMapperForKey(false);
 
         DefaultKafkaConsumerFactory<String, T> consumerFactory =
@@ -76,3 +95,4 @@ public class KafkaListenerConfig {
         return factory;
     }
 }
+

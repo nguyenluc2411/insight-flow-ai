@@ -16,6 +16,12 @@ public final class NotificationKafkaTopics {
 
     public static final String DLQ = "notifications.dlq";
 
+    public static final String OUTGOING_SENT = "notifications.outgoing.sent";
+    public static final String OUTGOING_FAILED = "notifications.outgoing.failed";
+    public static final String OUTGOING_RETRY = "notifications.outgoing.retry";
+    public static final String OUTGOING_BROADCAST = "notifications.outgoing.broadcast";
+    public static final String OUTGOING_DLQ = "notifications.outgoing.dlq";
+
     public static final List<String> PRIORITY_TOPICS = List.of(
             HIGH_PRIORITY,
             NORMAL_PRIORITY,
@@ -42,3 +48,4 @@ public final class NotificationKafkaTopics {
         };
     }
 }
+

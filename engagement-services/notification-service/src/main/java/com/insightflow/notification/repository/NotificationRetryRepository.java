@@ -1,6 +1,7 @@
 package com.insightflow.notification.repository;
 
 import com.insightflow.notification.entity.NotificationRetry;
+import com.insightflow.notification.enums.NotificationChannel;
 import com.insightflow.notification.enums.RetryStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,9 +30,21 @@ public interface NotificationRetryRepository extends JpaRepository<NotificationR
             UUID notificationId,
             RetryStatus status);
 
+    Optional<NotificationRetry> findFirstByNotification_IdAndChannelAndRetryStatusInOrderByUpdatedAtDesc(
+            UUID notificationId,
+            NotificationChannel channel,
+            Collection<RetryStatus> statuses);
+
+    Optional<NotificationRetry> findFirstByNotification_IdAndChannelOrderByUpdatedAtDesc(
+            UUID notificationId,
+            NotificationChannel channel);
+
     long countByRetryStatus(RetryStatus status);
 
     boolean existsByNotification_IdAndRetryStatusIn(
             UUID notificationId,
             Collection<RetryStatus> statuses);
+
+    long deleteByRetryStatusInAndUpdatedAtBefore(Collection<RetryStatus> statuses, Instant cutoff);
 }
+

@@ -17,3 +17,4 @@ public class UnreadCountPayload {
     private long unreadCount;
     private Instant timestamp;
 }
+

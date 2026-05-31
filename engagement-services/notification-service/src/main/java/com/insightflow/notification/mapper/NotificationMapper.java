@@ -1,6 +1,6 @@
 package com.insightflow.notification.mapper;
 
-import com.insightflow.notification.dto.kafka.IncomingNotificationEventDto;
+import com.insightflow.common.events.notification.IncomingNotificationEvent;
 import com.insightflow.notification.dto.request.CreateNotificationRequest;
 import com.insightflow.notification.dto.response.NotificationResponse;
 import com.insightflow.notification.entity.Notification;
@@ -21,6 +21,7 @@ public interface NotificationMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "aggregationWindow", ignore = true)
+    @Mapping(target = "payload", ignore = true)
     Notification toEntity(CreateNotificationRequest request);
 
     @Mapping(target = "id", ignore = true)
@@ -35,8 +36,11 @@ public interface NotificationMapper {
     @Mapping(target = "aggregationWindow", ignore = true)
     @Mapping(target = "aggregationKey", ignore = true)
     @Mapping(target = "expiresAt", ignore = true)
-    @Mapping(target = "notificationType", expression = "java(NotificationType.fromCode(event.getEventType()))")
-    Notification fromIncomingEvent(IncomingNotificationEventDto event);
+    @Mapping(target = "payload", ignore = true)
+    @Mapping(target = "severity", expression = "java(com.insightflow.notification.enums.NotificationSeverity.fromCode(event.severity()))")
+    @Mapping(target = "notificationType", expression = "java(NotificationType.fromCode(event.eventType()))")
+    Notification fromIncomingEvent(IncomingNotificationEvent event);
 
     NotificationResponse toResponse(Notification notification);
 }
+

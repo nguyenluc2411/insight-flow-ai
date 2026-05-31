@@ -36,3 +36,4 @@ public class NotificationResponse {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

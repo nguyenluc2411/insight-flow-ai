@@ -22,3 +22,4 @@ public interface NotificationInboxService {
 
     NotificationResponse delete(UUID id, UUID recipientId);
 }
+
