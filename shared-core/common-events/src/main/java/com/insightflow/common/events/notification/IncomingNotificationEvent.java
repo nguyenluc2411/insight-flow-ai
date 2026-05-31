@@ -8,12 +8,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Builder
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record IncomingNotificationEvent(
         UUID eventId,
         String eventType,
         Instant timestamp,
         UUID recipientId,
+        String recipientEmail,
         String severity,
         String title,
         String message,

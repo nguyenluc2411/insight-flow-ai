@@ -77,6 +77,9 @@ public class Notification {
     @Column(name = "recipient_id", nullable = false)
     private UUID recipientId;
 
+    @Column(name = "recipient_email", length = 255)
+    private String recipientEmail;
+
     @Column(nullable = false, length = 255)
     private String title;
 

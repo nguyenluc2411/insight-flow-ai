@@ -37,6 +37,7 @@ public interface NotificationMapper {
     @Mapping(target = "aggregationKey", ignore = true)
     @Mapping(target = "expiresAt", ignore = true)
     @Mapping(target = "payload", ignore = true)
+    @Mapping(target = "recipientEmail", source = "recipientEmail")
     @Mapping(target = "severity", expression = "java(com.insightflow.notification.enums.NotificationSeverity.fromCode(event.severity()))")
     @Mapping(target = "notificationType", expression = "java(NotificationType.fromCode(event.eventType()))")
     Notification fromIncomingEvent(IncomingNotificationEvent event);
