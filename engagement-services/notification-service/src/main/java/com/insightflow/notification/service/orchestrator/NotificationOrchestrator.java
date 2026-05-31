@@ -14,8 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.UUID;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -33,11 +33,17 @@ public class NotificationOrchestrator {
     @Transactional
     public void orchestrate(IncomingNotificationEvent event) {
 
-        if (event == null) return;
+        if (event == null) {
+            throw new IllegalArgumentException("event is required");
+        }
 
-        log.info("[ORCH] START eventId={} correlationId={}",
+        boolean directEmail = event.recipientEmail() != null && !event.recipientEmail().isBlank();
+
+        log.info("[ORCH] START eventId={} correlationId={} recipientEmail={} directEmail={}",
                 event.eventId(),
-                event.correlationId());
+                event.correlationId(),
+                event.recipientEmail(),
+                directEmail);
 
         boolean first = processedEventService.recordIfNotProcessed(event, "orchestrator");
         if (!first) {
@@ -46,37 +52,61 @@ public class NotificationOrchestrator {
         }
 
         boolean suppressed = aggregationService.tryAggregate(event);
+
+        log.info("[ORCH] AFTER_AGGREGATION eventId={} directEmail={} suppressed={}",
+                event.eventId(),
+                directEmail,
+                suppressed);
+
         if (suppressed) {
             log.info("[ORCH] SUPPRESSED eventId={}", event.eventId());
             return;
         }
 
         Notification notification = notificationMapper.fromIncomingEvent(event);
-        notification.setId(UUID.randomUUID());
+        if (directEmail && (notification.getRecipientEmail() == null || notification.getRecipientEmail().isBlank())) {
+            notification.setRecipientEmail(event.recipientEmail());
+        }
 
-        Notification saved = notificationRepository.save(notification);
+        log.info("[ORCH] MAPPED notificationId={} notificationType={} recipientEmail={}",
+                notification.getId(),
+                notification.getNotificationType(),
+                notification.getRecipientEmail());
+
+        Notification saved;
+        try {
+            saved = notificationRepository.saveAndFlush(notification);
+        } catch (Exception ex) {
+            log.error("[ORCH] SAVE_FAILED eventId={} recipientEmail={} error={}",
+                    event.eventId(),
+                    notification.getRecipientEmail(),
+                    ex.getMessage(),
+                    ex);
+            throw ex;
+        }
 
         log.info("[ORCH] SAVED notificationId={} recipientId={}",
                 saved.getId(),
                 saved.getRecipientId());
 
-        // ================= EMAIL DEBUG =================
-        try {
-            log.info("[EMAIL] sending notificationId={} to={}",
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            Notification notificationToSend = saved;
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    log.info("[EMAIL] SENDING notificationId={} to={} recipientEmail={}",
+                            notificationToSend.getId(),
+                            notificationToSend.getRecipientId(),
+                            notificationToSend.getRecipientEmail());
+                    emailNotificationService.sendEmail(notificationToSend);
+                }
+            });
+        } else {
+            log.info("[EMAIL] SENDING notificationId={} to={} recipientEmail={}",
                     saved.getId(),
-                    saved.getRecipientId());
-
-            emailNotificationService.sendEmail(
-                    saved
-            );
-
-            log.info("[EMAIL] SENT SUCCESS notificationId={}", saved.getId());
-
-        } catch (Exception ex) {
-            log.error("[EMAIL] FAILED notificationId={} error={}",
-                    saved.getId(),
-                    ex.getMessage(),
-                    ex);
+                    saved.getRecipientId(),
+                    saved.getRecipientEmail());
+            emailNotificationService.sendEmail(saved);
         }
 
         // ================= KAFKA =================

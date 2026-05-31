@@ -34,6 +34,9 @@ public class NotificationEventProcessingServiceImpl implements NotificationEvent
                 event.recipientId());
 
         notificationOrchestrator.orchestrate(event);
+        log.info("Notification event orchestration finished topic={} eventId={}",
+                sourceTopic,
+                event.eventId());
     }
 }
 
