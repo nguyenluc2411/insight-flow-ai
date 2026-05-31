@@ -43,6 +43,7 @@ public class TestNotificationController {
                 .eventType(request.eventType())
                 .timestamp(timestamp)
                 .recipientId(request.recipientId())
+                .recipientEmail(request.recipientEmail())
                 .severity(request.severity())
                 .title(request.title())
                 .message(request.message())
@@ -52,10 +53,11 @@ public class TestNotificationController {
                 .sourceService(request.sourceService())
                 .build();
 
-        log.info("Test realtime event publishing eventId={} correlationId={} recipientId={}",
+        log.info("Test realtime event publishing eventId={} correlationId={} recipientId={} recipientEmail={}",
                 event.eventId(),
                 event.correlationId(),
-                event.recipientId());
+                event.recipientId(),
+                event.recipientEmail());
 
         notificationEventProducer.publishBySeverity(event);
 
@@ -63,7 +65,8 @@ public class TestNotificationController {
                 Map.of(
                         "eventId", event.eventId(),
                         "correlationId", event.correlationId(),
-                        "recipientId", event.recipientId()
+                        "recipientId", event.recipientId(),
+                        "recipientEmail", event.recipientEmail()
                 ),
                 "Test notification published");
     }

@@ -86,20 +86,21 @@ spring:
       port: ${REDIS_PORT:6379}
 
   mail:
-    host: smtp.gmail.com
-    port: 587
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
 
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
 
     properties:
       mail:
         smtp:
-
-          auth: true
-
+          auth: ${MAIL_SMTP_AUTH:true}
           starttls:
-            enable: true
+            enable: ${MAIL_SMTP_STARTTLS:true}
+            required: ${MAIL_SMTP_STARTTLS_REQUIRED:true}
+          ssl:
+            trust: ${MAIL_SMTP_SSL_TRUST:smtp.gmail.com}
 
 eureka:
   instance:
