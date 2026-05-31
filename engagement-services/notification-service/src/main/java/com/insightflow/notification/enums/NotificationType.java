@@ -31,6 +31,9 @@ public enum NotificationType {
         if (code == null) {
             throw new IllegalArgumentException("NotificationType code is null");
         }
+        if ("RESTOCK_ALERT".equalsIgnoreCase(code)) {
+            return RESTOCK_RECOMMENDATION;
+        }
         return Arrays.stream(values())
                 .filter(value -> value.code.equalsIgnoreCase(code))
                 .findFirst()
