@@ -28,13 +28,10 @@ public class Workspace extends BaseEntity {
     private String name;
 
     @Column(name = "status", length = 20, nullable = false)
-    private String status;
+    private String status; // INIT, PROCESSING, COMPLETED, FAILED
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
-
-    @Column(name = "ai_recommendation", columnDefinition = "TEXT")
-    private String aiRecommendation;
 
     @Column(name = "progress")
     private Integer progress;

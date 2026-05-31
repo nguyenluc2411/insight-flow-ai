@@ -1,0 +1,39 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: recommendation-service
+
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/insightflow_ai_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: 12345
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: true
+
+  # Cấu hình Kafka Consumer lắng nghe event từ port 8082
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: ai-recommendation-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+
+# ... (các cấu hình cũ của spring, kafka, ai giữ nguyên) ...
+
+app:
+  services:
+    # Nếu chạy local máy dev, nó lấy localhost:8082
+    # Nếu chạy Docker/Production, nó sẽ lấy giá trị từ biến môi trường DATA_INGESTION_URL
+    data-ingestion-url: ${DATA_INGESTION_URL:http://localhost:8082}

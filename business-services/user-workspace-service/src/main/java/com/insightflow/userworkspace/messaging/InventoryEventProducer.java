@@ -1,6 +1,5 @@
 package com.insightflow.userworkspace.messaging;
 
-
 import com.insightflow.userworkspace.dto.event.EventEnvelope;
 import com.insightflow.userworkspace.dto.event.InventoryFileUploadedPayload;
 import com.insightflow.userworkspace.dto.event.KafkaTopics;

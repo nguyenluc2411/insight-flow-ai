@@ -9,22 +9,21 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.time.OffsetDateTime;
-
+import java.util.List;
+@CrossOrigin("*")
 @RestController
 @RequestMapping("/api/v1/workspaces")
 @RequiredArgsConstructor
 public class WorkspaceController {
 
     private final WorkspaceService workspaceService;
-
     @PostMapping
     public ResponseEntity<ApiResponse<CreateWorkspaceResponse>> createWorkspace(@Valid @RequestBody CreateWorkspaceRequest request) {
         CreateWorkspaceResponse response = workspaceService.createWorkspace(request);
         return ResponseEntity.ok(ApiResponse.<CreateWorkspaceResponse>builder()
                 .success(true)
-                .message("Workspace created")
+                .message("Khởi tạo phiên làm việc thành công, đường dẫn tải file S3 đã sẵn sàng")
                 .data(response)
                 .errorCode(null)
                 .timestamp(OffsetDateTime.now().toString())
@@ -36,7 +35,7 @@ public class WorkspaceController {
         workspaceService.confirmUpload(workspaceId);
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
-                .message("Upload confirmed")
+                .message("Xác nhận file tải lên thành công, đang kích hoạt luồng AI phân tích dữ liệu")
                 .data(null)
                 .errorCode(null)
                 .timestamp(OffsetDateTime.now().toString())
@@ -48,35 +47,20 @@ public class WorkspaceController {
         WorkspaceResponse response = workspaceService.getWorkspace(workspaceId);
         return ResponseEntity.ok(ApiResponse.<WorkspaceResponse>builder()
                 .success(true)
-                .message("OK")
+                .message("Lấy thông tin phiên làm việc thành công")
                 .data(response)
                 .errorCode(null)
                 .timestamp(OffsetDateTime.now().toString())
                 .build());
     }
 
-    @PatchMapping("/{id}/result")
-    public ResponseEntity<ApiResponse<Object>> updateResult(@PathVariable("id") String workspaceId,
-                                                            @RequestParam("recommendation_text") String recommendationText,
-                                                            @RequestParam(value = "progress", required = false) Integer progress) {
-        workspaceService.updateRecommendation(workspaceId, recommendationText, progress);
-        return ResponseEntity.ok(ApiResponse.builder()
+    @GetMapping("/user/history")
+    public ResponseEntity<ApiResponse<List<WorkspaceResponse>>> getHistory() {
+        List<WorkspaceResponse> responses = workspaceService.getCompletedHistories();
+        return ResponseEntity.ok(ApiResponse.<List<WorkspaceResponse>>builder()
                 .success(true)
-                .message("Updated")
-                .data(null)
-                .errorCode(null)
-                .timestamp(OffsetDateTime.now().toString())
-                .build());
-    }
-
-    @PatchMapping("/{id}/fail")
-    public ResponseEntity<ApiResponse<Object>> updateFail(@PathVariable("id") String workspaceId,
-                                                          @RequestParam("error_message") String errorMessage) {
-        workspaceService.updateFailure(workspaceId, errorMessage);
-        return ResponseEntity.ok(ApiResponse.builder()
-                .success(true)
-                .message("Updated")
-                .data(null)
+                .message("Lấy lịch sử phân tích thành công")
+                .data(responses)
                 .errorCode(null)
                 .timestamp(OffsetDateTime.now().toString())
                 .build());

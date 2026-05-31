@@ -15,6 +15,8 @@ public class InventoryFileUploadedPayload {
     private String workspaceId;
     @JsonProperty("user_id")
     private String userId;
+    @JsonProperty("file_name")
+    private String fileName; // Bổ sung đồng bộ với con 8082
     @JsonProperty("s3_file_url")
     private String s3FileUrl;
 }

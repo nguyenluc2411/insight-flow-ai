@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "file_metadata")
@@ -37,5 +38,5 @@ public class FileMetadata extends BaseEntity {
     private String s3FileUrl;
 
     @Column(name = "uploaded_at")
-    private java.time.OffsetDateTime uploadedAt;
+    private OffsetDateTime uploadedAt;
 }

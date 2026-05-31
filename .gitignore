@@ -70,3 +70,6 @@ kafka-logs
 
 generated
 out
+
+# Chặn file cấu hình chứa key bảo mật của cá nhân
+**/application-local.yml

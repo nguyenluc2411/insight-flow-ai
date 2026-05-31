@@ -11,14 +11,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ApiResponse<T> {
-    @JsonProperty("success")
     private boolean success;
-    @JsonProperty("message")
     private String message;
-    @JsonProperty("data")
     private T data;
     @JsonProperty("error_code")
     private String errorCode;
-    @JsonProperty("timestamp")
     private String timestamp;
 }

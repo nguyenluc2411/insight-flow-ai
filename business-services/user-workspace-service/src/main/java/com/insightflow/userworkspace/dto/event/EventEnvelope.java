@@ -15,10 +15,7 @@ public class EventEnvelope<T> {
     private String eventId;
     @JsonProperty("event_type")
     private String eventType;
-    @JsonProperty("timestamp")
     private String timestamp;
-    @JsonProperty("source")
     private String source;
-    @JsonProperty("payload")
     private T payload;
 }

@@ -12,15 +12,15 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateWorkspaceRequest {
-    @NotBlank
+    @NotBlank(message = "Tên phiên làm việc không được trống")
     @JsonProperty("workspace_name")
     private String workspaceName;
 
-    @NotBlank
+    @NotBlank(message = "Tên file không được trống")
     @JsonProperty("file_name")
     private String fileName;
 
-    @NotBlank
+    @NotBlank(message = "Định dạng file không được trống")
     @JsonProperty("content_type")
     private String contentType;
 }

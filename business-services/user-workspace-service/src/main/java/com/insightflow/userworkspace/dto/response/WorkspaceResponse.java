@@ -11,19 +11,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WorkspaceResponse {
-    @JsonProperty("id")
     private String id;
     @JsonProperty("user_id")
     private String userId;
-    @JsonProperty("name")
     private String name;
-    @JsonProperty("status")
     private String status;
     @JsonProperty("error_message")
     private String errorMessage;
-    @JsonProperty("ai_recommendation")
-    private String aiRecommendation;
-    @JsonProperty("progress")
     private Integer progress;
     @JsonProperty("created_at")
     private String createdAt;
