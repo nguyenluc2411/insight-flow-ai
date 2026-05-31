@@ -299,7 +299,7 @@ public class DashboardAggregationService {
     public ForecastSummaryResponse getForecastSummary(UserContext user) {
         // Step 1: get active variants from catalog — no dependency on ML recommendations
         PagedResponse<Map<String, Object>> variantsPage = catalogClient.get()
-                .uri("/api/v1/catalog/variants?size=20")
+                .uri("/api/v1/catalog/products/variants?size=20")
                 .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<PagedResponse<Map<String, Object>>>() {})
