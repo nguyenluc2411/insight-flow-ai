@@ -6,6 +6,7 @@ import com.insightflow.catalog.dto.response.InventoryMovementResponse;
 import com.insightflow.catalog.dto.response.InventorySummaryResponse;
 import com.insightflow.catalog.service.InventoryService;
 import com.insightflow.security.CurrentUser;
+import com.insightflow.security.RequiresPermission;
 import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -30,6 +31,7 @@ public class InventoryController {
     private final InventoryService inventoryService;
 
     @GetMapping("/summary")
+    @RequiresPermission("inventory:read")
     @Operation(
             summary = "Inventory summary",
             description = "Returns totalSKU (active variants), totalQuantity (sum on-hand), lowStockCount (positions at/below reorder threshold).")
@@ -39,6 +41,7 @@ public class InventoryController {
     }
 
     @GetMapping("/variants/{variantId}")
+    @RequiresPermission("inventory:read")
     @Operation(summary = "Get inventory levels by variant")
     @ApiResponse(responseCode = "200", description = "Success")
     public List<InventoryLevelResponse> getLevelsByVariant(
@@ -48,6 +51,7 @@ public class InventoryController {
     }
 
     @PostMapping("/movements")
+    @RequiresPermission("inventory:write")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Record inventory movement",
                description = "Appends a movement record and updates inventory level. Publishes catalog.inventory.updated to Kafka.")
@@ -60,6 +64,7 @@ public class InventoryController {
     }
 
     @GetMapping("/movements/{variantId}")
+    @RequiresPermission("inventory:read")
     @Operation(summary = "Get movement history by variant", description = "Ordered by createdAt DESC")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<InventoryMovementResponse> getMovementHistory(

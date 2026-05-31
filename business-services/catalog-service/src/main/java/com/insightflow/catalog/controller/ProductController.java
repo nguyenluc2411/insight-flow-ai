@@ -8,6 +8,7 @@ import com.insightflow.catalog.dto.response.ProductResponse;
 import com.insightflow.catalog.dto.response.VariantResponse;
 import com.insightflow.catalog.service.ProductService;
 import com.insightflow.security.CurrentUser;
+import com.insightflow.security.RequiresPermission;
 import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -32,6 +33,7 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
+    @RequiresPermission("catalog:read")
     @Operation(summary = "List products", description = "Paginated product list for the tenant")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<ProductResponse> listProducts(
@@ -41,6 +43,7 @@ public class ProductController {
     }
 
     @PostMapping
+    @RequiresPermission("catalog:write")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create product")
     @ApiResponse(responseCode = "201", description = "Product created")
@@ -52,6 +55,7 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
+    @RequiresPermission("catalog:read")
     @Operation(summary = "Get product by ID")
     @ApiResponse(responseCode = "200", description = "Success")
     @ApiResponse(responseCode = "404", description = "Not found")
@@ -62,6 +66,7 @@ public class ProductController {
     }
 
     @PutMapping("/{id}")
+    @RequiresPermission("catalog:write")
     @Operation(summary = "Update product")
     @ApiResponse(responseCode = "200", description = "Updated")
     @ApiResponse(responseCode = "404", description = "Not found")
@@ -73,6 +78,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
+    @RequiresPermission("catalog:write")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Soft-delete product", description = "Sets status to inactive")
     @ApiResponse(responseCode = "204", description = "Deleted")
@@ -84,6 +90,7 @@ public class ProductController {
     }
 
     @GetMapping("/{productId}/variants")
+    @RequiresPermission("catalog:read")
     @Operation(summary = "List variants for a product")
     @ApiResponse(responseCode = "200", description = "Variant list")
     @ApiResponse(responseCode = "404", description = "Product not found")
@@ -94,6 +101,7 @@ public class ProductController {
     }
 
     @PostMapping("/{productId}/variants")
+    @RequiresPermission("catalog:write")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create product variant")
     @ApiResponse(responseCode = "201", description = "Variant created")
@@ -107,6 +115,7 @@ public class ProductController {
     }
 
     @GetMapping("/{productId}/variants/{variantId}")
+    @RequiresPermission("catalog:read")
     @Operation(summary = "Get variant by ID")
     @ApiResponse(responseCode = "200", description = "Success")
     @ApiResponse(responseCode = "404", description = "Product or variant not found")
@@ -118,6 +127,7 @@ public class ProductController {
     }
 
     @PutMapping("/{productId}/variants/{variantId}")
+    @RequiresPermission("catalog:write")
     @Operation(summary = "Update product variant", description = "Patch semantics — only provided fields are updated. SKU cannot be changed.")
     @ApiResponse(responseCode = "200", description = "Updated")
     @ApiResponse(responseCode = "404", description = "Product or variant not found")
@@ -130,6 +140,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{productId}/variants/{variantId}")
+    @RequiresPermission("catalog:write")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Soft-delete product variant", description = "Sets variant status to inactive")
     @ApiResponse(responseCode = "204", description = "Deleted")

@@ -56,7 +56,7 @@ public class ProductService {
         product.setStatus("active");
 
         if (request.getCategoryId() != null) {
-            Category category = categoryRepository.findById(request.getCategoryId())
+            Category category = categoryRepository.findByTenantIdAndId(tenantId, request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + request.getCategoryId()));
             product.setCategory(category);
         }
@@ -80,7 +80,7 @@ public class ProductService {
         if (request.getStatus() != null)      product.setStatus(request.getStatus());
 
         if (request.getCategoryId() != null) {
-            Category category = categoryRepository.findById(request.getCategoryId())
+            Category category = categoryRepository.findByTenantIdAndId(tenantId, request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + request.getCategoryId()));
             product.setCategory(category);
         }
