@@ -44,6 +44,9 @@ public class NotificationEventConsumer {
                 event != null ? event.recipientId() : null);
 
         processingService.process(event, topic);
+        log.info("Kafka event processed topic={} eventId={}",
+                topic,
+                event != null ? event.eventId() : null);
     }
 }
 
