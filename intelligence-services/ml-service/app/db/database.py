@@ -1,4 +1,5 @@
 """SQLAlchemy engine, session factory, and DB initialization."""
+
 from collections.abc import Generator
 
 from sqlalchemy import create_engine, text
@@ -26,7 +27,7 @@ Base = declarative_base()
 def init_db() -> None:
     """Create schema and tables if they do not exist."""
     with engine.begin() as conn:
-        conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS {settings.DB_SCHEMA}'))
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {settings.DB_SCHEMA}"))
     Base.metadata.create_all(bind=engine)
 
 

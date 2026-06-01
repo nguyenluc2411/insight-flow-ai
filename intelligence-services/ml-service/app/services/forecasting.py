@@ -1,4 +1,5 @@
 """Prophet-based demand forecasting with cold-start fallback."""
+
 from __future__ import annotations
 
 import json
@@ -27,7 +28,9 @@ class InsufficientDataError(Exception):
 class ProphetForecaster:
     """Per-tenant per-variant Prophet forecaster with category fallback."""
 
-    def prepare_data(self, db: Session, tenant_id: UUID, variant_id: UUID) -> pd.DataFrame:
+    def prepare_data(
+        self, db: Session, tenant_id: UUID, variant_id: UUID
+    ) -> pd.DataFrame:
         """Aggregate sales by day; returns DataFrame with columns ds, y."""
         rows = (
             db.query(
@@ -84,7 +87,9 @@ class ProphetForecaster:
         with meta_path.open("w", encoding="utf-8") as f:
             json.dump(metadata, f)
 
-        logger.info("Trained model %s for tenant=%s variant=%s", version, tenant_id, variant_id)
+        logger.info(
+            "Trained model %s for tenant=%s variant=%s", version, tenant_id, variant_id
+        )
         return version
 
     def predict(
@@ -97,14 +102,18 @@ class ProphetForecaster:
         """Return (predictions, confidence, basis)."""
         latest = _find_latest_model(tenant_id, variant_id)
         if latest is None:
-            logger.info("No model found, using category fallback for variant=%s", variant_id)
+            logger.info(
+                "No model found, using category fallback for variant=%s", variant_id
+            )
             return self._category_fallback(db, tenant_id, variant_id, days)
 
         try:
             with latest.open("rb") as f:
                 model = pickle.load(f)
         except (OSError, pickle.UnpicklingError):
-            logger.warning("Failed to load model %s, falling back", latest, exc_info=True)
+            logger.warning(
+                "Failed to load model %s, falling back", latest, exc_info=True
+            )
             return self._category_fallback(db, tenant_id, variant_id, days)
 
         future = model.make_future_dataframe(periods=days)

@@ -1,4 +1,5 @@
 """SQLAlchemy ORM models for ml_service_db schema."""
+
 from __future__ import annotations
 
 import uuid
@@ -26,7 +27,12 @@ SCHEMA = settings.DB_SCHEMA
 class Forecast(Base):
     __tablename__ = "forecasts"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "variant_id", "forecast_date", name="uq_forecast_tenant_variant_date"),
+        UniqueConstraint(
+            "tenant_id",
+            "variant_id",
+            "forecast_date",
+            name="uq_forecast_tenant_variant_date",
+        ),
         {"schema": SCHEMA},
     )
 
@@ -39,7 +45,9 @@ class Forecast(Base):
     upper_bound = Column(Float, nullable=True)
     confidence_level = Column(Float, nullable=False, default=0.8)
     model_version = Column(String(50), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
 
 
 class Recommendation(Base):
@@ -57,7 +65,9 @@ class Recommendation(Base):
     stock_age_days = Column(Integer, nullable=True)
     current_stock = Column(Integer, nullable=True)
     sales_velocity_30d = Column(Float, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
 
 
 class TrainingJob(Base):
@@ -71,11 +81,14 @@ class TrainingJob(Base):
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
 
 
 class SalesData(Base):
     """Local sales data accumulated from Kafka consumer for forecast training."""
+
     __tablename__ = "sales_data"
     __table_args__ = (
         # One row per (event, variant) — an order can contain multiple variant items.
@@ -92,14 +105,19 @@ class SalesData(Base):
     unit_price = Column(Numeric(15, 2), nullable=True)
     order_id = Column(UUID(as_uuid=True), nullable=True)
     occurred_at = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
 
 
 class InventorySnapshot(Base):
     """Latest inventory state per (tenant, variant, location) from catalog events."""
+
     __tablename__ = "inventory_snapshots"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "variant_id", "location_id", name="uq_inv_snapshot_tvl"),
+        UniqueConstraint(
+            "tenant_id", "variant_id", "location_id", name="uq_inv_snapshot_tvl"
+        ),
         {"schema": SCHEMA},
     )
 
@@ -109,4 +127,6 @@ class InventorySnapshot(Base):
     location_id = Column(UUID(as_uuid=True), nullable=False)
     quantity = Column(Integer, nullable=False, default=0)
     first_restocked_at = Column(DateTime(timezone=True), nullable=True)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
