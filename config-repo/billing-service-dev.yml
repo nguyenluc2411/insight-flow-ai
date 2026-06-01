@@ -1,0 +1,8 @@
+# =============================================================================
+# billing-service-dev.yml — Dev profile overrides for billing-service
+# =============================================================================
+
+logging:
+  level:
+    com.insightflow.billing: DEBUG
+    org.flywaydb: DEBUG
