@@ -36,5 +36,16 @@ public class OrderSyncedEvent {
         private BigDecimal totalAmount;
         private String     status;
         private Instant    orderedAt;
+        private List<SyncedOrderLine> lines;   // POS line items — needed for ML training
+    }
+
+    @Data
+    @Builder
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public static class SyncedOrderLine {
+        private String     externalProductId;  // POS product id
+        private String     productCode;        // POS SKU — resolved to catalog variant
+        private Integer    quantity;
+        private BigDecimal unitPrice;
     }
 }

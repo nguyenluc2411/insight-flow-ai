@@ -13,12 +13,17 @@ from pydantic import ValidationError
 from app.config import settings
 from app.db.database import SessionLocal
 from app.db.models import InventorySnapshot, SalesData
-from app.events.schemas import InventoryUpdatedEvent, OrderCompletedEvent
+from app.events.schemas import (
+    CatalogOrderNormalizedEvent,
+    InventoryUpdatedEvent,
+    OrderCompletedEvent,
+)
 
 logger = logging.getLogger(__name__)
 
 TOPIC_SALES_COMPLETED = "sales.order.completed"
 TOPIC_INVENTORY_UPDATED = "catalog.inventory.updated"
+TOPIC_ORDER_NORMALIZED = "catalog.order.normalized"
 
 
 class KafkaEventConsumer:
@@ -61,9 +66,12 @@ class KafkaEventConsumer:
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": True,
             })
-            self._consumer.subscribe([TOPIC_SALES_COMPLETED, TOPIC_INVENTORY_UPDATED])
+            self._consumer.subscribe([
+                TOPIC_SALES_COMPLETED, TOPIC_INVENTORY_UPDATED, TOPIC_ORDER_NORMALIZED,
+            ])
             self._connected = True
-            logger.info("Subscribed to topics: %s, %s", TOPIC_SALES_COMPLETED, TOPIC_INVENTORY_UPDATED)
+            logger.info("Subscribed to topics: %s, %s, %s",
+                        TOPIC_SALES_COMPLETED, TOPIC_INVENTORY_UPDATED, TOPIC_ORDER_NORMALIZED)
         except KafkaException:
             logger.error("Failed to initialize Kafka consumer", exc_info=True)
             self._connected = False
@@ -94,6 +102,8 @@ class KafkaEventConsumer:
             self._handle_sales_completed(raw)
         elif topic == TOPIC_INVENTORY_UPDATED:
             self._handle_inventory_updated(raw)
+        elif topic == TOPIC_ORDER_NORMALIZED:
+            self._handle_order_normalized(raw)
 
     def _handle_sales_completed(self, raw: str) -> None:
         try:
@@ -132,6 +142,47 @@ class KafkaEventConsumer:
                 self._check_training_readiness(event.tenant_id)
         except Exception:  # noqa: BLE001
             logger.error("DB error handling sales.order.completed", exc_info=True)
+            session.rollback()
+        finally:
+            session.close()
+
+    def _handle_order_normalized(self, raw: str) -> None:
+        """POS orders normalized by catalog (variant-keyed) — backfill training data."""
+        try:
+            event = CatalogOrderNormalizedEvent.model_validate_json(raw)
+        except ValidationError:
+            logger.warning("Failed to parse CatalogOrderNormalizedEvent", exc_info=True)
+            return
+
+        # Use the POS purchase time as the ML time axis; fall back to emission time.
+        ts = event.ordered_at or event.occurred_at
+        occurred_at = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+
+        session = SessionLocal()
+        try:
+            saved = 0
+            for item in event.items:
+                exists = session.query(SalesData.id).filter(
+                    SalesData.event_id == UUID(event.event_id),
+                    SalesData.variant_id == UUID(item.variant_id),
+                ).first()
+                if exists:
+                    continue
+                session.add(SalesData(
+                    event_id=UUID(event.event_id),
+                    tenant_id=UUID(event.tenant_id),
+                    variant_id=UUID(item.variant_id),
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                    order_id=None,  # external POS order id is not an internal UUID
+                    occurred_at=occurred_at,
+                ))
+                saved += 1
+            if saved > 0:
+                session.commit()
+                self._check_training_readiness(event.tenant_id)
+        except Exception:  # noqa: BLE001
+            logger.error("DB error handling catalog.order.normalized", exc_info=True)
             session.rollback()
         finally:
             session.close()

@@ -1,8 +1,6 @@
 package com.insightflow.billing.controller;
 
 import com.insightflow.billing.dto.request.CreateUpgradeRequestRequest;
-import com.insightflow.billing.dto.request.DowngradeRequest;
-import com.insightflow.billing.dto.request.UpgradeRequest;
 import com.insightflow.billing.dto.response.SubscriptionResponse;
 import com.insightflow.billing.dto.response.UpgradeRequestResponse;
 import com.insightflow.billing.service.SubscriptionService;
@@ -16,8 +14,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/billing/subscriptions")
@@ -45,19 +41,8 @@ public class SubscriptionController {
         return ResponseEntity.ok(subscriptionService.getCurrentSubscription(user.tenantId()));
     }
 
-    @PostMapping("/upgrade")
-    @Operation(summary = "Upgrade subscription to a higher plan")
-    @ApiResponse(responseCode = "200", description = "Upgrade successful")
-    public ResponseEntity<SubscriptionResponse> upgrade(@CurrentUser UserContext user,
-                                                        @Valid @RequestBody UpgradeRequest req) {
-        return ResponseEntity.ok(subscriptionService.upgradePlan(user.tenantId(), req));
-    }
-
-    @PostMapping("/downgrade")
-    @Operation(summary = "Downgrade subscription to a lower plan")
-    @ApiResponse(responseCode = "200", description = "Downgrade successful")
-    public ResponseEntity<SubscriptionResponse> downgrade(@CurrentUser UserContext user,
-                                                          @Valid @RequestBody DowngradeRequest req) {
-        return ResponseEntity.ok(subscriptionService.downgradePlan(user.tenantId(), req));
-    }
+    // Self-serve /upgrade and /downgrade were removed for the MVP manual-payment
+    // model: plan changes happen only via upgrade-request -> ops approval
+    // (see UpgradeRequestService + InternalController). The underlying
+    // SubscriptionService.upgradePlan/downgradePlan remain for the approval path.
 }

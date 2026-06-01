@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -34,6 +36,7 @@ public class ConnectorConfigService {
     private final CredentialVault credentialVault;
     private final ConnectorConfigMapper mapper;
     private final ObjectMapper objectMapper;
+    private final SyncOrchestratorService syncOrchestrator;
 
     @Transactional
     public ConnectorConfigResponse createConfig(UUID tenantId, CreateConnectorRequest req) {
@@ -67,6 +70,17 @@ public class ConnectorConfigService {
 
         ConnectorConfig saved = repository.save(config);
         log.info("ConnectorConfig created: id={} tenant={} type={}", saved.getId(), tenantId, req.getConnectorType());
+
+        // Kick off the initial historical backfill once the config is committed, so a
+        // newly-connected tenant gets ~365 days of sales flowing to ML during the trial.
+        final UUID configId = saved.getId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                syncOrchestrator.triggerFullSync(configId, tenantId);
+            }
+        });
+
         return mapper.toResponse(saved);
     }
 

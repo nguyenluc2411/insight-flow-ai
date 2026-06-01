@@ -62,6 +62,7 @@ public class IntegrationEventProducer {
                         .totalAmount(o.getTotal())
                         .status(o.getStatus())
                         .orderedAt(o.getPurchaseDate())
+                        .lines(mapOrderLines(o))
                         .build())
                 .toList();
 
@@ -77,6 +78,20 @@ public class IntegrationEventProducer {
                 .build();
 
         publish("integration.order.synced", tenantId.toString(), event);
+    }
+
+    private List<OrderSyncedEvent.SyncedOrderLine> mapOrderLines(KvOrder o) {
+        if (o.getOrderDetails() == null) {
+            return List.of();
+        }
+        return o.getOrderDetails().stream()
+                .map(d -> OrderSyncedEvent.SyncedOrderLine.builder()
+                        .externalProductId(d.getProductId() != null ? d.getProductId().toString() : null)
+                        .productCode(d.getProductCode())
+                        .quantity(d.getQuantity())
+                        .unitPrice(d.getPrice())
+                        .build())
+                .toList();
     }
 
     public void publishInventorySynced(UUID tenantId, UUID connectorConfigId,

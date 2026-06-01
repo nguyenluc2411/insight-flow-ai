@@ -14,39 +14,28 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/billing/admin")
 @RequiredArgsConstructor
-@Tag(name = "Billing Admin", description = "Admin operations for billing management")
+@Tag(name = "Billing Admin", description = "Self-service billing views for the current tenant")
 public class BillingAdminController {
 
     private final BillingHistoryService billingHistoryService;
 
     @GetMapping("/history")
-    @Operation(summary = "Get billing history for current tenant")
+    @Operation(summary = "Get billing history for the CURRENT tenant")
     @ApiResponse(responseCode = "200", description = "Billing history returned")
     public ResponseEntity<Page<BillingHistory>> getBillingHistory(
             @CurrentUser UserContext user,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        // Scoped to the caller's own tenant — never accepts a tenantId from the client.
         Page<BillingHistory> history = billingHistoryService.getHistory(
                 user.tenantId(),
                 PageRequest.of(page, size, Sort.by("createdAt").descending()));
         return ResponseEntity.ok(history);
     }
 
-    @GetMapping("/tenants/{tenantId}/history")
-    @Operation(summary = "Get billing history for a specific tenant (admin only)")
-    @ApiResponse(responseCode = "200", description = "Billing history returned")
-    public ResponseEntity<Page<BillingHistory>> getTenantBillingHistory(
-            @PathVariable UUID tenantId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        Page<BillingHistory> history = billingHistoryService.getHistory(
-                tenantId,
-                PageRequest.of(page, size, Sort.by("createdAt").descending()));
-        return ResponseEntity.ok(history);
-    }
+    // Cross-tenant history lookup moved to InternalController (service JWT) — it must
+    // never be reachable with a plain user JWT (was a tenant-isolation leak).
 }
