@@ -34,7 +34,7 @@ public class MlForecastResponse {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ForecastPoint {
         private String date;
-        @JsonProperty("predictedQty")
-        private Double predictedQty;
+        @JsonProperty("predicted")
+        private Double predictedQty;  // ML returns "predicted", mapped to predictedQty for BFF use
     }
 }

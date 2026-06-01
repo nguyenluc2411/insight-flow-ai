@@ -1,0 +1,230 @@
+{
+  "info": {
+    "_postman_id": "email-delivery-fix-tests-final",
+    "name": "Email Delivery Fix Tests - FINAL CORRECTED",
+    "description": "Complete test suite for email delivery fix",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1️⃣ SUCCESS PATH - Send Email with Valid Recipient",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const uuid = require('uuid');\n",
+              "pm.variables.set('eventId', '550e8400-e29b-41d4-a716-446655440000');\n",
+              "pm.variables.set('recipientId', '550e8400-e29b-41d4-a716-446655440001');\n",
+              "pm.variables.set('productId', '550e8400-e29b-41d4-a716-446655440002');\n",
+              "pm.variables.set('warehouseId', '550e8400-e29b-41d4-a716-446655440003');\n",
+              "pm.variables.set('correlationId', '550e8400-e29b-41d4-a716-446655440004');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function () {\n",
+              "    pm.response.to.have.status(200);\n",
+              "});\n",
+              "\n",
+              "pm.test('Response has success=true', function () {\n",
+              "    var jsonData = pm.response.json();\n",
+              "    pm.expect(jsonData.success).to.equal(true);\n",
+              "});\n",
+              "\n",
+              "pm.test('Response contains recipientEmail', function () {\n",
+              "    var jsonData = pm.response.json();\n",
+              "    pm.expect(jsonData.data.recipientEmail).to.equal('user@fashionbrand.com');\n",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"recipientId\": \"{{recipientId}}\",\n  \"recipientEmail\": \"user@fashionbrand.com\",\n  \"eventType\": \"RESTOCK_ALERT\",\n  \"severity\": \"HIGH\",\n  \"title\": \"✅ SUCCESS TEST: Restock Required\",\n  \"message\": \"Popular item is running low on inventory\",\n  \"sourceService\": \"catalog-service\",\n  \"productId\": \"{{productId}}\",\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"correlationId\": \"{{correlationId}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8087/internal/test/notifications/realtime",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8087",
+          "path": ["internal", "test", "notifications", "realtime"]
+        }
+      }
+    },
+    {
+      "name": "2️⃣ FAILURE PATH - Missing Recipient Email",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "pm.variables.set('eventId', '550e8400-e29b-41d4-a716-446655440010');\n",
+              "pm.variables.set('recipientId', '550e8400-e29b-41d4-a716-446655440011');\n",
+              "pm.variables.set('productId', '550e8400-e29b-41d4-a716-446655440012');\n",
+              "pm.variables.set('warehouseId', '550e8400-e29b-41d4-a716-446655440013');\n",
+              "pm.variables.set('correlationId', '550e8400-e29b-41d4-a716-446655440014');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200 (event accepted)', function () {\n",
+              "    pm.response.to.have.status(200);\n",
+              "});\n",
+              "\n",
+              "pm.test('Response has success=true', function () {\n",
+              "    var jsonData = pm.response.json();\n",
+              "    pm.expect(jsonData.success).to.equal(true);\n",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"recipientId\": \"{{recipientId}}\",\n  \"eventType\": \"MARKDOWN_ALERT\",\n  \"severity\": \"MEDIUM\",\n  \"title\": \"❌ FAILURE TEST: Missing Recipient Email\",\n  \"message\": \"This event has no recipientEmail - should trigger failure and retry\",\n  \"sourceService\": \"ml-service\",\n  \"productId\": \"{{productId}}\",\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"correlationId\": \"{{correlationId}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8087/internal/test/notifications/realtime",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8087",
+          "path": ["internal", "test", "notifications", "realtime"]
+        }
+      }
+    },
+    {
+      "name": "3️⃣ FAILURE PATH - Empty Recipient Email",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "pm.variables.set('eventId', '550e8400-e29b-41d4-a716-446655440020');\n",
+              "pm.variables.set('recipientId', '550e8400-e29b-41d4-a716-446655440021');\n",
+              "pm.variables.set('productId', '550e8400-e29b-41d4-a716-446655440022');\n",
+              "pm.variables.set('warehouseId', '550e8400-e29b-41d4-a716-446655440023');\n",
+              "pm.variables.set('correlationId', '550e8400-e29b-41d4-a716-446655440024');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200 (event accepted)', function () {\n",
+              "    pm.response.to.have.status(200);\n",
+              "});\n",
+              "\n",
+              "pm.test('Response has success=true', function () {\n",
+              "    var jsonData = pm.response.json();\n",
+              "    pm.expect(jsonData.success).to.equal(true);\n",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"recipientId\": \"{{recipientId}}\",\n  \"recipientEmail\": \"\",\n  \"eventType\": \"CLEARANCE_ALERT\",\n  \"severity\": \"LOW\",\n  \"title\": \"❌ FAILURE TEST: Empty Email String\",\n  \"message\": \"This event has empty recipientEmail - should trigger failure and retry\",\n  \"sourceService\": \"sales-service\",\n  \"productId\": \"{{productId}}\",\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"correlationId\": \"{{correlationId}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8087/internal/test/notifications/realtime",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8087",
+          "path": ["internal", "test", "notifications", "realtime"]
+        }
+      }
+    },
+    {
+      "name": "4️⃣ MailHog - Check Received Emails",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function () {\n",
+              "    pm.response.to.have.status(200);\n",
+              "});\n",
+              "\n",
+              "pm.test('MailHog has emails', function () {\n",
+              "    var jsonData = pm.response.json();\n",
+              "    console.log('Total emails: ' + jsonData.total);\n",
+              "    pm.expect(jsonData.total).to.be.greaterThanOrEqual(1);\n",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1025/api/v1/messages",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "1025",
+          "path": ["api", "v1", "messages"]
+        }
+      }
+    },
+    {
+      "name": "5️⃣ Cleanup - Delete All Emails from MailHog",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function () {\n",
+              "    pm.response.to.have.status(200);\n",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1025/api/v1/messages",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "1025",
+          "path": ["api", "v1", "messages"]
+        }
+      }
+    }
+  ]
+}

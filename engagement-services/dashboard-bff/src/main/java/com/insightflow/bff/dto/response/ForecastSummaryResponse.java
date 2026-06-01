@@ -17,6 +17,8 @@ public class ForecastSummaryResponse {
     private List<TopProduct> topProducts;
     private Double overallConfidence;
     private boolean partial;
+    private Boolean hasColdStart;
+    private String message;
     private Instant lastUpdated;
 
     @Data
@@ -31,6 +33,7 @@ public class ForecastSummaryResponse {
     @Builder
     public static class TopProduct {
         private UUID variantId;
+        private String sku;
         private Double forecastDays30;
         private String confidence;
     }

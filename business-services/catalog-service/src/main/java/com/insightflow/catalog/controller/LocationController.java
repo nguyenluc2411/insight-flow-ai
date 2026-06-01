@@ -4,6 +4,7 @@ import com.insightflow.catalog.dto.request.CreateLocationRequest;
 import com.insightflow.catalog.dto.response.LocationResponse;
 import com.insightflow.catalog.service.LocationService;
 import com.insightflow.security.CurrentUser;
+import com.insightflow.security.RequiresPermission;
 import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -24,6 +25,7 @@ public class LocationController {
     private final LocationService locationService;
 
     @GetMapping
+    @RequiresPermission("settings:read")
     @Operation(summary = "List active locations")
     @ApiResponse(responseCode = "200", description = "Success")
     public List<LocationResponse> listLocations(@CurrentUser UserContext user) {
@@ -31,6 +33,7 @@ public class LocationController {
     }
 
     @PostMapping
+    @RequiresPermission("settings:write")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create location")
     @ApiResponse(responseCode = "201", description = "Location created")

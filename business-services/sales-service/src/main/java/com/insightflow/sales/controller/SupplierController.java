@@ -4,6 +4,7 @@ import com.insightflow.sales.dto.request.CreateSupplierRequest;
 import com.insightflow.sales.dto.response.SupplierResponse;
 import com.insightflow.sales.service.SupplierService;
 import com.insightflow.security.CurrentUser;
+import com.insightflow.security.RequiresPermission;
 import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,6 +28,7 @@ public class SupplierController {
     private final SupplierService supplierService;
 
     @GetMapping
+    @RequiresPermission("sales:read")
     @Operation(summary = "List suppliers")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<SupplierResponse> listSuppliers(
@@ -36,6 +38,7 @@ public class SupplierController {
     }
 
     @PostMapping
+    @RequiresPermission("sales:write")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create supplier")
     @ApiResponse(responseCode = "201", description = "Supplier created")

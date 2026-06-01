@@ -3,6 +3,7 @@ package com.insightflow.catalog.controller;
 import com.insightflow.catalog.dto.response.CategorySummaryItem;
 import com.insightflow.catalog.service.CategoryService;
 import com.insightflow.security.CurrentUser;
+import com.insightflow.security.RequiresPermission;
 import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -23,6 +24,7 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @GetMapping
+    @RequiresPermission("catalog:read")
     @Operation(
             summary = "List categories with product count",
             description = "Returns flat list of categories with active product count, ordered by name.")

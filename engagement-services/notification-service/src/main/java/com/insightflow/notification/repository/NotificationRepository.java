@@ -1,30 +1,64 @@
 package com.insightflow.notification.repository;
 
 import com.insightflow.notification.entity.Notification;
+import com.insightflow.notification.enums.InboxStatus;
+import com.insightflow.notification.enums.NotificationStatus;
+import com.insightflow.notification.enums.NotificationType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface NotificationRepository extends JpaRepository<Notification, UUID> {
+public interface NotificationRepository extends JpaRepository<Notification, UUID>, JpaSpecificationExecutor<Notification> {
 
-    Page<Notification> findByTenantIdOrderByCreatedAtDesc(UUID tenantId, Pageable pageable);
+    Page<Notification> findByRecipientId(UUID recipientId, Pageable pageable);
 
-    Page<Notification> findByTenantIdAndIsReadFalseOrderByCreatedAtDesc(UUID tenantId, Pageable pageable);
+    Page<Notification> findByRecipientIdAndInboxStatus(UUID recipientId, InboxStatus inboxStatus, Pageable pageable);
 
-    Page<Notification> findByTenantIdAndTypeOrderByCreatedAtDesc(UUID tenantId, String type, Pageable pageable);
+    Page<Notification> findByRecipientIdAndInboxStatusIn(
+            UUID recipientId,
+            Collection<InboxStatus> inboxStatuses,
+            Pageable pageable);
 
-    long countByTenantIdAndIsReadFalse(UUID tenantId);
+    Page<Notification> findByRecipientIdAndStatus(UUID recipientId, NotificationStatus status, Pageable pageable);
 
-    Optional<Notification> findByIdAndTenantId(UUID id, UUID tenantId);
+    Optional<Notification> findByEventId(UUID eventId);
+
+    Optional<Notification> findByIdAndRecipientId(UUID id, UUID recipientId);
+
+    boolean existsByEventId(UUID eventId);
+
+    long countByRecipientIdAndInboxStatus(UUID recipientId, InboxStatus inboxStatus);
+
+    long countByRecipientIdAndInboxStatusIn(UUID recipientId, Collection<InboxStatus> inboxStatuses);
+
+    List<Notification> findTop50ByRecipientIdAndInboxStatusOrderByCreatedAtDesc(
+            UUID recipientId,
+            InboxStatus inboxStatus);
+
+    @Query("select n.notificationType, count(n) from Notification n " +
+            "where n.createdAt between :start and :end group by n.notificationType")
+    List<Object[]> countByTypeBetween(Instant start, Instant end);
+
+    @Query("select count(n) from Notification n " +
+            "where n.notificationType = :type and n.createdAt between :start and :end")
+    long countByTypeAndCreatedAtBetween(NotificationType type, Instant start, Instant end);
 
     @Modifying
-    @Query("UPDATE Notification n SET n.isRead = true WHERE n.tenantId = :tenantId AND n.isRead = false")
-    int markAllReadByTenantId(UUID tenantId);
+    @Transactional
+    @Query("update Notification n set n.inboxStatus = :readStatus, n.readAt = :readAt " +
+            "where n.recipientId = :recipientId and n.inboxStatus = :unreadStatus and n.deleted = false")
+    int markAllAsRead(UUID recipientId, InboxStatus unreadStatus, InboxStatus readStatus, Instant readAt);
 }
+

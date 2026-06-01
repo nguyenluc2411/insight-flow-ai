@@ -13,6 +13,8 @@ import java.util.UUID;
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
 
+    Optional<Category> findByTenantIdAndId(UUID tenantId, UUID id);
+
     Optional<Category> findByTenantIdAndSlug(UUID tenantId, String slug);
 
     /**

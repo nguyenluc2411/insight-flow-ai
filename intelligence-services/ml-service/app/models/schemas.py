@@ -1,14 +1,15 @@
 """Pydantic schemas for API request/response."""
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # --- Forecast ---
+
 
 class ForecastPoint(BaseModel):
     date: datetime
@@ -25,9 +26,10 @@ class ForecastResponse(BaseModel):
     tenant_id: UUID = Field(..., alias="tenantId")
     forecast_days: int = Field(..., alias="forecastDays")
     confidence: Literal["high", "medium", "low", "none"]
-    basis: Literal["variant", "category", "moving_average"]
+    basis: Literal["variant", "market_trends_hcm", "market_trends_hcm_generic", "no_base_model"]
     predictions: list[ForecastPoint]
     generated_at: datetime = Field(..., alias="generatedAt")
+    warning: Optional[str] = None
 
     class Config:
         populate_by_name = True
@@ -43,6 +45,7 @@ class BatchForecastRequest(BaseModel):
 
 # --- Recommendation ---
 
+
 class RecommendationResponse(BaseModel):
     id: UUID
     tenant_id: UUID = Field(..., alias="tenantId")
@@ -50,7 +53,9 @@ class RecommendationResponse(BaseModel):
     action: Literal["CLEARANCE", "RESTOCK", "PROMOTE", "OK"]
     reason: str | None = None
     priority: Literal["HIGH", "MEDIUM", "LOW"]
-    suggested_discount_pct: float | None = Field(default=None, alias="suggestedDiscountPct")
+    suggested_discount_pct: float | None = Field(
+        default=None, alias="suggestedDiscountPct"
+    )
     suggested_restock_qty: int | None = Field(default=None, alias="suggestedRestockQty")
     stock_age_days: int | None = Field(default=None, alias="stockAgeDays")
     current_stock: int | None = Field(default=None, alias="currentStock")
@@ -90,6 +95,7 @@ class TrainJobResponse(BaseModel):
 
 
 # --- Health ---
+
 
 class HealthResponse(BaseModel):
     status: Literal["UP", "DOWN"]

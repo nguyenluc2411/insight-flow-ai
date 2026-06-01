@@ -4,6 +4,7 @@ import com.insightflow.sales.dto.request.CreateCustomerRequest;
 import com.insightflow.sales.dto.response.CustomerResponse;
 import com.insightflow.sales.service.CustomerService;
 import com.insightflow.security.CurrentUser;
+import com.insightflow.security.RequiresPermission;
 import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,6 +28,7 @@ public class CustomerController {
     private final CustomerService customerService;
 
     @GetMapping
+    @RequiresPermission("sales:read")
     @Operation(summary = "List customers")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<CustomerResponse> listCustomers(
@@ -36,6 +38,7 @@ public class CustomerController {
     }
 
     @PostMapping
+    @RequiresPermission("sales:write")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create customer")
     @ApiResponse(responseCode = "201", description = "Customer created")
@@ -47,6 +50,7 @@ public class CustomerController {
     }
 
     @GetMapping("/{id}")
+    @RequiresPermission("sales:read")
     @Operation(summary = "Get customer by ID")
     @ApiResponse(responseCode = "200", description = "Success")
     @ApiResponse(responseCode = "404", description = "Not found")
