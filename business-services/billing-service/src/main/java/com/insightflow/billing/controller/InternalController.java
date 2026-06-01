@@ -136,4 +136,15 @@ public class InternalController {
         jwtValidator.validateServiceToken(authHeader.replace("Bearer ", ""));
         return ResponseEntity.ok(usageTrackingService.getTodayUsage(tenantId));
     }
+
+    @PostMapping("/tenants/{tenantId}/provision-trial")
+    @Operation(summary = "Ops/recovery: provision Trial subscription for tenant that missed Kafka event")
+    public ResponseEntity<Map<String, Object>> provisionTrial(@PathVariable UUID tenantId) {
+        subscriptionService.createTrialSubscription(tenantId);
+        return ResponseEntity.ok(Map.of(
+                "tenantId", tenantId.toString(),
+                "plan", "trial",
+                "message", "Trial provisioned — run once per broken tenant"
+        ));
+    }
 }

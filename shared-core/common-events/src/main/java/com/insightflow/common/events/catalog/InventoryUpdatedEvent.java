@@ -1,5 +1,6 @@
 package com.insightflow.common.events.catalog;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.Builder;
@@ -28,4 +29,20 @@ public class InventoryUpdatedEvent {
     private String sku;
     private String referenceType;  // nullable — e.g. "SALES_ORDER"
     private String referenceId;    // nullable — order UUID if applicable
+
+    /**
+     * Category name (raw, shop-defined) — e.g. "Áo Sơ Mi Nam".
+     * Nullable when the variant's product has no category.
+     * Consumed by ml-service to map → base-model category_key.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String categoryName;
+
+    /**
+     * Category slug (raw, URL-friendly) — e.g. "ao-so-mi-nam".
+     * Nullable when the variant's product has no category.
+     * Consumed by ml-service category_mapper to map → base-model category_key.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String categorySlug;
 }

@@ -26,4 +26,10 @@ public class SecurityAutoConfiguration {
     public SecurityExceptionHandler securityExceptionHandler() {
         return new SecurityExceptionHandler();
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PermissionAspect permissionAspect() {
+        return new PermissionAspect();
+    }
 }

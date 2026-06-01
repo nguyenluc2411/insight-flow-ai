@@ -56,7 +56,7 @@ public class ProductService {
         product.setStatus("active");
 
         if (request.getCategoryId() != null) {
-            Category category = categoryRepository.findById(request.getCategoryId())
+            Category category = categoryRepository.findByTenantIdAndId(tenantId, request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + request.getCategoryId()));
             product.setCategory(category);
         }
@@ -80,7 +80,7 @@ public class ProductService {
         if (request.getStatus() != null)      product.setStatus(request.getStatus());
 
         if (request.getCategoryId() != null) {
-            Category category = categoryRepository.findById(request.getCategoryId())
+            Category category = categoryRepository.findByTenantIdAndId(tenantId, request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + request.getCategoryId()));
             product.setCategory(category);
         }
@@ -190,5 +190,11 @@ public class ProductService {
         ProductVariant saved = variantRepository.save(variant);
         log.debug("Created variant id={} productId={} tenantId={}", saved.getId(), productId, tenantId);
         return variantMapper.toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<VariantResponse> getActiveVariants(UUID tenantId, Pageable pageable) {
+        return variantRepository.findByTenantIdAndStatus(tenantId, "active", pageable)
+                .map(variantMapper::toResponse);
     }
 }

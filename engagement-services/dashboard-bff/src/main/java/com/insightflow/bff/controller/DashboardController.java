@@ -34,7 +34,7 @@ public class DashboardController {
     })
     public ResponseEntity<DashboardOverviewResponse> getOverview(@CurrentUser UserContext user) {
         log.debug("GET /overview tenant={}", user.tenantId());
-        return ResponseEntity.ok(aggregationService.getOverview(user.tenantId()));
+        return ResponseEntity.ok(aggregationService.getOverview(user));
     }
 
     @GetMapping("/health-summary")
@@ -49,7 +49,7 @@ public class DashboardController {
     })
     public ResponseEntity<HealthSummaryResponse> getHealthSummary(@CurrentUser UserContext user) {
         log.debug("GET /health-summary tenant={}", user.tenantId());
-        return ResponseEntity.ok(aggregationService.getHealthSummary(user.tenantId()));
+        return ResponseEntity.ok(aggregationService.getHealthSummary(user));
     }
 
     @GetMapping("/recommendations-summary")
@@ -64,7 +64,7 @@ public class DashboardController {
     })
     public ResponseEntity<RecommendationsSummaryResponse> getRecommendationsSummary(@CurrentUser UserContext user) {
         log.debug("GET /recommendations-summary tenant={}", user.tenantId());
-        return ResponseEntity.ok(aggregationService.getRecommendationsSummary(user.tenantId()));
+        return ResponseEntity.ok(aggregationService.getRecommendationsSummary(user));
     }
 
     @GetMapping("/forecast-summary")
@@ -79,6 +79,6 @@ public class DashboardController {
     })
     public ResponseEntity<ForecastSummaryResponse> getForecastSummary(@CurrentUser UserContext user) {
         log.debug("GET /forecast-summary tenant={}", user.tenantId());
-        return ResponseEntity.ok(aggregationService.getForecastSummary(user.tenantId()));
+        return ResponseEntity.ok(aggregationService.getForecastSummary(user));
     }
 }

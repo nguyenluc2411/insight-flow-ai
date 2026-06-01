@@ -1,11 +1,8 @@
 """Prophet-based demand forecasting with cold-start fallback."""
-
 from __future__ import annotations
 
 import json
 import logging
-import os
-import pickle
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
@@ -15,8 +12,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import SalesData
+from app.db.models import SalesData, VariantCategoryMap
 from app.models.schemas import ForecastPoint
+from app.models.storage import list_keys, load_model, model_exists, save_model
+from app.utils.vn_holidays import VN_HOLIDAYS
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +27,7 @@ class InsufficientDataError(Exception):
 class ProphetForecaster:
     """Per-tenant per-variant Prophet forecaster with category fallback."""
 
-    def prepare_data(
-        self, db: Session, tenant_id: UUID, variant_id: UUID
-    ) -> pd.DataFrame:
+    def prepare_data(self, db: Session, tenant_id: UUID, variant_id: UUID) -> pd.DataFrame:
         """Aggregate sales by day; returns DataFrame with columns ds, y."""
         rows = (
             db.query(
@@ -67,14 +64,15 @@ class ProphetForecaster:
             weekly_seasonality=True,
             daily_seasonality=False,
             seasonality_mode="multiplicative",
+            # Holiday effects via dummy variables — Taylor & Letham (2018).
+            # Captures Tết / 8-3 / 20-10 / 11-11 / Black Friday / Noel spikes.
+            holidays=VN_HOLIDAYS,
         )
         model.fit(data)
 
         version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        path = _model_path(tenant_id, variant_id, version)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("wb") as f:
-            pickle.dump(model, f)
+        key = _variant_key(tenant_id, variant_id, version)
+        save_model(model, key)
 
         metadata = {
             "version": version,
@@ -83,13 +81,12 @@ class ProphetForecaster:
             "variant_id": str(variant_id),
             "tenant_id": str(tenant_id),
         }
-        meta_path = path.with_suffix(".json")
+        meta_path = (Path(settings.MODEL_STORAGE_PATH) / key).with_suffix(".json")
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
         with meta_path.open("w", encoding="utf-8") as f:
             json.dump(metadata, f)
 
-        logger.info(
-            "Trained model %s for tenant=%s variant=%s", version, tenant_id, variant_id
-        )
+        logger.info("Trained model %s for tenant=%s variant=%s", version, tenant_id, variant_id)
         return version
 
     def predict(
@@ -98,23 +95,26 @@ class ProphetForecaster:
         tenant_id: UUID,
         variant_id: UUID,
         days: int = 30,
+        category_key: str | None = None,
+        sku: str | None = None,
     ) -> tuple[list[ForecastPoint], str, str]:
-        """Return (predictions, confidence, basis)."""
-        latest = _find_latest_model(tenant_id, variant_id)
-        if latest is None:
-            logger.info(
-                "No model found, using category fallback for variant=%s", variant_id
-            )
-            return self._category_fallback(db, tenant_id, variant_id, days)
+        """Return (predictions, confidence, basis).
+
+        Args:
+            category_key: Optional fashion category for cold-start. When the shop
+                has no per-variant model, the HCM market base model for this
+                category is used instead of returning zeros.
+        """
+        latest_key = _find_latest_model_key(tenant_id, variant_id)
+        if latest_key is None:
+            logger.info("No model found, using category fallback for variant=%s", variant_id)
+            return self._category_fallback(db, tenant_id, variant_id, days, category_key, sku)
 
         try:
-            with latest.open("rb") as f:
-                model = pickle.load(f)
-        except (OSError, pickle.UnpicklingError):
-            logger.warning(
-                "Failed to load model %s, falling back", latest, exc_info=True
-            )
-            return self._category_fallback(db, tenant_id, variant_id, days)
+            model = load_model(latest_key)
+        except (FileNotFoundError, OSError):
+            logger.warning("Failed to load model %s, falling back", latest_key, exc_info=True)
+            return self._category_fallback(db, tenant_id, variant_id, days, category_key, sku)
 
         future = model.make_future_dataframe(periods=days)
         forecast_df = model.predict(future)
@@ -137,43 +137,112 @@ class ProphetForecaster:
         tenant_id: UUID,
         variant_id: UUID,
         days: int,
+        category_key: str | None = None,
+        sku: str | None = None,
     ) -> tuple[list[ForecastPoint], str, str]:
-        """Moving-average fallback when no per-variant model exists."""
-        logger.info("Using category fallback for variant %s", variant_id)
-        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=30)
-        avg = (
-            db.query(func.avg(SalesData.quantity))
-            .filter(
-                SalesData.tenant_id == tenant_id,
-                SalesData.variant_id == variant_id,
-                SalesData.occurred_at >= cutoff,
-            )
-            .scalar()
-        )
+        """Cold-start: forecast from the HCM market base model for the category.
 
-        if avg is None or float(avg) <= 0:
-            zeros = [
-                ForecastPoint(
-                    date=datetime.now(tz=timezone.utc) + timedelta(days=i + 1),
-                    predicted=0.0,
-                    lower_bound=0.0,
-                    upper_bound=0.0,
-                )
-                for i in range(days)
-            ]
-            return zeros, "none", "moving_average"
+        Resolution order:
+        1. Explicit category_key from API caller (most accurate).
+        2. DB mapping from catalog.inventory.updated event.
+        3. SKU prefix hint (e.g. "AT-" → ao_thun).
+        4. Generic fallback to ao_thun (most common category, reasonable seasonal shape).
 
-        avg_f = float(avg)
+        Returns zeros only when no base model file exists at all.
+        """
+        basis = "market_trends_hcm"
+
+        # Step 1 & 2: explicit param or DB mapping
+        if category_key is None:
+            category_key = _resolve_category_key(db, tenant_id, variant_id)
+
+        # Step 3: SKU prefix hint
+        if category_key is None and sku:
+            category_key = self._guess_category_from_sku(sku)
+            if category_key:
+                logger.info("Cold-start SKU hint: sku=%s → category=%s for variant=%s", sku, category_key, variant_id)
+
+        # Step 4: generic fallback — ao_thun is the safest default (common, smooth seasonality)
+        if category_key is None:
+            category_key = "ao_thun"
+            basis = "market_trends_hcm_generic"
+            logger.info("Cold-start generic fallback (ao_thun) for variant=%s", variant_id)
+
+        base_key = _base_key(category_key)
+        if not model_exists(base_key):
+            # Try generic fallback model before giving up
+            if basis != "market_trends_hcm_generic":
+                fallback_key = _base_key("ao_thun")
+                if model_exists(fallback_key):
+                    base_key = fallback_key
+                    basis = "market_trends_hcm_generic"
+                    logger.info("No base model for category=%s, using ao_thun generic", category_key)
+                else:
+                    logger.warning("No base model for category=%s or generic (variant=%s)", category_key, variant_id)
+                    return self._zeros(days), "none", "no_base_model"
+            else:
+                logger.warning("No generic base model available for variant=%s", variant_id)
+                return self._zeros(days), "none", "no_base_model"
+
+        try:
+            model = load_model(base_key)
+        except (FileNotFoundError, OSError):
+            logger.warning("Failed to load base model %s, returning zeros", base_key, exc_info=True)
+            return self._zeros(days), "none", "no_base_model"
+
+        future = model.make_future_dataframe(periods=days, freq="D")
+        forecast_df = model.predict(future)
+        tail = forecast_df.tail(days)
+
         predictions = [
             ForecastPoint(
-                date=datetime.now(tz=timezone.utc) + timedelta(days=i + 1),
-                predicted=avg_f,
-                lower_bound=max(0.0, avg_f * 0.5),
-                upper_bound=avg_f * 1.5,
+                date=row.ds.to_pydatetime().replace(tzinfo=timezone.utc),
+                predicted=max(0.0, float(row.yhat)),
+                lower_bound=max(0.0, float(row.yhat_lower)),
+                upper_bound=max(0.0, float(row.yhat_upper)),
+            )
+            for row in tail.itertuples(index=False)
+        ]
+        logger.info("Cold-start from base model category=%s basis=%s variant=%s", category_key, basis, variant_id)
+        return predictions, "low", basis
+
+    @staticmethod
+    def _guess_category_from_sku(sku: str) -> str | None:
+        """Map SKU prefix to a category_key using naming conventions."""
+        sku_upper = sku.upper()
+        SKU_HINTS = {
+            "ASM": "ao_so_mi", "SHIRT": "ao_so_mi",
+            "VD": "vay_dam", "DRESS": "vay_dam",
+            "QJ": "quan_jeans", "JEAN": "quan_jeans", "DENIM": "quan_jeans",
+            "AT": "ao_thun", "THUN": "ao_thun", "TSHIRT": "ao_thun",
+            "GS": "giay_sneaker", "SHOE": "giay_sneaker", "SNEAKER": "giay_sneaker",
+            "AK": "ao_khoac", "JACKET": "ao_khoac", "HOODIE": "ao_khoac",
+            "TX": "tui_xach", "BAG": "tui_xach", "TOTE": "tui_xach",
+            "AD": "ao_dai", "AODAI": "ao_dai",
+            "CV": "chan_vay", "SKIRT": "chan_vay",
+            "QA": "quan_au", "TROUSER": "quan_au",
+            "DT": "do_the_thao", "SPORT": "do_the_thao",
+            "DM": "dam_maxi", "MAXI": "dam_maxi",
+            "CS": "dam_cong_so", "OFFICE": "dam_cong_so",
+            "PK": "phu_kien", "ACC": "phu_kien",
+        }
+        for prefix, key in SKU_HINTS.items():
+            if sku_upper.startswith(prefix):
+                return key
+        return None
+
+    def _zeros(self, days: int) -> list[ForecastPoint]:
+        """Empty forecast used when no model or base model is available."""
+        now = datetime.now(tz=timezone.utc)
+        return [
+            ForecastPoint(
+                date=now + timedelta(days=i + 1),
+                predicted=0.0,
+                lower_bound=0.0,
+                upper_bound=0.0,
             )
             for i in range(days)
         ]
-        return predictions, "low", "moving_average"
 
     def count_loaded_models(self) -> int:
         """Count model files on disk (rough proxy for 'models loaded')."""
@@ -183,21 +252,43 @@ class ProphetForecaster:
         return sum(1 for _ in root.rglob("*.pkl"))
 
 
-def _model_path(tenant_id: UUID, variant_id: UUID, version: str) -> Path:
-    return (
-        Path(settings.MODEL_STORAGE_PATH)
-        / str(tenant_id)
-        / str(variant_id)
-        / f"{version}.pkl"
+def _variant_key(tenant_id: UUID, variant_id: UUID, version: str) -> str:
+    """Storage key (relative to MODEL_STORAGE_PATH) for a per-variant model."""
+    return f"{tenant_id}/{variant_id}/{version}.pkl"
+
+
+def _find_latest_model_key(tenant_id: UUID, variant_id: UUID) -> str | None:
+    """Latest per-variant model key across local cache + MinIO, or None.
+
+    Version strings are timestamp-ordered ("vYYYYMMDD_HHMMSS"), so a lexical sort
+    of the keys puts the newest version last.
+    """
+    keys = list_keys(f"{tenant_id}/{variant_id}")
+    return keys[-1] if keys else None
+
+
+def _base_key(category_key: str) -> str:
+    """Storage key for the pre-trained HCM market base model of a category."""
+    return f"base/{category_key}.pkl"
+
+
+def _resolve_category_key(db: Session, tenant_id: UUID, variant_id: UUID) -> str | None:
+    """Resolve a variant to its base-model category key for cold-start.
+
+    Reads ``variant_category_map``, populated by the catalog.inventory.updated
+    consumer (raw catalog slug/name → key via app.utils.category_mapper).
+    Returns None when there is no mapping yet or the mapping is "unknown", so the
+    caller can pass the category explicitly via the forecast API ``category``
+    parameter as a fallback.
+    """
+    row = (
+        db.query(VariantCategoryMap.category_key)
+        .filter(VariantCategoryMap.variant_id == variant_id)
+        .first()
     )
-
-
-def _find_latest_model(tenant_id: UUID, variant_id: UUID) -> Path | None:
-    base = Path(settings.MODEL_STORAGE_PATH) / str(tenant_id) / str(variant_id)
-    if not base.exists():
+    if row is None or row.category_key == "unknown":
         return None
-    candidates = sorted(base.glob("*.pkl"), key=os.path.getmtime, reverse=True)
-    return candidates[0] if candidates else None
+    return row.category_key
 
 
 forecaster = ProphetForecaster()
