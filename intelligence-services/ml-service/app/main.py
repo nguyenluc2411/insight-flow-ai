@@ -1,4 +1,5 @@
 """FastAPI application entrypoint for ml-service."""
+
 from __future__ import annotations
 
 import logging
@@ -18,9 +19,7 @@ from app.services.forecasting import forecaster
 
 def _configure_logging() -> None:
     handler = logging.StreamHandler()
-    fmt = jsonlogger.JsonFormatter(
-        "%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
+    fmt = jsonlogger.JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     handler.setFormatter(fmt)
     root = logging.getLogger()
     root.handlers.clear()

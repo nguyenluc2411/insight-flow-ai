@@ -1,4 +1,5 @@
 """Pydantic schemas for API request/response."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -7,8 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # --- Forecast ---
+
 
 class ForecastPoint(BaseModel):
     date: datetime
@@ -43,6 +44,7 @@ class BatchForecastRequest(BaseModel):
 
 # --- Recommendation ---
 
+
 class RecommendationResponse(BaseModel):
     id: UUID
     tenant_id: UUID = Field(..., alias="tenantId")
@@ -50,7 +52,9 @@ class RecommendationResponse(BaseModel):
     action: Literal["CLEARANCE", "RESTOCK", "PROMOTE", "OK"]
     reason: str | None = None
     priority: Literal["HIGH", "MEDIUM", "LOW"]
-    suggested_discount_pct: float | None = Field(default=None, alias="suggestedDiscountPct")
+    suggested_discount_pct: float | None = Field(
+        default=None, alias="suggestedDiscountPct"
+    )
     suggested_restock_qty: int | None = Field(default=None, alias="suggestedRestockQty")
     stock_age_days: int | None = Field(default=None, alias="stockAgeDays")
     current_stock: int | None = Field(default=None, alias="currentStock")
@@ -90,6 +94,7 @@ class TrainJobResponse(BaseModel):
 
 
 # --- Health ---
+
 
 class HealthResponse(BaseModel):
     status: Literal["UP", "DOWN"]

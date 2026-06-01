@@ -1,4 +1,5 @@
 """Kafka consumer for ingesting sales and inventory events."""
+
 from __future__ import annotations
 
 import logging
@@ -43,7 +44,9 @@ class KafkaEventConsumer:
         if self._running:
             return
         self._running = True
-        self._thread = threading.Thread(target=self._run, name="kafka-consumer", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run, name="kafka-consumer", daemon=True
+        )
         self._thread.start()
         logger.info("Kafka consumer thread started")
 
@@ -60,18 +63,28 @@ class KafkaEventConsumer:
 
     def _run(self) -> None:
         try:
-            self._consumer = Consumer({
-                "bootstrap.servers": settings.KAFKA_BOOTSTRAP,
-                "group.id": settings.KAFKA_GROUP_ID,
-                "auto.offset.reset": "earliest",
-                "enable.auto.commit": True,
-            })
-            self._consumer.subscribe([
-                TOPIC_SALES_COMPLETED, TOPIC_INVENTORY_UPDATED, TOPIC_ORDER_NORMALIZED,
-            ])
+            self._consumer = Consumer(
+                {
+                    "bootstrap.servers": settings.KAFKA_BOOTSTRAP,
+                    "group.id": settings.KAFKA_GROUP_ID,
+                    "auto.offset.reset": "earliest",
+                    "enable.auto.commit": True,
+                }
+            )
+            self._consumer.subscribe(
+                [
+                    TOPIC_SALES_COMPLETED,
+                    TOPIC_INVENTORY_UPDATED,
+                    TOPIC_ORDER_NORMALIZED,
+                ]
+            )
             self._connected = True
-            logger.info("Subscribed to topics: %s, %s, %s",
-                        TOPIC_SALES_COMPLETED, TOPIC_INVENTORY_UPDATED, TOPIC_ORDER_NORMALIZED)
+            logger.info(
+                "Subscribed to topics: %s, %s, %s",
+                TOPIC_SALES_COMPLETED,
+                TOPIC_INVENTORY_UPDATED,
+                TOPIC_ORDER_NORMALIZED,
+            )
         except KafkaException:
             logger.error("Failed to initialize Kafka consumer", exc_info=True)
             self._connected = False
@@ -95,7 +108,9 @@ class KafkaEventConsumer:
         try:
             raw = value.decode("utf-8")
         except UnicodeDecodeError:
-            logger.warning("Failed to decode message bytes on topic=%s", topic, exc_info=True)
+            logger.warning(
+                "Failed to decode message bytes on topic=%s", topic, exc_info=True
+            )
             return
 
         if topic == TOPIC_SALES_COMPLETED:
@@ -114,28 +129,41 @@ class KafkaEventConsumer:
 
         session = SessionLocal()
         try:
-            occurred_at = event.occurred_at.replace(tzinfo=timezone.utc) \
-                if event.occurred_at.tzinfo is None else event.occurred_at
+            occurred_at = (
+                event.occurred_at.replace(tzinfo=timezone.utc)
+                if event.occurred_at.tzinfo is None
+                else event.occurred_at
+            )
 
             saved = 0
             for item in event.items:
                 # Dedup per (event_id, variant_id) — one order can have multiple variants
-                exists = session.query(SalesData.id).filter(
-                    SalesData.event_id == UUID(event.event_id),
-                    SalesData.variant_id == UUID(item.variant_id),
-                ).first()
+                exists = (
+                    session.query(SalesData.id)
+                    .filter(
+                        SalesData.event_id == UUID(event.event_id),
+                        SalesData.variant_id == UUID(item.variant_id),
+                    )
+                    .first()
+                )
                 if exists:
-                    logger.debug("Skipping duplicate event_id=%s variant=%s", event.event_id, item.variant_id)
+                    logger.debug(
+                        "Skipping duplicate event_id=%s variant=%s",
+                        event.event_id,
+                        item.variant_id,
+                    )
                     continue
-                session.add(SalesData(
-                    event_id=UUID(event.event_id),
-                    tenant_id=UUID(event.tenant_id),
-                    variant_id=UUID(item.variant_id),
-                    quantity=item.quantity,
-                    unit_price=item.unit_price,
-                    order_id=UUID(event.order_id) if event.order_id else None,
-                    occurred_at=occurred_at,
-                ))
+                session.add(
+                    SalesData(
+                        event_id=UUID(event.event_id),
+                        tenant_id=UUID(event.tenant_id),
+                        variant_id=UUID(item.variant_id),
+                        quantity=item.quantity,
+                        unit_price=item.unit_price,
+                        order_id=UUID(event.order_id) if event.order_id else None,
+                        occurred_at=occurred_at,
+                    )
+                )
                 saved += 1
             if saved > 0:
                 session.commit()
@@ -162,21 +190,27 @@ class KafkaEventConsumer:
         try:
             saved = 0
             for item in event.items:
-                exists = session.query(SalesData.id).filter(
-                    SalesData.event_id == UUID(event.event_id),
-                    SalesData.variant_id == UUID(item.variant_id),
-                ).first()
+                exists = (
+                    session.query(SalesData.id)
+                    .filter(
+                        SalesData.event_id == UUID(event.event_id),
+                        SalesData.variant_id == UUID(item.variant_id),
+                    )
+                    .first()
+                )
                 if exists:
                     continue
-                session.add(SalesData(
-                    event_id=UUID(event.event_id),
-                    tenant_id=UUID(event.tenant_id),
-                    variant_id=UUID(item.variant_id),
-                    quantity=item.quantity,
-                    unit_price=item.unit_price,
-                    order_id=None,  # external POS order id is not an internal UUID
-                    occurred_at=occurred_at,
-                ))
+                session.add(
+                    SalesData(
+                        event_id=UUID(event.event_id),
+                        tenant_id=UUID(event.tenant_id),
+                        variant_id=UUID(item.variant_id),
+                        quantity=item.quantity,
+                        unit_price=item.unit_price,
+                        order_id=None,  # external POS order id is not an internal UUID
+                        occurred_at=occurred_at,
+                    )
+                )
                 saved += 1
             if saved > 0:
                 session.commit()
@@ -196,20 +230,28 @@ class KafkaEventConsumer:
 
         session = SessionLocal()
         try:
-            snap = session.query(InventorySnapshot).filter(
-                InventorySnapshot.tenant_id == UUID(event.tenant_id),
-                InventorySnapshot.variant_id == UUID(event.variant_id),
-                InventorySnapshot.location_id == UUID(event.location_id),
-            ).first()
+            snap = (
+                session.query(InventorySnapshot)
+                .filter(
+                    InventorySnapshot.tenant_id == UUID(event.tenant_id),
+                    InventorySnapshot.variant_id == UUID(event.variant_id),
+                    InventorySnapshot.location_id == UUID(event.location_id),
+                )
+                .first()
+            )
             now = datetime.now(tz=timezone.utc)
-            movement_type_lower = event.movement_type.lower() if event.movement_type else ""
+            movement_type_lower = (
+                event.movement_type.lower() if event.movement_type else ""
+            )
             if snap is None:
                 snap = InventorySnapshot(
                     tenant_id=UUID(event.tenant_id),
                     variant_id=UUID(event.variant_id),
                     location_id=UUID(event.location_id),
                     quantity=event.quantity_change,
-                    first_restocked_at=now if movement_type_lower == "restock" else None,
+                    first_restocked_at=(
+                        now if movement_type_lower == "restock" else None
+                    ),
                     updated_at=now,
                 )
                 session.add(snap)
@@ -229,25 +271,33 @@ class KafkaEventConsumer:
     def _check_training_readiness(self, tenant_id: str) -> None:
         session = SessionLocal()
         try:
-            count = session.query(SalesData).filter(
-                SalesData.tenant_id == UUID(tenant_id)
-            ).count()
+            count = (
+                session.query(SalesData)
+                .filter(SalesData.tenant_id == UUID(tenant_id))
+                .count()
+            )
             if count < settings.MIN_DATA_POINTS:
                 return
 
             # Auto-trigger first-time training when no model exists yet for this tenant
             tenant_model_dir = Path(settings.MODEL_STORAGE_PATH) / tenant_id
-            has_model = tenant_model_dir.exists() and any(tenant_model_dir.rglob("*.pkl"))
+            has_model = tenant_model_dir.exists() and any(
+                tenant_model_dir.rglob("*.pkl")
+            )
             if not has_model:
                 logger.info(
                     "Tenant %s crossed threshold (%d points) — auto-triggering first training",
-                    tenant_id, count,
+                    tenant_id,
+                    count,
                 )
                 # Late import avoids circular dependency at module load time
                 from app.api.training import start_training_background  # noqa: PLC0415
+
                 start_training_background(UUID(tenant_id))
             else:
-                logger.debug("Tenant %s has %d data points and existing models", tenant_id, count)
+                logger.debug(
+                    "Tenant %s has %d data points and existing models", tenant_id, count
+                )
         except Exception:  # noqa: BLE001
             logger.warning("Could not check training readiness", exc_info=True)
         finally:

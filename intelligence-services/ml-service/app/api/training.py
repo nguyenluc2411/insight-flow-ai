@@ -1,4 +1,5 @@
 """Training endpoints and background job runner."""
+
 from __future__ import annotations
 
 import logging
@@ -138,7 +139,9 @@ def _run_training_job(job_id: UUID, tenant_id: UUID) -> None:
         session.commit()
         logger.info(
             "Training job %s completed: %d variants trained, %d errors",
-            job_id, trained, len(errors),
+            job_id,
+            trained,
+            len(errors),
         )
     except Exception as exc:  # noqa: BLE001
         logger.error("Training job %s failed", job_id, exc_info=True)

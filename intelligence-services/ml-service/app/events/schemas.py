@@ -3,6 +3,7 @@
 Java side uses @JsonNaming(SnakeCaseStrategy) so wire format is snake_case.
 Pydantic defaults to snake_case field names — no aliasing needed.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
