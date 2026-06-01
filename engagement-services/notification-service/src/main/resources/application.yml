@@ -1,5 +1,5 @@
 server:
-  port: 8091
+  port: 8087
 
 spring:
   application:
@@ -18,94 +18,135 @@ spring:
         max-attempts: 6
 
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${NOTIFICATION_DB_NAME:insightflow_notification}
-    username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:postgres}
+    url: jdbc:postgresql://localhost:5433/insightflow?currentSchema=notification_db
+    username: postgres
+    password: 12345
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      pool-name: notification-service-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
 
   jpa:
     hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        default_schema: notification_db
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+      ddl-auto: update
+
     open-in-view: false
 
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: notification_db
+        format_sql: false
+
+        jdbc:
+          time_zone: UTC
+
   flyway:
+    enabled: true
+    locations: classpath:db/migration
+
     schemas: notification_db
     default-schema: notification_db
     create-schemas: true
 
+    baseline-on-migrate: false
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    consumer:
-      group-id: notification-service-events
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      enable-auto-commit: false
-    listener:
-      ack-mode: manual_immediate
 
-  # Email (SMTP) — fail-open: app starts even if MAIL_HOST is not set
+    consumer:
+      group-id: notification-service-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+
+    listener:
+      ack-mode: manual
+
+    producer:
+      acks: all
+
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+      retries: 3
+
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+        max.in.flight.requests.per.connection: 5
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:1025}
-    username: ${MAIL_USER:}
-    password: ${MAIL_PASS:}
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+
     properties:
       mail:
         smtp:
-          auth: false
+          auth: ${MAIL_SMTP_AUTH:true}
           starttls:
-            enable: false
-
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-    deserialization:
-      fail-on-unknown-properties: false
-    default-property-inclusion: non_null
+            enable: ${MAIL_SMTP_STARTTLS:true}
+            required: ${MAIL_SMTP_STARTTLS_REQUIRED:true}
+          ssl:
+            trust: ${MAIL_SMTP_SSL_TRUST:smtp.gmail.com}
 
 eureka:
   instance:
     prefer-ip-address: true
     instance-id: "${spring.application.name}:${random.value}"
+
     lease-renewal-interval-in-seconds: 10
     lease-expiration-duration-in-seconds: 30
+
   client:
     register-with-eureka: true
     fetch-registry: true
+
     service-url:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
-
-app:
-  notification:
-    # Low stock threshold — used when reorder_point is not set on inventory level
-    default-low-stock-threshold: 10
-    # From address for outgoing emails
-    mail-from: ${MAIL_FROM:noreply@insightflow.ai}
-
-springdoc:
-  api-docs:
-    enabled: true
-    path: /v3/api-docs
-  swagger-ui:
-    enabled: false
-    path: /swagger-ui.html
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics,prometheus
+
   endpoint:
     health:
       show-details: when-authorized
 
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+  swagger-ui:
+    path: /swagger-ui.html
+
+  show-actuator: false
+
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
   level:
     root: INFO
     com.insightflow.notification: INFO
+    org.springframework.kafka: INFO
+    org.springframework.web.socket: INFO

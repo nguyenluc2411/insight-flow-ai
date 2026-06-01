@@ -1,70 +1,101 @@
 package com.insightflow.notification.controller;
 
+import com.insightflow.notification.dto.request.NotificationInboxFilterRequest;
+import com.insightflow.notification.dto.response.ApiResponse;
+import com.insightflow.notification.dto.response.DlqReplayResponse;
 import com.insightflow.notification.dto.response.NotificationResponse;
 import com.insightflow.notification.dto.response.UnreadCountResponse;
-import com.insightflow.notification.service.NotificationService;
-import com.insightflow.security.CurrentUser;
-import com.insightflow.security.UserContext;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import com.insightflow.notification.service.interfaces.NotificationInboxService;
+import com.insightflow.notification.service.retry.DlqReplayService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
 @RequiredArgsConstructor
-@Tag(name = "Notifications", description = "In-app notification feed")
+@Validated
+@Slf4j
 public class NotificationController {
 
-    private final NotificationService notificationService;
+    private final NotificationInboxService notificationInboxService;
+    private final DlqReplayService dlqReplayService;
 
-    @GetMapping
-    @Operation(summary = "List notifications",
-               description = "Paginated notification feed for the tenant. Filter by unreadOnly=true or type (LOW_STOCK|RECOMMENDATION|FORECAST).")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Notification list"),
-            @ApiResponse(responseCode = "401", description = "Authentication required")
-    })
-    public ResponseEntity<Page<NotificationResponse>> list(
-            @CurrentUser UserContext user,
-            @RequestParam(required = false) Boolean unreadOnly,
-            @RequestParam(required = false) String type,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(notificationService.listNotifications(user.tenantId(), unreadOnly, type, pageable));
+    @GetMapping("/inbox")
+    public ApiResponse<Page<NotificationResponse>> getInbox(
+            @RequestHeader("X-User-Id") @NotNull UUID recipientId,
+            @Valid @ModelAttribute NotificationInboxFilterRequest filter,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<NotificationResponse> response = notificationInboxService.getInbox(recipientId, filter, pageable);
+        log.info("Inbox query recipientId={} page={} size={}", recipientId, page, size);
+        return ApiResponse.success(response, "Inbox retrieved");
     }
 
     @GetMapping("/unread-count")
-    @Operation(summary = "Unread notification count")
-    @ApiResponse(responseCode = "200", description = "Count")
-    public ResponseEntity<UnreadCountResponse> unreadCount(@CurrentUser UserContext user) {
-        return ResponseEntity.ok(notificationService.getUnreadCount(user.tenantId()));
+    public ApiResponse<UnreadCountResponse> getUnreadCount(
+            @RequestHeader("X-User-Id") @NotNull UUID recipientId) {
+        UnreadCountResponse response = notificationInboxService.getUnreadCount(recipientId);
+        log.info("Unread count query recipientId={} unreadCount={}", recipientId, response.getUnreadCount());
+        return ApiResponse.success(response, "Unread count retrieved");
     }
 
-    @PutMapping("/{id}/read")
-    @Operation(summary = "Mark notification as read")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Updated"),
-            @ApiResponse(responseCode = "404", description = "Not found")
-    })
-    public ResponseEntity<NotificationResponse> markRead(
-            @CurrentUser UserContext user,
+    @PatchMapping("/{id}/read")
+    public ApiResponse<NotificationResponse> markAsRead(
+            @RequestHeader("X-User-Id") @NotNull UUID recipientId,
             @PathVariable UUID id) {
-        return ResponseEntity.ok(notificationService.markRead(id, user.tenantId()));
+        NotificationResponse response = notificationInboxService.markAsRead(id, recipientId);
+        return ApiResponse.success(response, "Notification marked as read");
     }
 
-    @PutMapping("/read-all")
-    @Operation(summary = "Mark all notifications as read")
-    @ApiResponse(responseCode = "200", description = "Updated count")
-    public ResponseEntity<Void> markAllRead(@CurrentUser UserContext user) {
-        notificationService.markAllRead(user.tenantId());
-        return ResponseEntity.ok().build();
+    @PatchMapping("/read-all")
+    public ApiResponse<UnreadCountResponse> markAllAsRead(
+            @RequestHeader("X-User-Id") @NotNull UUID recipientId) {
+        UnreadCountResponse response = notificationInboxService.markAllAsRead(recipientId);
+        return ApiResponse.success(response, "All notifications marked as read");
+    }
+
+    @PatchMapping("/{id}/archive")
+    public ApiResponse<NotificationResponse> archive(
+            @RequestHeader("X-User-Id") @NotNull UUID recipientId,
+            @PathVariable UUID id) {
+        NotificationResponse response = notificationInboxService.archive(id, recipientId);
+        return ApiResponse.success(response, "Notification archived");
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<NotificationResponse> delete(
+            @RequestHeader("X-User-Id") @NotNull UUID recipientId,
+            @PathVariable UUID id) {
+        NotificationResponse response = notificationInboxService.delete(id, recipientId);
+        return ApiResponse.success(response, "Notification deleted");
+    }
+
+    @PostMapping("/dlq/{notificationId}/replay")
+    public ApiResponse<DlqReplayResponse> replayDlq(
+            @RequestHeader(value = "X-Admin", defaultValue = "false") boolean admin,
+            @PathVariable UUID notificationId) {
+        DlqReplayResponse response = dlqReplayService.replay(notificationId, admin);
+        return ApiResponse.success(response, "DLQ replay scheduled");
     }
 }
+

@@ -1,3 +1,11 @@
 package com.insightflow.notification.dto.response;
 
-public record UnreadCountResponse(long count) {}
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+@Getter
+@AllArgsConstructor
+public class UnreadCountResponse {
+    private long unreadCount;
+}
+
