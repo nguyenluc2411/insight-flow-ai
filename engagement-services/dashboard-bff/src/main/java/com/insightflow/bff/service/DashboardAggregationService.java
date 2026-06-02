@@ -474,11 +474,24 @@ public class DashboardAggregationService {
                     return Mono.just(List.of());
                 });
 
-        var results = Mono.zip(salesMono.defaultIfEmpty(new SalesAnalyticsResponse()),
-                               restockMono.defaultIfEmpty(new MlPagedRecommendationsResponse()),
-                               clearanceMono.defaultIfEmpty(new MlPagedRecommendationsResponse()),
-                               trendsMono.defaultIfEmpty(new MlMarketTrendsResponse()),
-                               locationsMono)
+        Mono<List<CatalogVariantItem>> variantsMono = catalogClient.get()
+                .uri(u -> u.path("/api/v1/catalog/products/variants").queryParam("size", "50").build())
+                .headers(securityHeaders(user))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<PagedResponse<CatalogVariantItem>>() {})
+                .map(p -> p.getContent() != null ? p.getContent() : List.<CatalogVariantItem>of())
+                .timeout(CALL_TIMEOUT)
+                .onErrorResume(ex -> {
+                    log.warn("catalog variants unavailable for market-summary: {}", ex.getMessage());
+                    return Mono.just(List.of());
+                });
+
+        var results = Mono.zip(
+                        salesMono.defaultIfEmpty(new SalesAnalyticsResponse()),
+                        restockMono.defaultIfEmpty(new MlPagedRecommendationsResponse()),
+                        clearanceMono.defaultIfEmpty(new MlPagedRecommendationsResponse()),
+                        trendsMono.defaultIfEmpty(new MlMarketTrendsResponse()),
+                        Mono.zip(locationsMono, variantsMono))
                 .block(Duration.ofSeconds(35));
 
         if (results == null) {
@@ -491,11 +504,20 @@ public class DashboardAggregationService {
                     .build();
         }
 
-        SalesAnalyticsResponse sales       = results.getT1();
-        MlPagedRecommendationsResponse restock    = results.getT2();
-        MlPagedRecommendationsResponse clearance  = results.getT3();
-        MlMarketTrendsResponse trends      = results.getT4();
-        List<CatalogLocationResponse> locations   = results.getT5();
+        SalesAnalyticsResponse sales           = results.getT1();
+        MlPagedRecommendationsResponse restock = results.getT2();
+        MlPagedRecommendationsResponse clearance = results.getT3();
+        MlMarketTrendsResponse trends           = results.getT4();
+        List<CatalogLocationResponse> locations = results.getT5().getT1();
+        List<CatalogVariantItem> variants        = results.getT5().getT2();
+
+        Map<java.util.UUID, String> variantNameMap = variants.stream()
+                .filter(v -> v.getId() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        CatalogVariantItem::getId,
+                        v -> v.getProductName() != null ? v.getProductName()
+                                : v.getSku() != null ? v.getSku() : "SKU " + v.getId().toString().substring(0, 8),
+                        (a, b) -> a));
 
         boolean partial = trends.getTrends() == null || trends.getTrends().isEmpty();
 
@@ -510,7 +532,7 @@ public class DashboardAggregationService {
 
         List<MarketSummaryResponse.ChannelOpportunity> channelOpps = buildChannelOpps(sales);
         List<MarketSummaryResponse.RegionDemand> regionDemand = buildRegionDemand(sales, locCityMap);
-        List<MarketSummaryResponse.ProductOpportunity> productOpps = buildProductOpps(restock);
+        List<MarketSummaryResponse.ProductOpportunity> productOpps = buildProductOpps(restock, variantNameMap);
         List<MarketSummaryResponse.TrendHighlight> trendHighlights = buildTrendHighlights(trends);
         MarketSummaryResponse.Kpis kpis = buildKpis(channelOpps, restock, clearance);
 
@@ -556,7 +578,9 @@ public class DashboardAggregationService {
                 .toList();
     }
 
-    private List<MarketSummaryResponse.ProductOpportunity> buildProductOpps(MlPagedRecommendationsResponse restock) {
+    private List<MarketSummaryResponse.ProductOpportunity> buildProductOpps(
+            MlPagedRecommendationsResponse restock,
+            Map<java.util.UUID, String> variantNameMap) {
         if (restock.getItems() == null) return List.of();
         return restock.getItems().stream()
                 .limit(6)
@@ -564,8 +588,13 @@ public class DashboardAggregationService {
                     String badge = "HIGH".equalsIgnoreCase(item.getPriority()) ? "HOT" : "RECOMMEND_IMPORT";
                     int trendPct = item.getSalesVelocity30d() != null
                             ? (int) Math.min(99, item.getSalesVelocity30d() * 10) : 0;
+                    String name = item.getVariantId() != null && variantNameMap.containsKey(item.getVariantId())
+                            ? variantNameMap.get(item.getVariantId())
+                            : item.getSku() != null ? item.getSku()
+                            : item.getVariantId() != null ? "SKU-" + item.getVariantId().toString().substring(0, 8).toUpperCase()
+                            : "Sản phẩm";
                     return MarketSummaryResponse.ProductOpportunity.builder()
-                            .name(item.getReason() != null ? item.getReason() : "SKU " + item.getVariantId())
+                            .name(name)
                             .category(item.getCategoryKey() != null ? item.getCategoryKey() : "—")
                             .badge(badge)
                             .trendPct(trendPct)

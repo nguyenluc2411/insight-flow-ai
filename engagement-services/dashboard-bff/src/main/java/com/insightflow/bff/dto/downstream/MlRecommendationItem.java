@@ -39,6 +39,9 @@ public class MlRecommendationItem {
     @JsonProperty("salesVelocity30d")
     private Double salesVelocity30d;
 
+    @JsonProperty("sku")
+    private String sku;
+
     @JsonProperty("categoryKey")
     private String categoryKey;
 
