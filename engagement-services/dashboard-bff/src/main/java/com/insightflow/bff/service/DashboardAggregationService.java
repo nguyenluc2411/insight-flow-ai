@@ -408,6 +408,234 @@ public class DashboardAggregationService {
         };
     }
 
+    // -------------------------------------------------------------------------
+    // Market Summary
+    // -------------------------------------------------------------------------
+
+    public MarketSummaryResponse getMarketSummary(UserContext user, String location, String period) {
+        String resolvedPeriod = period != null ? period : currentQuarter();
+        String resolvedLocation = location != null ? location : "hcmc";
+
+        Mono<SalesAnalyticsResponse> salesMono = salesClient.get()
+                .uri(u -> u.path("/api/v1/sales/analytics/summary")
+                           .queryParam("period", resolvedPeriod).build())
+                .headers(securityHeaders(user))
+                .retrieve()
+                .bodyToMono(SalesAnalyticsResponse.class)
+                .timeout(CALL_TIMEOUT)
+                .onErrorResume(ex -> {
+                    log.warn("sales analytics unavailable: {}", ex.getMessage());
+                    return Mono.empty();
+                });
+
+        Mono<MlPagedRecommendationsResponse> restockMono = mlClient.get()
+                .uri(u -> u.path("/api/v1/ml/recommendations")
+                           .queryParam("action", "RESTOCK").queryParam("size", "50").build())
+                .headers(securityHeaders(user))
+                .retrieve()
+                .bodyToMono(MlPagedRecommendationsResponse.class)
+                .timeout(CALL_TIMEOUT)
+                .onErrorResume(ex -> {
+                    log.warn("ml restock recommendations unavailable: {}", ex.getMessage());
+                    return Mono.empty();
+                });
+
+        Mono<MlPagedRecommendationsResponse> clearanceMono = mlClient.get()
+                .uri(u -> u.path("/api/v1/ml/recommendations")
+                           .queryParam("action", "CLEARANCE").queryParam("size", "100").build())
+                .headers(securityHeaders(user))
+                .retrieve()
+                .bodyToMono(MlPagedRecommendationsResponse.class)
+                .timeout(CALL_TIMEOUT)
+                .onErrorResume(ex -> {
+                    log.warn("ml clearance recommendations unavailable: {}", ex.getMessage());
+                    return Mono.empty();
+                });
+
+        Mono<MlMarketTrendsResponse> trendsMono = mlClient.get()
+                .uri(u -> u.path("/api/v1/ml/market-trends")
+                           .queryParam("location", resolvedLocation).build())
+                .retrieve()
+                .bodyToMono(MlMarketTrendsResponse.class)
+                .timeout(Duration.ofSeconds(30))
+                .onErrorResume(ex -> {
+                    log.warn("ml market-trends unavailable: {}", ex.getMessage());
+                    return Mono.empty();
+                });
+
+        Mono<List<CatalogLocationResponse>> locationsMono = catalogClient.get()
+                .uri("/api/v1/catalog/locations")
+                .headers(securityHeaders(user))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<List<CatalogLocationResponse>>() {})
+                .timeout(CALL_TIMEOUT)
+                .onErrorResume(ex -> {
+                    log.warn("catalog locations unavailable: {}", ex.getMessage());
+                    return Mono.just(List.of());
+                });
+
+        var results = Mono.zip(salesMono.defaultIfEmpty(new SalesAnalyticsResponse()),
+                               restockMono.defaultIfEmpty(new MlPagedRecommendationsResponse()),
+                               clearanceMono.defaultIfEmpty(new MlPagedRecommendationsResponse()),
+                               trendsMono.defaultIfEmpty(new MlMarketTrendsResponse()),
+                               locationsMono)
+                .block(Duration.ofSeconds(35));
+
+        if (results == null) {
+            return MarketSummaryResponse.builder()
+                    .period(resolvedPeriod).location(resolvedLocation)
+                    .partial(true).lastUpdated(Instant.now())
+                    .channelOpportunities(List.of()).regionDemand(List.of())
+                    .productOpportunities(List.of()).trendHighlights(List.of())
+                    .kpis(MarketSummaryResponse.Kpis.builder().build())
+                    .build();
+        }
+
+        SalesAnalyticsResponse sales       = results.getT1();
+        MlPagedRecommendationsResponse restock    = results.getT2();
+        MlPagedRecommendationsResponse clearance  = results.getT3();
+        MlMarketTrendsResponse trends      = results.getT4();
+        List<CatalogLocationResponse> locations   = results.getT5();
+
+        boolean partial = trends.getTrends() == null || trends.getTrends().isEmpty();
+
+        // Location UUID → city mapping
+        Map<java.util.UUID, String> locCityMap = locations.stream()
+                .filter(l -> l.getId() != null && l.getCity() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        CatalogLocationResponse::getId,
+                        l -> l.getCity().toLowerCase().replace(" ", "_").replace("hồ_chí_minh", "hcmc")
+                               .replace("hà_nội", "hanoi").replace("đà_nẵng", "danang"),
+                        (a, b) -> a));
+
+        List<MarketSummaryResponse.ChannelOpportunity> channelOpps = buildChannelOpps(sales);
+        List<MarketSummaryResponse.RegionDemand> regionDemand = buildRegionDemand(sales, locCityMap);
+        List<MarketSummaryResponse.ProductOpportunity> productOpps = buildProductOpps(restock);
+        List<MarketSummaryResponse.TrendHighlight> trendHighlights = buildTrendHighlights(trends);
+        MarketSummaryResponse.Kpis kpis = buildKpis(channelOpps, restock, clearance);
+
+        return MarketSummaryResponse.builder()
+                .period(resolvedPeriod)
+                .location(resolvedLocation)
+                .kpis(kpis)
+                .channelOpportunities(channelOpps)
+                .regionDemand(regionDemand)
+                .productOpportunities(productOpps)
+                .trendHighlights(trendHighlights)
+                .partial(partial)
+                .lastUpdated(Instant.now())
+                .build();
+    }
+
+    private List<MarketSummaryResponse.ChannelOpportunity> buildChannelOpps(SalesAnalyticsResponse sales) {
+        if (sales.getChannelStats() == null) return List.of();
+        return sales.getChannelStats().stream()
+                .map(c -> MarketSummaryResponse.ChannelOpportunity.builder()
+                        .channel(c.getChannel())
+                        .score(c.getScorePct())
+                        .growthPct(c.getGrowthPct())
+                        .build())
+                .toList();
+    }
+
+    private List<MarketSummaryResponse.RegionDemand> buildRegionDemand(
+            SalesAnalyticsResponse sales, Map<java.util.UUID, String> locCityMap) {
+        if (sales.getLocationStats() == null) return List.of();
+        long maxOrders = sales.getLocationStats().stream().mapToLong(l -> l.getOrderCount()).max().orElse(1L);
+        return sales.getLocationStats().stream()
+                .map(l -> {
+                    String region = locCityMap.getOrDefault(l.getLocationId(),
+                            l.getLocationId() != null ? l.getLocationId().toString().substring(0, 8) : "unknown");
+                    double ratio = maxOrders > 0 ? (double) l.getOrderCount() / maxOrders : 0;
+                    String level = ratio >= 0.8 ? "VERY_HIGH" : ratio >= 0.5 ? "HIGH"
+                            : ratio >= 0.25 ? "MEDIUM" : "RISING";
+                    return MarketSummaryResponse.RegionDemand.builder()
+                            .region(region).demandLevel(level).growthPct(l.getGrowthPct())
+                            .build();
+                })
+                .toList();
+    }
+
+    private List<MarketSummaryResponse.ProductOpportunity> buildProductOpps(MlPagedRecommendationsResponse restock) {
+        if (restock.getItems() == null) return List.of();
+        return restock.getItems().stream()
+                .limit(6)
+                .map(item -> {
+                    String badge = "HIGH".equalsIgnoreCase(item.getPriority()) ? "HOT" : "RECOMMEND_IMPORT";
+                    int trendPct = item.getSalesVelocity30d() != null
+                            ? (int) Math.min(99, item.getSalesVelocity30d() * 10) : 0;
+                    return MarketSummaryResponse.ProductOpportunity.builder()
+                            .name(item.getReason() != null ? item.getReason() : "SKU " + item.getVariantId())
+                            .category(item.getCategoryKey() != null ? item.getCategoryKey() : "—")
+                            .badge(badge)
+                            .trendPct(trendPct)
+                            .insight(item.getReason())
+                            .imageUrl(null)
+                            .build();
+                })
+                .toList();
+    }
+
+    private List<MarketSummaryResponse.TrendHighlight> buildTrendHighlights(MlMarketTrendsResponse trends) {
+        if (trends.getTrends() == null) return List.of();
+        return trends.getTrends().stream()
+                .map(t -> MarketSummaryResponse.TrendHighlight.builder()
+                        .name(t.getName()).tag(t.getTag()).growthPct(t.getGrowthPct())
+                        .build())
+                .toList();
+    }
+
+    private MarketSummaryResponse.Kpis buildKpis(
+            List<MarketSummaryResponse.ChannelOpportunity> channels,
+            MlPagedRecommendationsResponse restock,
+            MlPagedRecommendationsResponse clearance) {
+
+        // Best channel by score
+        String bestChannel = channels.stream()
+                .max(Comparator.comparingInt(MarketSummaryResponse.ChannelOpportunity::getScore))
+                .map(MarketSummaryResponse.ChannelOpportunity::getChannel).orElse(null);
+        int bestScore = channels.stream()
+                .mapToInt(MarketSummaryResponse.ChannelOpportunity::getScore).max().orElse(0);
+
+        // Opportunity score: high-priority restock / total restock * 100, capped 100
+        long highRestock = restock.getItems() == null ? 0L : restock.getItems().stream()
+                .filter(i -> "HIGH".equalsIgnoreCase(i.getPriority())).count();
+        long totalRestock = Math.max(restock.getTotal(), highRestock);
+        int opportunityScore = (int) Math.min(100, highRestock * 100L / Math.max(1, totalRestock));
+
+        // Potential product groups: distinct categories in restock recs
+        long potentialGroups = restock.getItems() == null ? 0L : restock.getItems().stream()
+                .map(MlRecommendationItem::getCategoryKey).filter(Objects::nonNull).distinct().count();
+
+        // Competition level: clearance ratio
+        long clearanceTotal = clearance.getTotal();
+        long combined = totalRestock + clearanceTotal;
+        String compLevel = combined == 0 ? "LOW"
+                : clearanceTotal * 100L / combined > 30 ? "HIGH"
+                : clearanceTotal * 100L / combined > 15 ? "MEDIUM" : "LOW";
+
+        List<String> hotCategories = clearance.getItems() == null ? List.of()
+                : clearance.getItems().stream()
+                        .map(MlRecommendationItem::getCategoryKey).filter(Objects::nonNull)
+                        .distinct().limit(3).toList();
+
+        return MarketSummaryResponse.Kpis.builder()
+                .opportunityScore(opportunityScore)
+                .opportunityScoreDelta(0)
+                .potentialProductGroups((int) potentialGroups)
+                .bestChannel(bestChannel)
+                .bestChannelScorePct(bestScore)
+                .competitionLevel(compLevel)
+                .competitionHotCategories(hotCategories)
+                .build();
+    }
+
+    private static String currentQuarter() {
+        java.time.LocalDate now = java.time.LocalDate.now();
+        int q = (now.getMonthValue() - 1) / 3 + 1;
+        return now.getYear() + "-Q" + q;
+    }
+
     /**
      * Builds a header consumer that propagates all gateway-injected security headers
      * from the caller's UserContext to downstream service calls.
