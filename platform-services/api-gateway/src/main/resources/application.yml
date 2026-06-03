@@ -209,6 +209,22 @@ spring:
             rateLimiter: defaultRateLimiter
           order: 40
 
+        # ── THÊM MỚI: Billing service — SePay Webhooks (Giữ nguyên Header) ────
+        - id: billing-service-webhooks
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/v1/billing/payments/sepay-webhook
+            - Method=POST
+          filters:
+            # TUYỆT ĐỐI KHÔNG DÙNG RemoveRequestHeader Ở ĐÂY ĐỂ GIỮ LẠI API KEY
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@webhookRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: webhookRateLimiter
+          order: 44
         # ── Billing service — public package/feature listing (no JWT) ────────
         - id: billing-service-public
           uri: lb://billing-service

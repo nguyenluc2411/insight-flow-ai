@@ -56,6 +56,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if (StringUtils.hasText(authHeader) && authHeader.startsWith("Apikey ")) {
+            return chain.filter(exchange);
+        }
         if (!StringUtils.hasText(authHeader) || !authHeader.startsWith(BEARER_PREFIX)) {
             return rejectWith401(exchange, "missing-token",
                     "Authorization header with Bearer token is required");
