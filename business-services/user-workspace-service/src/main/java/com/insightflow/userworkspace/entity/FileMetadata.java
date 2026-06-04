@@ -22,6 +22,9 @@ public class FileMetadata extends BaseEntity {
     @Column(name = "id", length = 36)
     private String id;
 
+    @Column(name = "tenant_id", length = 36, nullable = false)
+    private String tenantId;
+
     @Column(name = "workspace_id", length = 36, nullable = false, unique = true)
     private String workspaceId;
 

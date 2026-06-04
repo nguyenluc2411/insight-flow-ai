@@ -11,7 +11,8 @@ import com.insightflow.userworkspace.exception.ApiException;
 import com.insightflow.userworkspace.messaging.InventoryEventProducer;
 import com.insightflow.userworkspace.repository.FileMetadataRepository;
 import com.insightflow.userworkspace.repository.WorkspaceRepository;
-import com.insightflow.userworkspace.security.UserContext;
+import com.insightflow.security.UserContext;
+import com.insightflow.security.UserContextHolder;
 import com.insightflow.userworkspace.service.WorkspaceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +45,15 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     @Value("${aws.s3.presign-expiration-minutes}")
     private Long presignMinutes;
 
+    // Tenant context is populated by common-security's UserContextFilter from gateway headers.
+    private UserContext requireContext() {
+        UserContext ctx = UserContextHolder.get();
+        if (ctx == null || ctx.tenantId() == null) {
+            throw new ApiException("Thiếu thông tin xác thực (tenant) — request phải đi qua gateway", "UNAUTHENTICATED");
+        }
+        return ctx;
+    }
+
     @Override
     @Transactional
     public CreateWorkspaceResponse createWorkspace(CreateWorkspaceRequest request) {
@@ -53,11 +63,14 @@ public class WorkspaceServiceImpl implements WorkspaceService {
             throw new ApiException("Hệ thống chỉ chấp nhận định dạng file .csv hoặc .xlsx!", "INVALID_FILE_TYPE");
         }
 
+        UserContext ctx = requireContext();
+        String tenantId = ctx.tenantId().toString();
+        String userId = ctx.userId() != null ? ctx.userId().toString() : null;
         String workspaceId = UUID.randomUUID().toString();
-        String userId = UserContext.getCurrentUserId();
 
         Workspace workspace = Workspace.builder()
                 .id(workspaceId)
+                .tenantId(tenantId)
                 .userId(userId)
                 .name(request.getWorkspaceName())
                 .status("INIT")
@@ -70,6 +83,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
         FileMetadata metadata = FileMetadata.builder()
                 .id(UUID.randomUUID().toString())
+                .tenantId(tenantId)
                 .workspaceId(workspaceId)
                 .fileName(request.getFileName())
                 .fileSize(0L) // Sẽ được cập nhật thật khi FE đẩy thẳng lên S3
@@ -88,7 +102,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     @Override
     @Transactional
     public void confirmUpload(String workspaceId) {
-        Workspace workspace = workspaceRepository.findById(workspaceId)
+        Workspace workspace = workspaceRepository.findByIdAndTenantId(workspaceId, requireContext().tenantId().toString())
                 .orElseThrow(() -> new ApiException("Không tìm thấy phiên làm việc này", "WORKSPACE_NOT_FOUND"));
 
         FileMetadata metadata = fileMetadataRepository.findByWorkspaceId(workspaceId)
@@ -145,7 +159,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     @Override
     @Transactional(readOnly = true)
     public WorkspaceResponse getWorkspace(String workspaceId) {
-        Workspace workspace = workspaceRepository.findById(workspaceId)
+        Workspace workspace = workspaceRepository.findByIdAndTenantId(workspaceId, requireContext().tenantId().toString())
                 .orElseThrow(() -> new ApiException("Không tìm thấy phiên làm việc này", "WORKSPACE_NOT_FOUND"));
 
         return WorkspaceResponse.builder()
@@ -180,26 +194,26 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     }
 
     private String generatePresignedUrl(String key, String contentType) {
-        try (S3Presigner presigner = S3Presigner.builder().region(software.amazon.awssdk.regions.Region.of(region)).build()) {
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(bucket)
-                    .key(key)
-                    .contentType(contentType)
-                    .build();
+        // Use the injected presigner bean so the MinIO endpoint override is honoured
+        // (the old code built a fresh presigner that pointed at real AWS).
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentType(contentType)
+                .build();
 
-            PresignedPutObjectRequest presignedRequest = presigner.presignPutObject(r -> r
-                    .signatureDuration(java.time.Duration.ofMinutes(presignMinutes))
-                    .putObjectRequest(putObjectRequest));
-            return presignedRequest.url().toString();
-        }
+        PresignedPutObjectRequest presignedRequest = s3Presigner.presignPutObject(r -> r
+                .signatureDuration(java.time.Duration.ofMinutes(presignMinutes))
+                .putObjectRequest(putObjectRequest));
+        return presignedRequest.url().toString();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<WorkspaceResponse> getCompletedHistories() {
 
-        String userId = UserContext.getCurrentUserId();
-        List<Workspace> workspaces = workspaceRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        String tenantId = requireContext().tenantId().toString();
+        List<Workspace> workspaces = workspaceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
 
         // Map sang DTO Response
         return workspaces.stream().map(workspace -> WorkspaceResponse.builder()

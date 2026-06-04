@@ -21,7 +21,12 @@ public class Workspace extends BaseEntity {
     @Column(name = "id", length = 36)
     private String id;
 
-    @Column(name = "user_id", length = 50, nullable = false)
+    // Owning tenant — every query is scoped by this for multi-tenant isolation.
+    @Column(name = "tenant_id", length = 36, nullable = false)
+    private String tenantId;
+
+    // Creator (user) within the tenant — kept as metadata, not used for isolation.
+    @Column(name = "user_id", length = 50)
     private String userId;
 
     @Column(name = "name", length = 255, nullable = false)
