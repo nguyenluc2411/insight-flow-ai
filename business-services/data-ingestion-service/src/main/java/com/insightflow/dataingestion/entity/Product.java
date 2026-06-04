@@ -8,7 +8,10 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
-@Table(name = "products")
+@Table(name = "products", uniqueConstraints = {
+        // Product code is unique per tenant, not globally — two shops may reuse the same code.
+        @UniqueConstraint(name = "uq_products_tenant_code", columnNames = {"tenant_id", "product_code"})
+})
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,6 +22,9 @@ public class Product extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
+
+    @Column(name = "tenant_id", length = 36, nullable = false)
+    private String tenantId;
 
     @Column(name = "product_code", length = 50, nullable = false)
     private String productCode;
@@ -57,6 +63,6 @@ public class Product extends BaseEntity {
     private String season;
 
     // Cột JSON chứa mọi đặc tính râu ria (cổ áo, tay áo, cạp quần...)
-    @Column(name = "attributes", columnDefinition = "json")
+    @Column(name = "attributes", columnDefinition = "jsonb")
     private String attributes;
 }

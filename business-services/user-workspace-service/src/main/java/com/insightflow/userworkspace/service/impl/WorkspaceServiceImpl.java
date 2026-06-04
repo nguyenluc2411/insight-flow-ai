@@ -139,6 +139,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
         fileMetadataRepository.save(metadata);
 
         InventoryFileUploadedPayload payload = InventoryFileUploadedPayload.builder()
+                .tenantId(workspace.getTenantId())
                 .workspaceId(workspaceId)
                 .userId(workspace.getUserId())
                 .fileName(metadata.getFileName())

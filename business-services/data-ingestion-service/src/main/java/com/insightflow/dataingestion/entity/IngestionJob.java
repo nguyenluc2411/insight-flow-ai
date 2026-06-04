@@ -23,6 +23,9 @@ public class IngestionJob extends BaseEntity {
     @Column(name = "id", length = 36)
     private String id;
 
+    @Column(name = "tenant_id", length = 36, nullable = false)
+    private String tenantId;
+
     @Column(name = "workspace_id", length = 36, nullable = false, unique = true)
     private String workspaceId;
 
@@ -38,7 +41,7 @@ public class IngestionJob extends BaseEntity {
     @Column(name = "failed_records", nullable = false)
     private Integer failedRecords;
 
-    @Column(name = "error_log", columnDefinition = "JSON")
+    @Column(name = "error_log", columnDefinition = "jsonb")
     private String errorLog;
 
     @Column(name = "started_at")

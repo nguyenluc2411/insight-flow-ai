@@ -47,9 +47,13 @@ public class IngestionServiceImpl implements IngestionService {
     @Transactional
     public void handleFileUploadedEvent(EventEnvelope<InventoryFileUploadedPayload> envelope) {
         InventoryFileUploadedPayload payload = envelope.getPayload();
+        String tenantId = payload.getTenantId();
         String workspaceId = payload.getWorkspaceId();
         String fileName = payload.getFileName();
 
+        if (tenantId == null || tenantId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Thiếu tenant_id trong sự kiện từ Kafka — không thể ingest an toàn!");
+        }
         if (fileName == null || fileName.trim().isEmpty()) {
             throw new IllegalArgumentException("Không tìm thấy tên file trong sự kiện từ Kafka!");
         }
@@ -65,7 +69,7 @@ public class IngestionServiceImpl implements IngestionService {
         }
 
         // 2. Tiến hành khởi tạo Job và đánh dấu PROCESSING
-        IngestionJob job = initOrGetJob(workspaceId);
+        IngestionJob job = initOrGetJob(tenantId, workspaceId);
 
         try {
             log.info("🚀 Bắt đầu luồng UPSERT Data-Driven cho file: {}", fileName);
@@ -102,9 +106,10 @@ public class IngestionServiceImpl implements IngestionService {
                             .productName(rawName != null ? rawName : "").rawCategory(rawCat != null ? rawCat : "").rawColor(rawColor != null ? rawColor : "").build();
                     EnrichmentResponse aiData = catalogClient.enrichProduct(request);
 
-                    Product product = productRepository.findByProductCode(productCode)
+                    Product product = productRepository.findByTenantIdAndProductCode(tenantId, productCode)
                             .orElseGet(() -> productRepository.save(Product.builder()
                                     .id(UUID.randomUUID().toString())
+                                    .tenantId(tenantId)
                                     .productCode(productCode)
                                     .productName(rawName)
                                     .department(aiData.getDepartment())
@@ -114,9 +119,10 @@ public class IngestionServiceImpl implements IngestionService {
                                     .material(aiData.getMaterial())
                                     .build()));
 
-                    ProductVariant variant = productVariantRepository.findBySku(sku)
+                    ProductVariant variant = productVariantRepository.findByTenantIdAndSku(tenantId, sku)
                             .orElseGet(() -> productVariantRepository.save(ProductVariant.builder()
                                     .id(UUID.randomUUID().toString())
+                                    .tenantId(tenantId)
                                     .productId(product.getId())
                                     .sku(sku)
                                     .colorFamily(aiData.getColorFamily())
@@ -127,6 +133,7 @@ public class IngestionServiceImpl implements IngestionService {
                     InventoryFact fact = inventoryFactRepository.findByVariantIdAndWorkspaceId(variant.getId(), workspaceId)
                             .orElse(InventoryFact.builder()
                                     .id(UUID.randomUUID().toString())
+                                    .tenantId(tenantId)
                                     .variantId(variant.getId())
                                     .workspaceId(workspaceId)
                                     .quantityInStock(0)
@@ -153,7 +160,7 @@ public class IngestionServiceImpl implements IngestionService {
 
             updateJobStatus(job, parsedRecords.size(), successCount, "DONE", null);
 
-            sendSuccessEvent(workspaceId, parsedRecords.size(), completenessScore, new ArrayList<>(allMissingFields));
+            sendSuccessEvent(tenantId, workspaceId, parsedRecords.size(), completenessScore, new ArrayList<>(allMissingFields));
             log.info("✅ Hoàn tất UPSERT file {}. Thành công: {}. Điểm chất lượng Data: {}", fileName, successCount, completenessScore);
 
         } catch (Exception ex) {
@@ -164,8 +171,8 @@ public class IngestionServiceImpl implements IngestionService {
     }
 
     @Override
-    public WorkspaceInventoryResponse exportWorkspaceData(String workspaceId) {
-        List<InventoryFact> facts = inventoryFactRepository.findByWorkspaceId(workspaceId);
+    public WorkspaceInventoryResponse exportWorkspaceData(String tenantId, String workspaceId) {
+        List<InventoryFact> facts = inventoryFactRepository.findByTenantIdAndWorkspaceId(tenantId, workspaceId);
         if (facts.isEmpty()) {
             return WorkspaceInventoryResponse.builder()
                     .products(Collections.emptyList())
@@ -187,9 +194,10 @@ public class IngestionServiceImpl implements IngestionService {
                 .build();
     }
 
-    private IngestionJob initOrGetJob(String workspaceId) {
+    private IngestionJob initOrGetJob(String tenantId, String workspaceId) {
         IngestionJob job = ingestionJobRepository.findByWorkspaceId(workspaceId).orElse(new IngestionJob());
         job.setId(job.getId() == null ? UUID.randomUUID().toString() : job.getId());
+        job.setTenantId(tenantId);
         job.setWorkspaceId(workspaceId);
         job.setStatus("PROCESSING");
 
@@ -221,8 +229,9 @@ public class IngestionServiceImpl implements IngestionService {
         return missing;
     }
 
-    private void sendSuccessEvent(String workspaceId, int totalItems, double completenessScore, List<String> missingFields) {
+    private void sendSuccessEvent(String tenantId, String workspaceId, int totalItems, double completenessScore, List<String> missingFields) {
         InventoryIngestionCompletedPayload payload = InventoryIngestionCompletedPayload.builder()
+                .tenantId(tenantId)
                 .workspaceId(workspaceId)
                 .totalItems(totalItems)
                 .completenessScore(completenessScore)

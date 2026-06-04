@@ -12,6 +12,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class InventoryIngestionCompletedPayload {
+    @JsonProperty("tenant_id")
+    private String tenantId;
     @JsonProperty("workspace_id")
     private String workspaceId;
     @JsonProperty("total_items")

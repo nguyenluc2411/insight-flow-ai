@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class InventoryFileUploadedPayload {
+    @JsonProperty("tenant_id")
+    private String tenantId;
     @JsonProperty("workspace_id")
     private String workspaceId;
     @JsonProperty("user_id")

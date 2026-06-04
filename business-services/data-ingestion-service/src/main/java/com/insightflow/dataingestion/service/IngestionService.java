@@ -6,5 +6,5 @@ import com.insightflow.dataingestion.dto.response.WorkspaceInventoryResponse;
 
 public interface IngestionService {
     void handleFileUploadedEvent(EventEnvelope<InventoryFileUploadedPayload> envelope);
-    WorkspaceInventoryResponse exportWorkspaceData(String workspaceId);
+    WorkspaceInventoryResponse exportWorkspaceData(String tenantId, String workspaceId);
 }

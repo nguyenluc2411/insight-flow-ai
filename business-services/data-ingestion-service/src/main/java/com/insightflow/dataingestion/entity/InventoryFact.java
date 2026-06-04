@@ -22,6 +22,9 @@ public class InventoryFact extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
+    @Column(name = "tenant_id", length = 36, nullable = false)
+    private String tenantId;
+
     @Column(name = "variant_id", length = 36, nullable = false)
     private String variantId;
 
