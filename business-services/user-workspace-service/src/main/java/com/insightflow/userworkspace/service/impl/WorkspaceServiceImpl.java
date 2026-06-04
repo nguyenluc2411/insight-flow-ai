@@ -7,7 +7,10 @@ import com.insightflow.userworkspace.dto.response.CreateWorkspaceResponse;
 import com.insightflow.userworkspace.dto.response.WorkspaceResponse;
 import com.insightflow.userworkspace.entity.FileMetadata;
 import com.insightflow.userworkspace.entity.Workspace;
-import com.insightflow.userworkspace.exception.ApiException;
+import com.insightflow.common.web.exception.BusinessException;
+import com.insightflow.common.web.exception.ErrorCode;
+import com.insightflow.common.web.exception.ResourceNotFoundException;
+import com.insightflow.common.web.exception.UnauthorizedException;
 import com.insightflow.userworkspace.messaging.InventoryEventProducer;
 import com.insightflow.userworkspace.repository.FileMetadataRepository;
 import com.insightflow.userworkspace.repository.WorkspaceRepository;
@@ -49,7 +52,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     private UserContext requireContext() {
         UserContext ctx = UserContextHolder.get();
         if (ctx == null || ctx.tenantId() == null) {
-            throw new ApiException("Thiếu thông tin xác thực (tenant) — request phải đi qua gateway", "UNAUTHENTICATED");
+            throw new UnauthorizedException("Thiếu thông tin xác thực (tenant) — request phải đi qua gateway");
         }
         return ctx;
     }
@@ -60,7 +63,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
         // 🛡️ LỚP GIÁP GÁC CỔNG: Chặn rác ngay tại cửa khi thấy sai đuôi mở rộng file
         String nameLower = request.getFileName().toLowerCase();
         if (!nameLower.endsWith(".csv") && !nameLower.endsWith(".xlsx")) {
-            throw new ApiException("Hệ thống chỉ chấp nhận định dạng file .csv hoặc .xlsx!", "INVALID_FILE_TYPE");
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "Hệ thống chỉ chấp nhận định dạng file .csv hoặc .xlsx!");
         }
 
         UserContext ctx = requireContext();
@@ -103,10 +106,10 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     @Transactional
     public void confirmUpload(String workspaceId) {
         Workspace workspace = workspaceRepository.findByIdAndTenantId(workspaceId, requireContext().tenantId().toString())
-                .orElseThrow(() -> new ApiException("Không tìm thấy phiên làm việc này", "WORKSPACE_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiên làm việc này"));
 
         FileMetadata metadata = fileMetadataRepository.findByWorkspaceId(workspaceId)
-                .orElseThrow(() -> new ApiException("Không tìm thấy siêu dữ liệu của file", "FILE_METADATA_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy siêu dữ liệu của file"));
 
         // 🚨 CHỐT CHẶN KIỂM TRA S3: Phải thấy file vật lý mới cho phép chạy tiếp!
         try {
@@ -125,9 +128,9 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
         } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException e) {
             // NẾU FILE KHÔNG CÓ TRÊN S3 -> QUĂNG LỖI 400 NGAY LẬP TỨC!
-            throw new ApiException("File chưa được tải lên S3! Vui lòng kiểm tra lại bước Upload (API 2).", "FILE_NOT_ON_S3");
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "File chưa được tải lên S3! Vui lòng kiểm tra lại bước Upload (API 2).");
         } catch (Exception e) {
-            throw new ApiException("Lỗi kết nối đến S3 để kiểm tra file: " + e.getMessage(), "S3_CONNECTION_ERROR");
+            throw new BusinessException(ErrorCode.DOWNSTREAM_ERROR, "Lỗi kết nối đến S3 để kiểm tra file: " + e.getMessage());
         }
 
         // ✅ Qua được đoạn trên nghĩa là S3 ĐÃ CÓ FILE. Lúc này mới cấp phép chạy ngầm.
@@ -161,7 +164,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     @Transactional(readOnly = true)
     public WorkspaceResponse getWorkspace(String workspaceId) {
         Workspace workspace = workspaceRepository.findByIdAndTenantId(workspaceId, requireContext().tenantId().toString())
-                .orElseThrow(() -> new ApiException("Không tìm thấy phiên làm việc này", "WORKSPACE_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiên làm việc này"));
 
         return WorkspaceResponse.builder()
                 .id(workspace.getId())

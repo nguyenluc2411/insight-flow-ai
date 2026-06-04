@@ -125,7 +125,8 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9000/minio/health/live || exit 1"]
+      # Newer MinIO images ship curl (not wget); use it for the liveness probe.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
