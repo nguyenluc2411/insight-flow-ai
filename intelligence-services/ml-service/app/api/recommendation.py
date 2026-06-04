@@ -1,4 +1,5 @@
 """Recommendation endpoints."""
+
 from __future__ import annotations
 
 import logging
@@ -26,7 +27,9 @@ router = APIRouter(prefix="/api/v1/ml/recommendations", tags=["Recommendation"])
 @router.get("", response_model=PagedRecommendationResponse)
 def list_recommendations(
     x_tenant_id: UUID = Header(..., alias="X-Tenant-Id"),
-    action: Literal["CLEARANCE", "RESTOCK", "PROMOTE", "OK"] | None = Query(default=None),
+    action: Literal["CLEARANCE", "RESTOCK", "PROMOTE", "OK"] | None = Query(
+        default=None
+    ),
     priority: Literal["HIGH", "MEDIUM", "LOW"] | None = Query(default=None),
     page: int = Query(default=0, ge=0),
     size: int = Query(default=20, ge=1, le=100),

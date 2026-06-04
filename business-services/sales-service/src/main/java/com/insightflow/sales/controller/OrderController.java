@@ -4,6 +4,7 @@ import com.insightflow.sales.dto.request.CreateOrderRequest;
 import com.insightflow.sales.dto.response.SalesOrderResponse;
 import com.insightflow.sales.service.OrderService;
 import com.insightflow.security.CurrentUser;
+import com.insightflow.security.RequiresPermission;
 import com.insightflow.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,6 +28,7 @@ public class OrderController {
     private final OrderService orderService;
 
     @GetMapping
+    @RequiresPermission("sales:read")
     @Operation(summary = "List orders", description = "Paginated order list for the tenant")
     @ApiResponse(responseCode = "200", description = "Success")
     public Page<SalesOrderResponse> listOrders(
@@ -36,6 +38,7 @@ public class OrderController {
     }
 
     @PostMapping
+    @RequiresPermission("sales:write")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create order", description = "Creates a new order in pending status")
     @ApiResponse(responseCode = "201", description = "Order created")
@@ -47,6 +50,7 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
+    @RequiresPermission("sales:read")
     @Operation(summary = "Get order by ID")
     @ApiResponse(responseCode = "200", description = "Success")
     @ApiResponse(responseCode = "404", description = "Not found")
@@ -57,6 +61,7 @@ public class OrderController {
     }
 
     @PostMapping("/{id}/complete")
+    @RequiresPermission("sales:write")
     @Operation(summary = "Complete order",
                description = "Transitions order from pending to completed. Publishes sales.order.completed to Kafka.")
     @ApiResponse(responseCode = "200", description = "Order completed")

@@ -261,8 +261,6 @@ services:
       EUREKA_URL: http://discovery-server:8761/eureka/
       CONFIG_SERVER_URL: http://config-server:8888
       # Route email to MailHog container instead of localhost
-      MAIL_HOST: mailhog
-      MAIL_PORT: 1025
       MAIL_FROM: ${MAIL_FROM:-noreply@insightflow.ai}
     depends_on:
       postgres:

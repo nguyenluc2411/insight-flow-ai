@@ -1,4 +1,5 @@
 """Rule-based recommendation engine for inventory actions."""
+
 from __future__ import annotations
 
 import logging
@@ -57,7 +58,9 @@ class RuleBasedRecommender:
             return 0.0
         return float(total) / max(days, 1)
 
-    def calculate_stock_age(self, db: Session, tenant_id: UUID, variant_id: UUID) -> int:
+    def calculate_stock_age(
+        self, db: Session, tenant_id: UUID, variant_id: UUID
+    ) -> int:
         snap = (
             db.query(InventorySnapshot)
             .filter(
@@ -186,7 +189,9 @@ class RuleBasedRecommender:
             results.append(rec)
 
         db.commit()
-        logger.info("Generated %d recommendations for tenant=%s", len(results), tenant_id)
+        logger.info(
+            "Generated %d recommendations for tenant=%s", len(results), tenant_id
+        )
         return results
 
 

@@ -108,6 +108,10 @@ public class InventoryService {
     private void publishInventoryEvent(UUID tenantId, ProductVariant variant, UUID locationId,
                                        String movementType, int quantityChange, int quantityOnHand,
                                        String referenceType, UUID referenceId) {
+        // Raw category (name + slug) for ml-service cold-start mapping.
+        // Lazy association is safe here: called within the inventory transaction.
+        var category = variant.getProduct().getCategory();
+
         InventoryUpdatedEvent event = InventoryUpdatedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .eventType("catalog.inventory.updated")
@@ -119,6 +123,8 @@ public class InventoryService {
                 .quantityOnHand(quantityOnHand)
                 .productId(variant.getProduct().getId().toString())
                 .sku(variant.getSku())
+                .categoryName(category != null ? category.getName() : null)
+                .categorySlug(category != null ? category.getSlug() : null)
                 .referenceType(referenceType)
                 .referenceId(referenceId != null ? referenceId.toString() : null)
                 .occurredAt(Instant.now())

@@ -1,30 +1,39 @@
 package com.insightflow.notification.dto.response;
 
-import com.insightflow.notification.entity.Notification;
+import com.insightflow.notification.enums.InboxStatus;
+import com.insightflow.notification.enums.NotificationSeverity;
+import com.insightflow.notification.enums.NotificationStatus;
+import com.insightflow.notification.enums.NotificationType;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
-public record NotificationResponse(
-        UUID id,
-        UUID tenantId,
-        String type,
-        String channel,
-        String title,
-        String body,
-        Map<String, Object> metadata,
-        boolean isRead,
-        Instant sentAt,
-        Instant createdAt
-) {
-    public static NotificationResponse from(Notification n) {
-        return new NotificationResponse(
-                n.getId(), n.getTenantId(),
-                n.getType(), n.getChannel(),
-                n.getTitle(), n.getBody(),
-                n.getMetadata(), n.isRead(),
-                n.getSentAt(), n.getCreatedAt()
-        );
-    }
+@Getter
+@Builder
+@AllArgsConstructor
+public class NotificationResponse {
+    private UUID id;
+    private UUID eventId;
+    private UUID correlationId;
+    private String sourceService;
+    private NotificationType notificationType;
+    private NotificationSeverity severity;
+    private NotificationStatus status;
+    private InboxStatus inboxStatus;
+    private UUID recipientId;
+    private String title;
+    private String message;
+    private Map<String, Object> payload;
+    private String aggregationKey;
+    private Instant readAt;
+    private Instant archivedAt;
+    private Instant deletedAt;
+    private Instant expiresAt;
+    private Instant createdAt;
+    private Instant updatedAt;
 }
+

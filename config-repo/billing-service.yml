@@ -1,0 +1,17 @@
+# =============================================================================
+# billing-service.yml — Config-server overrides for billing-service
+# Port: 8086
+# =============================================================================
+
+spring:
+  jpa:
+    properties:
+      hibernate:
+        default_schema: billing_db
+  flyway:
+    schemas: billing_db
+    default-schema: billing_db
+
+app:
+  service-jwt:
+    secret: ${SERVICE_JWT_SECRET:insightflow-service-jwt-secret-change-in-prod!!}

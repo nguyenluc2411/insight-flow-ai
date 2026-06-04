@@ -1,0 +1,554 @@
+openapi: "3.1.0"
+info:
+  title: Billing Service API
+  description: |
+    Subscription management, entitlement checks, and usage tracking for Insight Flow AI.
+
+    ## Plan Tiers
+    | Code | Price | Trial |
+    |------|-------|-------|
+    | free | 0 | — |
+    | trial | 0 | 30 days (Advanced features) |
+    | basic | 199,000 VND/mo | — |
+    | advanced | 499,000 VND/mo | — |
+    | pro | 699,000 VND/mo | — |
+
+    ## Upgrade Flow (MVP — no payment gateway)
+    1. `POST /subscriptions/upgrade-request` — tenant submits request
+    2. Ops reviews via internal endpoint `POST /internal/upgrade-requests/{id}/approve`
+    3. Subscription switches immediately upon approval
+
+    ## Internal Endpoints
+    `/api/v1/internal/**` requires a **service JWT** (`Authorization: Bearer <service-token>`).
+    These are called by api-gateway (quota check) and ops tooling — not by the frontend.
+
+  version: "1.0.0"
+  contact:
+    name: Insight Flow AI
+    email: dev@insightflow.ai
+
+servers:
+  - url: http://localhost:8080/api/v1/billing
+    description: Via API Gateway (dev)
+  - url: http://localhost:8086/api/v1/billing
+    description: Direct (dev)
+
+tags:
+  - name: Packages
+    description: Available subscription packages and plans
+  - name: Subscriptions
+    description: Current tenant subscription management
+  - name: Entitlements
+    description: Feature access and usage tracking
+  - name: Billing Admin
+    description: Billing history for current tenant
+  - name: Internal
+    description: Service-to-service endpoints (requires service JWT)
+
+paths:
+  /packages:
+    get:
+      operationId: listPackages
+      summary: List all active packages
+      tags: [Packages]
+      responses:
+        '200':
+          description: List of packages with plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PackageResponse'
+
+  /packages/{code}:
+    get:
+      operationId: getPackageByCode
+      summary: Get package details by code
+      tags: [Packages]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            example: advanced
+      responses:
+        '200':
+          description: Package details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /subscriptions/current:
+    get:
+      operationId: getCurrentSubscription
+      summary: Get the current active subscription for the caller's tenant
+      tags: [Subscriptions]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /subscriptions/upgrade-request:
+    post:
+      operationId: submitUpgradeRequest
+      summary: Submit a manual upgrade request (ops approves — no payment in MVP)
+      tags: [Subscriptions]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUpgradeRequestRequest'
+      responses:
+        '202':
+          description: Upgrade request submitted, pending ops approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpgradeRequestResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /entitlements:
+    get:
+      operationId: getEntitlements
+      summary: Get all feature entitlements for current tenant
+      tags: [Entitlements]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Entitlement summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /entitlements/features/{featureCode}:
+    get:
+      operationId: checkFeatureAccess
+      summary: Check if current tenant has access to a specific feature
+      tags: [Entitlements]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: featureCode
+          in: path
+          required: true
+          schema:
+            type: string
+            example: forecast.advanced
+      responses:
+        '200':
+          description: Feature access result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureAccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /entitlements/usage:
+    get:
+      operationId: getUsageStats
+      summary: Get today's usage statistics for current tenant
+      tags: [Entitlements]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Usage statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/history:
+    get:
+      operationId: getBillingHistory
+      summary: Get billing history for current tenant
+      tags: [Billing Admin]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated billing history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBillingHistory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+x-internal-note: >
+  Internal endpoints below are served at /api/v1/internal/** (not under /billing).
+  They require service JWT and are not routed through the public gateway path.
+
+x-paths-internal:
+  /tenants/{tenantId}/limits:
+    get:
+      operationId: getTenantLimits
+      summary: Get rate limits for a tenant (service-to-service)
+      tags: [Internal]
+      security:
+        - ServiceJWT: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Rate limit info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitResponse'
+
+  /tenants/{tenantId}/usage/check:
+    post:
+      operationId: checkAndConsumeApiCall
+      summary: Count one API call and enforce daily quota (service-to-service)
+      tags: [Internal]
+      security:
+        - ServiceJWT: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Updated rate limit after consuming one call
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitResponse'
+        '429':
+          description: Daily quota exceeded
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: User JWT issued by auth-service (validated by api-gateway)
+    ServiceJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Service-to-service JWT (must match SERVICE_JWT_SECRET)
+
+  schemas:
+    PackageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: advanced
+        version:
+          type: integer
+        name:
+          type: string
+          example: Advanced
+        description:
+          type: string
+        displayOrder:
+          type: integer
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanResponse'
+        featureCodes:
+          type: array
+          items:
+            type: string
+          example: [forecast.advanced, inventory.alerts, export.csv]
+
+    PlanResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        packageId:
+          type: string
+          format: uuid
+        billingCycle:
+          type: string
+          enum: [MONTHLY, YEARLY]
+        priceVnd:
+          type: integer
+          example: 499000
+        currency:
+          type: string
+          example: VND
+        trialDays:
+          type: integer
+          example: 30
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+
+    SubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        priceAtSubscription:
+          type: integer
+        featuresAtSubscription:
+          type: array
+          items:
+            type: string
+        limitsAtSubscription:
+          type: object
+          additionalProperties: true
+        planVersion:
+          type: integer
+        status:
+          type: string
+          enum: [ACTIVE, TRIAL, EXPIRED, CANCELLED]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        autoRenew:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EntitlementResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        subscriptionStatus:
+          type: string
+          enum: [ACTIVE, TRIAL, EXPIRED, CANCELLED]
+        featureCodes:
+          type: array
+          items:
+            type: string
+        cached:
+          type: boolean
+
+    FeatureAccessResponse:
+      type: object
+      properties:
+        featureCode:
+          type: string
+        hasAccess:
+          type: boolean
+        reason:
+          type: string
+          example: Feature not included in current plan
+
+    UsageStatusResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        usageDate:
+          type: string
+          format: date
+        apiCallsCount:
+          type: integer
+        maxApiCallsPerDay:
+          type: integer
+        productExportsCount:
+          type: integer
+        reportsGeneratedCount:
+          type: integer
+        forecastsExecutedCount:
+          type: integer
+        storageUsedBytes:
+          type: integer
+          format: int64
+        maxStorageGb:
+          type: integer
+
+    RateLimitResponse:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        remaining:
+          type: integer
+        limit:
+          type: integer
+        rateLimitPerMinute:
+          type: integer
+
+    UpgradeRequestResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        requestedPackageCode:
+          type: string
+        billingCycle:
+          type: string
+          enum: [MONTHLY, YEARLY]
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+        note:
+          type: string
+        resolvedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateUpgradeRequestRequest:
+      type: object
+      required: [packageCode]
+      properties:
+        packageCode:
+          type: string
+          example: pro
+        billingCycle:
+          type: string
+          enum: [MONTHLY, YEARLY]
+          default: MONTHLY
+
+    BillingHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        subscriptionId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          example: PLAN_UPGRADED
+        fromPackageCode:
+          type: string
+        toPackageCode:
+          type: string
+        amountVnd:
+          type: integer
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    PageBillingHistory:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillingHistory'
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
