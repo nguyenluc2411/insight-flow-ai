@@ -105,16 +105,11 @@
             <version>1.0.0</version>
         </dependency>
 
-        <!-- FILE PARSING -->
+        <!-- FILE PARSING — shared DynamicFileParser (brings poi-ooxml + commons-csv transitively) -->
         <dependency>
-            <groupId>org.apache.poi</groupId>
-            <artifactId>poi-ooxml</artifactId>
-            <version>5.2.5</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-csv</artifactId>
-            <version>1.10.0</version>
+            <groupId>com.insightflow</groupId>
+            <artifactId>common-fileparse</artifactId>
+            <version>1.0.0</version>
         </dependency>
 
         <!-- OBJECT STORAGE (MinIO via S3-compatible SDK) -->

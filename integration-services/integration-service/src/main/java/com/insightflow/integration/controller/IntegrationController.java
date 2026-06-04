@@ -1,11 +1,13 @@
 package com.insightflow.integration.controller;
 
+import com.insightflow.integration.dto.ImportResultDto;
 import com.insightflow.integration.dto.request.CreateConnectorRequest;
 import com.insightflow.integration.dto.response.ConnectorConfigResponse;
 import com.insightflow.integration.dto.response.SyncJobResponse;
 import com.insightflow.integration.entity.SyncJob;
 import com.insightflow.integration.mapper.SyncJobMapper;
 import com.insightflow.integration.service.ConnectorConfigService;
+import com.insightflow.integration.service.ImportService;
 import com.insightflow.integration.service.SyncOrchestratorService;
 import com.insightflow.security.CurrentUser;
 import com.insightflow.security.UserContext;
@@ -37,6 +39,7 @@ public class IntegrationController {
     private final ConnectorConfigService configService;
     private final SyncOrchestratorService orchestrator;
     private final SyncJobMapper syncJobMapper;
+    private final ImportService importService;
 
     @GetMapping
     @Operation(summary = "List connector configs for the tenant")
@@ -107,18 +110,16 @@ public class IntegrationController {
     @PostMapping("/import")
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(summary = "Upload inventory/sales file for import",
-               description = "Accepts CSV, XLSX, or JSON. Returns a fileId for status polling.")
-    @ApiResponse(responseCode = "202", description = "File accepted for processing")
-    public Map<String, Object> importFile(
+               description = "Accepts CSV/XLSX/XLS. Parses rows and emits product + order "
+                       + "synced events so file data flows through the same catalog → ml pipeline as a POS sync.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "202", description = "File parsed and events emitted"),
+            @ApiResponse(responseCode = "400", description = "Unsupported format or too many invalid rows")
+    })
+    public ImportResultDto importFile(
             @CurrentUser UserContext user,
             @RequestParam("file") MultipartFile file) {
-        String fileId = UUID.randomUUID().toString();
-        return Map.of(
-                "fileId", fileId,
-                "fileName", file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload",
-                "status", "processing",
-                "message", "File received — processing will complete shortly"
-        );
+        return importService.importFile(user.tenantId(), file);
     }
 
     @GetMapping("/import/{fileId}")

@@ -1,11 +1,10 @@
-package com.insightflow.dataingestion.util;
+package com.insightflow.common.fileparse;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.poi.ss.usermodel.*;
-import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -15,8 +14,15 @@ import java.text.Normalizer;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * Dynamic file parser shared across services (data-ingestion, integration).
+ *
+ * <p>Auto-detects file extension, parses CSV/XLSX/XLS into a list of row maps keyed
+ * by normalized header names (diacritics stripped, snake_cased). Numeric columns are
+ * sanitized to digit-only strings. Registered as a Spring bean via
+ * {@code FileParseAutoConfiguration} — inject it like any other bean.
+ */
 @Slf4j
-@Component
 public class DynamicFileParser {
 
     /**
@@ -124,7 +130,7 @@ public class DynamicFileParser {
         return records;
     }
 
-    // ================== CÁC HÀM VŨ KHÍ BỔ TRỢ (Giữ nguyên logic cực mượt của Bro) ==================
+    // ================== CÁC HÀM BỔ TRỢ ==================
 
     /**
      * Biến mọi thể loại tên cột về 1 chuẩn: "Giá Bán" -> "gia_ban", "Size (EU)" -> "size_eu"
@@ -163,7 +169,13 @@ public class DynamicFileParser {
             return null;
         }
 
-        // Nếu AI nhận diện cột này chứa tiền hoặc số lượng, nó sẽ gọt sạch chữ
+        // KHÔNG gọt cột ngày/giờ — phải giữ nguyên để parse được.
+        // (vd: "ngay_giao_dich" chứa chuỗi con "gia" nên dễ bị nhận nhầm là cột số)
+        if (colName.contains("ngay") || colName.contains("date") || colName.contains("time")) {
+            return value;
+        }
+
+        // Nếu cột này chứa tiền hoặc số lượng, gọt sạch chữ
         // VD: "150.000 VNĐ" -> "150000"
         if (colName.contains("gia") || colName.contains("price") || colName.contains("cost") ||
                 colName.contains("soluong") || colName.contains("quantity") || colName.contains("ton")) {

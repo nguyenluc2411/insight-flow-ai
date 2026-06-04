@@ -180,6 +180,13 @@
             <version>1.0.0</version>
         </dependency>
 
+        <!-- Shared file parsing — DynamicFileParser (brings poi-ooxml + commons-csv transitively) -->
+        <dependency>
+            <groupId>com.insightflow</groupId>
+            <artifactId>common-fileparse</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <!-- ============================================================
              TEST
              ============================================================ -->

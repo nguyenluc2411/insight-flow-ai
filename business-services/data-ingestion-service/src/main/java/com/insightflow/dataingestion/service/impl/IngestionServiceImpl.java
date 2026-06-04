@@ -13,7 +13,7 @@ import com.insightflow.dataingestion.messaging.InventoryEventProducer;
 import com.insightflow.dataingestion.repository.*;
 import com.insightflow.dataingestion.service.IngestionService;
 import com.insightflow.dataingestion.service.S3StorageService;
-import com.insightflow.dataingestion.util.DynamicFileParser;
+import com.insightflow.common.fileparse.DynamicFileParser;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
