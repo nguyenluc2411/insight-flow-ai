@@ -11,6 +11,6 @@ public interface RecommendationHistoryRepository extends JpaRepository<Recommend
 
     boolean existsByWorkspaceIdAndStatus(String workspaceId, String status);
 
-    // Lấy bản ghi tư vấn mới nhất của một cửa hàng
-    Optional<RecommendationHistory> findTopByWorkspaceIdOrderByCreatedAtDesc(String workspaceId);
+    // Lấy bản ghi tư vấn mới nhất của một cửa hàng — scope theo tenant.
+    Optional<RecommendationHistory> findTopByTenantIdAndWorkspaceIdOrderByCreatedAtDesc(String tenantId, String workspaceId);
 }

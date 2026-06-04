@@ -41,6 +41,7 @@ create_topic inventory.file.uploaded
 create_topic inventory.ingestion.completed
 create_topic inventory.ingestion.failed
 create_topic inventory.recommendation.generated
+create_topic inventory.recommendation.failed
 
 echo "All topics created."
 kafka-topics --bootstrap-server "$BROKER" --list

@@ -18,14 +18,16 @@ public class RecommendationHistory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "tenant_id", length = 36, nullable = false)
+    private String tenantId;
+
     @Column(name = "workspace_id", nullable = false)
     private String workspaceId;
 
     @Column(name = "status")
     private String status; // PROCESSING, DONE, ERROR
 
-    // ĐÃ SỬA THÀNH LONGTEXT ĐỂ KHÔNG BAO GIỜ BỊ TRÀN DATA
-    @Column(name = "recommendation_result", columnDefinition = "LONGTEXT")
+    @Column(name = "recommendation_result", columnDefinition = "text")
     private String recommendationResult;
 
     @Column(name = "error_log", columnDefinition = "TEXT")

@@ -17,14 +17,17 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class AiRecommendation extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID) // 👉 THÊM DÒNG NÀY VÀO
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
+
+    @Column(name = "tenant_id", length = 36, nullable = false)
+    private String tenantId;
 
     @Column(name = "workspace_id", length = 36, nullable = false, unique = true)
     private String workspaceId;
 
-    // Lưu trữ nguyên cục JSON trả về từ AI (có thể rất dài nên dùng LONGTEXT)
-    @Column(name = "recommendation_json", columnDefinition = "LONGTEXT")
+    // Lưu trữ nguyên cục JSON trả về từ AI (có thể rất dài)
+    @Column(name = "recommendation_json", columnDefinition = "text")
     private String recommendationJson;
 
     // Trạng thái chạy AI: PENDING, PROCESSING, COMPLETED, FAILED

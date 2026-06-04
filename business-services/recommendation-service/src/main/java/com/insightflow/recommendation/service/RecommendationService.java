@@ -5,5 +5,5 @@ import com.insightflow.recommendation.entity.RecommendationHistory;
 
 public interface RecommendationService {
     void processRecommendation(InventoryIngestionCompletedPayload payload);
-    RecommendationHistory getRecommendationByWorkspace(String workspaceId);
+    RecommendationHistory getRecommendationByWorkspace(String tenantId, String workspaceId);
 }

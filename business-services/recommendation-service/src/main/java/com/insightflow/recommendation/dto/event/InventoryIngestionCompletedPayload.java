@@ -8,6 +8,8 @@ import java.util.List;
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class InventoryIngestionCompletedPayload {
+    @JsonProperty("tenant_id")
+    private String tenantId;
     @JsonProperty("workspace_id")
     private String workspaceId;
     @JsonProperty("completeness_score")

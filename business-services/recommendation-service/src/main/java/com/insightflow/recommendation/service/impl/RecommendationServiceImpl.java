@@ -28,14 +28,19 @@ public class RecommendationServiceImpl implements RecommendationService {
     private final RecommendationEventProducer eventProducer;
 
     @Override
-    public RecommendationHistory getRecommendationByWorkspace(String workspaceId) {
-        return historyRepository.findTopByWorkspaceIdOrderByCreatedAtDesc(workspaceId)
+    public RecommendationHistory getRecommendationByWorkspace(String tenantId, String workspaceId) {
+        return historyRepository.findTopByTenantIdAndWorkspaceIdOrderByCreatedAtDesc(tenantId, workspaceId)
                 .orElseThrow(() -> new RuntimeException("Chưa có dữ liệu tư vấn nào cho Workspace này."));
     }
 
     @Override
     public void processRecommendation(InventoryIngestionCompletedPayload payload) {
+        String tenantId = payload.getTenantId();
         String workspaceId = payload.getWorkspaceId();
+        if (tenantId == null || tenantId.isBlank()) {
+            log.error("❌ Bỏ qua event: thiếu tenant_id cho workspace {}", workspaceId);
+            return;
+        }
         boolean isProcessing = historyRepository.existsByWorkspaceIdAndStatus(workspaceId, "PROCESSING");
         if (isProcessing) {
             log.warn("⚠️ Bỏ qua event. Workspace {} đang được AI xử lý rồi!", workspaceId);
@@ -43,6 +48,7 @@ public class RecommendationServiceImpl implements RecommendationService {
         }
 
         RecommendationHistory history = historyRepository.save(RecommendationHistory.builder()
+                .tenantId(tenantId)
                 .workspaceId(workspaceId)
                 .status("PROCESSING")
                 .createdAt(OffsetDateTime.now())
@@ -50,7 +56,7 @@ public class RecommendationServiceImpl implements RecommendationService {
         String rawAiResponse = null;
 
         try {
-            WorkspaceInventoryResponse inventoryData = dataIngestionClient.exportWorkspaceData(workspaceId);
+            WorkspaceInventoryResponse inventoryData = dataIngestionClient.exportWorkspaceData(workspaceId, tenantId);
             if (inventoryData == null || inventoryData.getProducts() == null || inventoryData.getProducts().isEmpty()) {
                 throw new RuntimeException("Dữ liệu kho rỗng hoặc API 8082 không phản hồi.");
             }

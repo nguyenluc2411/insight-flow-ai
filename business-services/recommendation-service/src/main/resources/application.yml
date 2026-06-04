@@ -1,26 +1,34 @@
 server:
-  port: 8084
+  port: 8091
 
 spring:
   application:
     name: recommendation-service
-
-
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
   datasource:
-    url: jdbc:mysql://localhost:3306/insightflow_ai_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: root
-    password: 12345
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${RECOMMENDATION_DB_NAME:insightflow_recommendation}
+    username: ${POSTGRES_USER:insightflow}
+    password: ${POSTGRES_PASSWORD:insightflow}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: recommendation-service-pool
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
+    open-in-view: false
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: recommendation_db
         format_sql: true
-    show-sql: true
-
-  # Cấu hình Kafka Consumer lắng nghe event từ port 8082
+  flyway:
+    enabled: true
+    schemas: recommendation_db
+    default-schema: recommendation_db
+    create-schemas: true
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: ai-recommendation-group
       auto-offset-reset: earliest
@@ -29,11 +37,23 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
 
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
 
-# ... (các cấu hình cũ của spring, kafka, ai giữ nguyên) ...
+# Data-ingestion service (Feign) — must point at its new port 8088.
+ingestion-service:
+  base-url: ${DATA_INGESTION_URL:http://localhost:8088}
 
-app:
-  services:
-    # Nếu chạy local máy dev, nó lấy localhost:8082
-    # Nếu chạy Docker/Production, nó sẽ lấy giá trị từ biến môi trường DATA_INGESTION_URL
-    data-ingestion-url: ${DATA_INGESTION_URL:http://localhost:8082}
+# Google Gemini — API key MUST be provided via env (no default committed).
+ai:
+  gemini:
+    url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent}
+    api-key: ${GEMINI_API_KEY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
