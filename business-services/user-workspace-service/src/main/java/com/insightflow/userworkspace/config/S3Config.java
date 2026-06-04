@@ -8,6 +8,7 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
@@ -27,10 +28,17 @@ public class S3Config {
     @Value("${aws.s3.endpoint-url:#{null}}")
     private String endpointUrl;
 
+    // MinIO serves S3 in path-style (http://host:9000/bucket/key); virtual-hosted
+    // style (bucket.host) does not resolve on localhost — force path-style.
+    private S3Configuration pathStyle() {
+        return S3Configuration.builder().pathStyleAccessEnabled(true).build();
+    }
+
     @Bean
     public S3Client s3Client() {
         S3ClientBuilder builder = S3Client.builder()
                 .region(Region.of(region))
+                .serviceConfiguration(pathStyle())
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)
                 ));
@@ -42,11 +50,11 @@ public class S3Config {
         return builder.build();
     }
 
-    // ✅ VÁ LỖI BẢO MẬT: Thêm Bean Presigner để nó dùng chung một bộ Key và Endpoint với S3Client
     @Bean
     public S3Presigner s3Presigner() {
         S3Presigner.Builder builder = S3Presigner.builder()
                 .region(Region.of(region))
+                .serviceConfiguration(pathStyle())
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)
                 ));
