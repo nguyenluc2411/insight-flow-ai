@@ -291,6 +291,38 @@ spring:
             rateLimiter: defaultRateLimiter
           order: 60
 
+        # ── User workspace service (file-upload sessions) ─────────────────────
+        - id: user-workspace-service
+          uri: lb://user-workspace-service
+          predicates:
+            - Path=/api/v1/workspaces/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 70
+
+        # ── Data ingestion service (parsed inventory export) ──────────────────
+        - id: data-ingestion-service
+          uri: lb://data-ingestion-service
+          predicates:
+            - Path=/api/v1/inventories/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 71
+
         # NOTE: /actuator/health and /v3/api-docs/** are served by the gateway
         # process itself — Spring Boot exposes them on port 8080 automatically.
         # No routing entries needed.
