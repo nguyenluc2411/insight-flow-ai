@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_API_URL: str = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        "gemini-1.5-flash:generateContent"
+        "gemini-2.5-flash:generateContent"
     )
     # data-ingestion-service — source of the uploaded inventory snapshot.
     DATA_INGESTION_URL: str = "http://localhost:8088"
