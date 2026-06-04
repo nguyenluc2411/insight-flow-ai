@@ -108,7 +108,6 @@ public class IngestionServiceImpl implements IngestionService {
 
                     Product product = productRepository.findByTenantIdAndProductCode(tenantId, productCode)
                             .orElseGet(() -> productRepository.save(Product.builder()
-                                    .id(UUID.randomUUID().toString())
                                     .tenantId(tenantId)
                                     .productCode(productCode)
                                     .productName(rawName)
@@ -121,7 +120,6 @@ public class IngestionServiceImpl implements IngestionService {
 
                     ProductVariant variant = productVariantRepository.findByTenantIdAndSku(tenantId, sku)
                             .orElseGet(() -> productVariantRepository.save(ProductVariant.builder()
-                                    .id(UUID.randomUUID().toString())
                                     .tenantId(tenantId)
                                     .productId(product.getId())
                                     .sku(sku)
@@ -132,7 +130,6 @@ public class IngestionServiceImpl implements IngestionService {
 
                     InventoryFact fact = inventoryFactRepository.findByVariantIdAndWorkspaceId(variant.getId(), workspaceId)
                             .orElse(InventoryFact.builder()
-                                    .id(UUID.randomUUID().toString())
                                     .tenantId(tenantId)
                                     .variantId(variant.getId())
                                     .workspaceId(workspaceId)
