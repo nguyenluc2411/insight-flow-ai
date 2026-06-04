@@ -8,6 +8,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 
@@ -41,6 +43,7 @@ public class IngestionJob extends BaseEntity {
     @Column(name = "failed_records", nullable = false)
     private Integer failedRecords;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "error_log", columnDefinition = "jsonb")
     private String errorLog;
 

@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
@@ -63,6 +65,7 @@ public class Product extends BaseEntity {
     private String season;
 
     // Cột JSON chứa mọi đặc tính râu ria (cổ áo, tay áo, cạp quần...)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "attributes", columnDefinition = "jsonb")
     private String attributes;
 }
