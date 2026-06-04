@@ -14,4 +14,4 @@ CREATE DATABASE insightflow_billing;
 CREATE DATABASE insightflow_workspace;
 CREATE DATABASE insightflow_ingestion;
 CREATE DATABASE insightflow_enrichment;
-CREATE DATABASE insightflow_recommendation;
+-- recommendation moved into ml-service (insightflow_ml); no separate DB needed.

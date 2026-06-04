@@ -16,9 +16,11 @@ from app.db.database import SessionLocal
 from app.db.models import InventorySnapshot, SalesData, VariantCategoryMap
 from app.events.schemas import (
     CatalogOrderNormalizedEvent,
+    InventoryIngestionCompletedEnvelope,
     InventoryUpdatedEvent,
     OrderCompletedEvent,
 )
+from app.services import inventory_advice
 from app.utils.category_mapper import resolve_category_key
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,7 @@ logger = logging.getLogger(__name__)
 TOPIC_SALES_COMPLETED = "sales.order.completed"
 TOPIC_INVENTORY_UPDATED = "catalog.inventory.updated"
 TOPIC_ORDER_NORMALIZED = "catalog.order.normalized"
+TOPIC_INGESTION_COMPLETED = "inventory.ingestion.completed"
 
 
 class KafkaEventConsumer:
@@ -77,14 +80,16 @@ class KafkaEventConsumer:
                     TOPIC_SALES_COMPLETED,
                     TOPIC_INVENTORY_UPDATED,
                     TOPIC_ORDER_NORMALIZED,
+                    TOPIC_INGESTION_COMPLETED,
                 ]
             )
             self._connected = True
             logger.info(
-                "Subscribed to topics: %s, %s, %s",
+                "Subscribed to topics: %s, %s, %s, %s",
                 TOPIC_SALES_COMPLETED,
                 TOPIC_INVENTORY_UPDATED,
                 TOPIC_ORDER_NORMALIZED,
+                TOPIC_INGESTION_COMPLETED,
             )
         except KafkaException:
             logger.error("Failed to initialize Kafka consumer", exc_info=True)
@@ -120,6 +125,42 @@ class KafkaEventConsumer:
             self._handle_inventory_updated(raw)
         elif topic == TOPIC_ORDER_NORMALIZED:
             self._handle_order_normalized(raw)
+        elif topic == TOPIC_INGESTION_COMPLETED:
+            self._handle_ingestion_completed(raw)
+
+    def _handle_ingestion_completed(self, raw: str) -> None:
+        """File-upload pipeline: run the Gemini inventory advisor for the workspace.
+
+        The LLM call is slow (+retries), so run it on a worker thread to avoid
+        blocking the consumer loop / stalling other events.
+        """
+        try:
+            envelope = InventoryIngestionCompletedEnvelope.model_validate_json(raw)
+        except ValidationError:
+            logger.warning(
+                "Failed to parse InventoryIngestionCompletedEnvelope", exc_info=True
+            )
+            return
+
+        payload = envelope.payload
+        if not payload.tenant_id:
+            logger.error(
+                "inventory.ingestion.completed missing tenant_id (workspace=%s) — skipping",
+                payload.workspace_id,
+            )
+            return
+
+        threading.Thread(
+            target=inventory_advice.process_ingestion_completed,
+            args=(
+                payload.tenant_id,
+                payload.workspace_id,
+                payload.completeness_score,
+                payload.missing_fields,
+            ),
+            name=f"llm-advice-{payload.workspace_id}",
+            daemon=True,
+        ).start()
 
     def _handle_sales_completed(self, raw: str) -> None:
         try:

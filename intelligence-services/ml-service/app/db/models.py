@@ -148,3 +148,30 @@ class InventorySnapshot(Base):
     updated_at = Column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
+
+
+class InventoryAdvice(Base):
+    """LLM-generated inventory strategy for a file-upload workspace.
+
+    Folded in from the former Java recommendation-service: one row per workspace
+    ingestion run, holding the raw Gemini JSON (strategy + trend forecasting).
+    """
+
+    __tablename__ = "inventory_advice"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", name="uq_inventory_advice_workspace"),
+        {"schema": SCHEMA},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    workspace_id = Column(String(36), nullable=False, index=True)
+    status = Column(String(20), nullable=False)  # PROCESSING, DONE, ERROR
+    result_json = Column(Text, nullable=True)
+    error_log = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )

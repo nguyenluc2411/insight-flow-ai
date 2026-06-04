@@ -83,3 +83,23 @@ class RecommendationCreatedEvent(BaseEvent):
     suggested_discount: Optional[int] = None
     stock_age_days: Optional[int] = None
     forecast_demand_30d: Optional[int] = None
+
+
+# --- File-upload ingestion flow (nested {envelope, payload}, not the flat BaseEvent) ---
+# Emitted by data-ingestion-service; consumed here to run the LLM inventory advisor.
+
+
+class IngestionCompletedPayload(BaseModel):
+    tenant_id: Optional[str] = None
+    workspace_id: str
+    total_items: Optional[int] = None
+    completeness_score: Optional[float] = None
+    missing_fields: Optional[List[str]] = None
+
+
+class InventoryIngestionCompletedEnvelope(BaseModel):
+    event_id: Optional[str] = None
+    event_type: Optional[str] = None
+    timestamp: Optional[str] = None
+    source: Optional[str] = None
+    payload: IngestionCompletedPayload

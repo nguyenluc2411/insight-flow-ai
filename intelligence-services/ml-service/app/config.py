@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "ml-models"
     MINIO_ENABLED: bool = True  # False = local-only (dev/test without MinIO)
 
+    # LLM inventory advisor (folded in from the former Java recommendation-service).
+    # Triggered by inventory.ingestion.completed (file-upload flow).
+    GEMINI_API_KEY: str = ""
+    GEMINI_API_URL: str = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        "gemini-1.5-flash:generateContent"
+    )
+    # data-ingestion-service — source of the uploaded inventory snapshot.
+    DATA_INGESTION_URL: str = "http://localhost:8088"
+
     class Config:
         env_file = ".env"
 

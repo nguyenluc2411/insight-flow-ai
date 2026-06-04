@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, get_db
@@ -18,6 +19,7 @@ from app.models.schemas import (
     RecommendationResponse,
     RefreshJobResponse,
 )
+from app.services import inventory_advice
 from app.services.recommendation import recommender
 
 logger = logging.getLogger(__name__)
@@ -101,3 +103,31 @@ def _run_refresh_job(job_id: UUID, tenant_id: UUID) -> None:
             logger.error("Could not update failed job status", exc_info=True)
     finally:
         session.close()
+
+
+@router.get("/advice/{workspace_id}", tags=["Recommendation"])
+def get_inventory_advice(
+    workspace_id: str,
+    x_tenant_id: UUID = Header(..., alias="X-Tenant-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """LLM inventory strategy for a file-upload workspace (tenant-scoped)."""
+    advice = inventory_advice.get_advice_by_workspace(db, x_tenant_id, workspace_id)
+    if advice is None:
+        raise HTTPException(status_code=404, detail="No advice for this workspace yet")
+
+    result = None
+    if advice.result_json:
+        try:
+            result = json.loads(advice.result_json)
+        except ValueError:
+            result = advice.result_json  # store-as-is fallback if not valid JSON
+
+    return {
+        "workspace_id": advice.workspace_id,
+        "status": advice.status,
+        "result": result,
+        "error_log": advice.error_log,
+        "created_at": advice.created_at,
+        "updated_at": advice.updated_at,
+    }
