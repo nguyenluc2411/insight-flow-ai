@@ -13,3 +13,4 @@ CREATE DATABASE insightflow_ml;
 CREATE DATABASE insightflow_billing;
 CREATE DATABASE insightflow_workspace;
 CREATE DATABASE insightflow_ingestion;
+CREATE DATABASE insightflow_enrichment;
