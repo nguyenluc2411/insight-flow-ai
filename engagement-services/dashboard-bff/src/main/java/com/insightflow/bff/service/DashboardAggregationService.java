@@ -220,7 +220,7 @@ public class DashboardAggregationService {
                 });
 
         Mono<MlPagedRecommendationsResponse> allRecs = mlClient.get()
-                .uri("/api/v1/ml/recommendations?size=200")
+                .uri("/api/v1/ml/recommendations?size=100")
                 .headers(securityHeaders(user))
                 .retrieve()
                 .bodyToMono(MlPagedRecommendationsResponse.class)
