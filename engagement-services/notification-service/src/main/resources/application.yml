@@ -18,9 +18,9 @@ spring:
         max-attempts: 6
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/insightflow?currentSchema=notification_db
-    username: postgres
-    password: 12345
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:insightflow}?currentSchema=notification_db
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
     hikari:
