@@ -111,8 +111,10 @@ public class SePayPaymentService {
             log.info("✅ [SEPAY] Đã xử lý thành công mã {} cho Tenant {}", transactionCode, tenantId);
 
         } catch (Exception e) {
-            log.error("❌ Lỗi hệ thống khi xử lý Webhook: {}", e.getMessage());
-            throw new RuntimeException(e);
+            // Rethrow so the tx rolls back and SePay retries — the idempotency guard
+            // (findBySepayId) makes the retry safe. Log with stacktrace for diagnosis.
+            log.error("❌ Lỗi hệ thống khi xử lý Webhook id={}", request.getId(), e);
+            throw new RuntimeException("SePay webhook processing failed for id=" + request.getId(), e);
         }
     }
 
