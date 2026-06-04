@@ -36,5 +36,12 @@ create_topic integration.sync.completed
 create_topic ml.forecast.generated
 create_topic ml.recommendation.created
 
+# Inventory ingestion events (file upload → parse → recommend)
+create_topic inventory.file.uploaded
+create_topic inventory.ingestion.completed
+create_topic inventory.ingestion.failed
+create_topic inventory.recommendation.generated
+create_topic inventory.recommendation.failed
+
 echo "All topics created."
 kafka-topics --bootstrap-server "$BROKER" --list

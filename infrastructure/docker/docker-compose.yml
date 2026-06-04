@@ -125,10 +125,28 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9000/minio/health/live || exit 1"]
+      # Newer MinIO images ship curl (not wget); use it for the liveness probe.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ---------------------------------------------------------------------------
+  # MinIO bucket initialisation — creates the shared bucket once, then exits
+  # ---------------------------------------------------------------------------
+  minio-init:
+    image: minio/mc:latest
+    container_name: insight-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
+      mc mb --ignore-existing local/${MINIO_BUCKET:-insightflow-bucket} &&
+      echo 'MinIO bucket ready: ${MINIO_BUCKET:-insightflow-bucket}'
+      "
+    restart: "no"
 
   # ---------------------------------------------------------------------------
   # Kafka topic initialisation — runs once after Kafka is healthy, then exits

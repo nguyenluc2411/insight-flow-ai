@@ -1,0 +1,40 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: product-catalog-service
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${ENRICHMENT_DB_NAME:insightflow_enrichment}
+    username: ${POSTGRES_USER:insightflow}
+    password: ${POSTGRES_PASSWORD:insightflow}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: product-catalog-service-pool
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: enrichment_db
+        format_sql: true
+  flyway:
+    enabled: true
+    schemas: enrichment_db
+    default-schema: enrichment_db
+    create-schemas: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

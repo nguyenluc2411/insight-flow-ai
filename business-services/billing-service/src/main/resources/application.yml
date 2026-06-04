@@ -83,6 +83,10 @@ eureka:
 app:
   service-jwt:
     secret: ${SERVICE_JWT_SECRET:insightflow-service-jwt-secret-change-in-prod!!}
+  payment:
+    bank-id: MB
+    account-no: "0367457851"
+    account-name: "Doan Trung Truc"
 
 management:
   endpoints:
@@ -106,3 +110,8 @@ logging:
   level:
     root: INFO
     com.insightflow.billing: INFO
+sepay:
+  webhook:
+    secret-token: ${SEPAY_WEBHOOK_SECRET}
+
+
