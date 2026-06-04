@@ -86,7 +86,8 @@ def model_exists(key: str) -> bool:
         try:
             _get_s3().head_object(Bucket=settings.MINIO_BUCKET, Key=key)
             return True
-        except ClientError:
+        except Exception as exc:  # noqa: BLE001 — includes EndpointConnectionError
+            logger.debug("MinIO head_object failed for %s: %s", key, exc)
             return False
     return False
 
@@ -108,6 +109,6 @@ def list_keys(prefix: str) -> list[str]:
             for obj in resp.get("Contents", []):
                 if obj["Key"].endswith(".pkl"):
                     keys.add(obj["Key"])
-        except ClientError as exc:
+        except Exception as exc:  # noqa: BLE001 — includes EndpointConnectionError
             logger.warning("MinIO list failed for prefix %s: %s", prefix, exc)
     return sorted(keys)
