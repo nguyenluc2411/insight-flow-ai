@@ -55,10 +55,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
+        // Webhook routes (e.g. SePay) are exposed via metadata.public=true and authenticated
+        // at the service layer by their own Apikey secret — no global Apikey bypass here.
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (StringUtils.hasText(authHeader) && authHeader.startsWith("Apikey ")) {
-            return chain.filter(exchange);
-        }
         if (!StringUtils.hasText(authHeader) || !authHeader.startsWith(BEARER_PREFIX)) {
             return rejectWith401(exchange, "missing-token",
                     "Authorization header with Bearer token is required");
