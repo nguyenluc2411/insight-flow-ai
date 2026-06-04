@@ -8,9 +8,6 @@ import lombok.Data;
 public class LoginRequest {
 
     @NotBlank
-    private String tenantSlug;
-
-    @NotBlank
     @Email
     private String email;
 

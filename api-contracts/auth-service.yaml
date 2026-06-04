@@ -6,7 +6,7 @@ info:
 
     ## Token Lifecycle
     - `POST /register-tenant` issues access + refresh tokens on creation
-    - `POST /login` issues tokens; use `tenantSlug` + `email` + `password`
+    - `POST /login` issues tokens; use `email` + `password` (email is globally unique)
     - `POST /refresh` rotates the refresh token (old one is revoked)
     - `POST /logout` revokes the refresh token
     - Access tokens expire in **15 minutes** (HS256, verified by api-gateway)
@@ -283,11 +283,8 @@ components:
 
     LoginRequest:
       type: object
-      required: [tenantSlug, email, password]
+      required: [email, password]
       properties:
-        tenantSlug:
-          type: string
-          example: "test-shop"
         email:
           type: string
           format: email

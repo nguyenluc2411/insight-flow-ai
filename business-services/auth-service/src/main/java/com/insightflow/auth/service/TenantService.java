@@ -52,6 +52,11 @@ public class TenantService {
             throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Tenant slug '" + request.getSlug() + "' is already taken");
         }
 
+        // Email is globally unique now (email-only login) — reject if already registered.
+        if (userRepository.findByEmail(request.getOwnerEmail().toLowerCase().strip()).isPresent()) {
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Email '" + request.getOwnerEmail() + "' đã được đăng ký");
+        }
+
         Tenant tenant = Tenant.builder()
                 .name(request.getTenantName())
                 .slug(request.getSlug())

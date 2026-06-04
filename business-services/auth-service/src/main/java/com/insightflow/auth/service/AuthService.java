@@ -46,11 +46,11 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        Tenant tenant = tenantRepository.findBySlug(request.getTenantSlug())
+        // Email is globally unique → identifies the user (and thus the tenant) on its own.
+        User user = userRepository.findByEmail(request.getEmail().toLowerCase().strip())
                 .orElseThrow(() -> new UnauthorizedException(INVALID_CREDENTIALS));
 
-        User user = userRepository.findByTenantIdAndEmail(tenant.getId(),
-                        request.getEmail().toLowerCase().strip())
+        Tenant tenant = tenantRepository.findById(user.getTenantId())
                 .orElseThrow(() -> new UnauthorizedException(INVALID_CREDENTIALS));
 
         if (!passwordService.matches(request.getPassword(), user.getPasswordHash())) {
