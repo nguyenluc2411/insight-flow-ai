@@ -153,6 +153,13 @@ class RuleBasedRecommender:
             if sv[0] not in variant_ids:
                 variant_ids.append(sv[0])
 
+        # Replace this tenant's recommendations rather than appending — otherwise
+        # every refresh accumulates duplicate rows for the same variant. Same
+        # transaction as the inserts below, so it's atomic (rollback on error).
+        db.query(Recommendation).filter(
+            Recommendation.tenant_id == tenant_id
+        ).delete(synchronize_session=False)
+
         results: list[Recommendation] = []
         for variant_id in variant_ids:
             velocity_30 = self.calculate_sales_velocity(db, tenant_id, variant_id, 30)
