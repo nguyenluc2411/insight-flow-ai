@@ -114,7 +114,7 @@ class RuleBasedRecommender:
                 action="RESTOCK",
                 priority=priority,
                 reason=(
-                    f"Còn {days_remaining:.0f} ngày hàng, forecast cần {forecast_30d:.0f}"
+                    f"Còn {days_remaining:.0f} ngày hàng, dự báo cần {forecast_30d:.0f} sản phẩm"
                 ),
                 suggested_restock_qty=qty,
             )
@@ -128,7 +128,7 @@ class RuleBasedRecommender:
             return RuleResult(
                 action="PROMOTE",
                 priority="MEDIUM",
-                reason=f"Forecast tăng {increase_pct}% so với trung bình",
+                reason=f"Dự báo tăng {increase_pct}% so với trung bình",
             )
 
         return RuleResult(action="OK", priority="LOW", reason="Tồn kho ổn định")
