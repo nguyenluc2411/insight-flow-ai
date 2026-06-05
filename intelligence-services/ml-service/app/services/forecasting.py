@@ -11,6 +11,13 @@ import pandas as pd
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+# Eagerly initialize prophet (and its cmdstanpy backend) at import time, which runs
+# in the main thread during app startup. Prophet models are later unpickled inside
+# background refresh threads; if cmdstanpy is first imported there, its internal
+# re-entrant imports raise "cannot import name 'CmdStanGQ' ... circular import".
+# Importing it here fully populates sys.modules before any worker thread needs it.
+import prophet  # noqa: F401
+
 from app.config import settings
 from app.db.models import SalesData, VariantCategoryMap
 from app.models.schemas import ForecastPoint
