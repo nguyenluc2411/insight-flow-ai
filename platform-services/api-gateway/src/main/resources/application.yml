@@ -13,6 +13,17 @@ spring:
     name: api-gateway
 
   # ---------------------------------------------------------------------------
+  # Redis — backs the gateway's RequestRateLimiter. Bind to env so it works in
+  # Docker (REDIS_HOST=redis container); falls back to localhost for bare-metal
+  # local dev. No SSL (matches the plain redis:7 infra container).
+  # ---------------------------------------------------------------------------
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  # ---------------------------------------------------------------------------
   # Spring Cloud Config — pull from config server at startup.
   # "optional:" means the gateway still starts if config server is absent
   # (useful for local dev without full infra). Remove "optional:" in prod CI.
