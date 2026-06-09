@@ -16,8 +16,10 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     MODEL_STORAGE_PATH=/app/models
 
+# python:3.11-slim ships neither wget nor curl, so use Python's stdlib for the
+# health probe. urlopen raises on non-2xx, which fails the check.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget -qO /dev/null http://localhost:8000/api/v1/ml/health || exit 1
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/ml/health').status==200 else 1)" || exit 1
 
 EXPOSE 8000
 
