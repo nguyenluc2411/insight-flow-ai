@@ -212,17 +212,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # ml-service uses its own env var naming (Python/Pydantic)
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${ML_DB_NAME:-insightflow_ml}
-      DB_USERNAME: ${POSTGRES_USER}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
-      KAFKA_BOOTSTRAP: kafka:29092
+      # ml-service reads these via pydantic-settings aliases (see app/config.py).
+      # The alias is the env var name, so we must use the alias names here, not
+      # the field names (POSTGRES_HOST not DB_HOST, etc.).
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      ML_DB_NAME: ${ML_DB_NAME:-insightflow_ml}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MODEL_STORAGE_PATH: /app/models
       MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - ml-models:/app/models
     depends_on:
