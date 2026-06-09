@@ -109,6 +109,9 @@ services:
       EUREKA_URL: http://discovery-server:8761/eureka/
       CONFIG_SERVER_URL: http://config-server:8888
       JWT_SECRET: ${JWT_SECRET}
+      # Route email to MailHog container instead of localhost
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
     depends_on:
       postgres:
         condition: service_healthy
@@ -165,6 +168,38 @@ services:
       kafka:
         condition: service_healthy
       config-server:
+        condition: service_healthy
+
+  billing-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/billing-service:latest
+    build:
+      context: ../../business-services/billing-service
+      dockerfile: Dockerfile
+    container_name: insight-billing
+    ports:
+      - "8086:8086"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BILLING_DB_NAME: ${BILLING_DB_NAME:-insightflow_billing}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:-insightflow-service-jwt-secret-change-in-prod!!}
+      SEPAY_WEBHOOK_SECRET: ${SEPAY_WEBHOOK_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # ============================================================================
@@ -268,11 +303,19 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME:-insightflow_notification}
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME:-insightflow_notification}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_URL: http://discovery-server:8761/eureka/
       CONFIG_SERVER_URL: http://config-server:8888
-      # Route email to MailHog container instead of localhost
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # Route email to MailHog container instead of localhost (MailHog needs no TLS/auth)
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_SMTP_AUTH: "false"
+      MAIL_SMTP_STARTTLS: "false"
+      MAIL_SMTP_STARTTLS_REQUIRED: "false"
       MAIL_FROM: ${MAIL_FROM:-noreply@insightflow.ai}
     depends_on:
       postgres:
@@ -280,6 +323,8 @@ services:
       kafka:
         condition: service_healthy
       config-server:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:

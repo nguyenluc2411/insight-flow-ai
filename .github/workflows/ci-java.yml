@@ -50,6 +50,7 @@ jobs:
           mvn -f business-services/auth-service/pom.xml    package -DskipTests -q
           mvn -f business-services/catalog-service/pom.xml package -DskipTests -q
           mvn -f business-services/sales-service/pom.xml   package -DskipTests -q
+          mvn -f business-services/billing-service/pom.xml package -DskipTests -q
 
       - name: Build integration & engagement services
         run: |
@@ -66,6 +67,7 @@ jobs:
           docker build -t insightflow/auth-service:${{ github.sha }}       business-services/auth-service
           docker build -t insightflow/catalog-service:${{ github.sha }}    business-services/catalog-service
           docker build -t insightflow/sales-service:${{ github.sha }}      business-services/sales-service
+          docker build -t insightflow/billing-service:${{ github.sha }}     business-services/billing-service
           docker build -t insightflow/integration-service:${{ github.sha }} integration-services/integration-service
           docker build -t insightflow/dashboard-bff:${{ github.sha }}      engagement-services/dashboard-bff
           docker build -t insightflow/notification-service:${{ github.sha }} engagement-services/notification-service
@@ -83,7 +85,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          for svc in discovery-server config-server api-gateway auth-service catalog-service sales-service integration-service dashboard-bff notification-service; do
+          for svc in discovery-server config-server api-gateway auth-service catalog-service sales-service billing-service integration-service dashboard-bff notification-service; do
             docker tag insightflow/${svc}:${{ github.sha }} ghcr.io/${OWNER}/${svc}:latest
             docker tag insightflow/${svc}:${{ github.sha }} ghcr.io/${OWNER}/${svc}:${{ github.sha }}
             docker push ghcr.io/${OWNER}/${svc}:latest
@@ -114,7 +116,7 @@ jobs:
             git fetch origin main && git reset --hard origin/main
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
             export REGISTRY_PREFIX="ghcr.io/${OWNER}"
-            SERVICES="discovery-server config-server api-gateway auth-service catalog-service sales-service integration-service dashboard-bff notification-service"
+            SERVICES="discovery-server config-server api-gateway auth-service catalog-service sales-service billing-service integration-service dashboard-bff notification-service"
             COMPOSE="docker compose \
               -f infrastructure/docker/docker-compose.yml \
               -f infrastructure/docker/docker-compose.services.yml \
