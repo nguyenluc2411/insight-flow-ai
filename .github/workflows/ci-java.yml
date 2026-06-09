@@ -31,9 +31,10 @@ jobs:
       # shared-core must be installed to local Maven repo before building services
       - name: Build shared-core
         run: |
-          mvn -f shared-core/common-events/pom.xml   install -DskipTests -q
-          mvn -f shared-core/common-security/pom.xml install -DskipTests -q
-          mvn -f shared-core/common-web/pom.xml      install -DskipTests -q
+          mvn -f shared-core/common-events/pom.xml    install -DskipTests -q
+          mvn -f shared-core/common-security/pom.xml  install -DskipTests -q
+          mvn -f shared-core/common-web/pom.xml       install -DskipTests -q
+          mvn -f shared-core/common-fileparse/pom.xml install -DskipTests -q
 
       - name: Build platform services
         run: |
