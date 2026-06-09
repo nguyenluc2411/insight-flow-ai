@@ -115,4 +115,4 @@ jobs:
             done
             docker logout ghcr.io
             cd ~/insight-flow-ai/infrastructure/docker
-            docker-compose up -d
+            docker compose up -d

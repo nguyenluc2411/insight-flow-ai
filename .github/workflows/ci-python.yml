@@ -83,4 +83,4 @@ jobs:
             docker pull ghcr.io/${OWNER}/ml-service:latest
             docker logout ghcr.io
             cd ~/insight-flow-ai/infrastructure/docker
-            docker-compose up -d ml-service
+            docker compose up -d ml-service
