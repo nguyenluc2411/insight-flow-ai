@@ -59,3 +59,28 @@ jobs:
           docker tag insightflow/ml-service:${{ github.sha }} ghcr.io/${OWNER}/ml-service:${{ github.sha }}
           docker push ghcr.io/${OWNER}/ml-service:latest
           docker push ghcr.io/${OWNER}/ml-service:${{ github.sha }}
+
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: SSH & deploy ML service
+        uses: appleboy/ssh-action@v1
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: GHCR_TOKEN,REPO_OWNER
+          script: |
+            OWNER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
+            docker pull ghcr.io/${OWNER}/ml-service:latest
+            docker logout ghcr.io
+            cd ~/insight-flow-ai/infrastructure/docker
+            docker-compose up -d ml-service
