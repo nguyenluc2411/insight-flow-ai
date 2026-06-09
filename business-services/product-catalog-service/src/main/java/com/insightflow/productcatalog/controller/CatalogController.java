@@ -1,6 +1,7 @@
 package com.insightflow.productcatalog.controller;
 
 
+import com.insightflow.productcatalog.dto.request.ColumnResolveRequest;
 import com.insightflow.productcatalog.dto.request.EnrichmentRequest;
 import com.insightflow.productcatalog.dto.response.EnrichmentResponse;
 import com.insightflow.productcatalog.service.CatalogEnrichmentService;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -31,8 +33,20 @@ public class CatalogController {
     }
 
     /**
+     * API phân giải tên cột thô của file upload về trường chuẩn (cho data-ingestion gọi
+     * 1 lần/file). Bao được tên cột tiếng Việt/Anh, có dấu/không dấu, viết liền/gạch dưới.
+     * URL: POST http://localhost:8089/api/v1/catalog/resolve-columns
+     */
+    @PostMapping("/resolve-columns")
+    public ResponseEntity<Map<String, String>> resolveColumns(@RequestBody ColumnResolveRequest request) {
+        List<String> headers = request.getHeaders();
+        log.info("🧭 [CONTROLLER] Phân giải {} tên cột từ file upload.", headers != null ? headers.size() : 0);
+        return ResponseEntity.ok(enrichmentService.resolveColumns(headers));
+    }
+
+    /**
      * API cho phép Admin làm mới bộ nhớ đệm RAM Cache ngay lập tức khi DB Dictionary thay đổi
-     * URL: POST http://localhost:8083/api/v1/catalog/refresh
+     * URL: POST http://localhost:8089/api/v1/catalog/refresh
      */
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, Object>> refreshCatalogCache() {

@@ -1,15 +1,17 @@
 package com.insightflow.dataingestion.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insightflow.dataingestion.client.CatalogClient;
 import com.insightflow.dataingestion.dto.event.EventEnvelope;
 import com.insightflow.dataingestion.dto.event.InventoryFileUploadedPayload;
 import com.insightflow.dataingestion.dto.event.InventoryIngestionFailedPayload;
 import com.insightflow.dataingestion.dto.event.InventoryIngestionCompletedPayload;
+import com.insightflow.dataingestion.dto.request.ColumnResolveRequest;
 import com.insightflow.dataingestion.dto.request.EnrichmentRequest;
 import com.insightflow.dataingestion.dto.response.EnrichmentResponse;
 import com.insightflow.dataingestion.dto.response.WorkspaceInventoryResponse;
 import com.insightflow.dataingestion.entity.*;
-import com.insightflow.dataingestion.messaging.InventoryEventProducer;
 import com.insightflow.dataingestion.repository.*;
 import com.insightflow.dataingestion.service.IngestionService;
 import com.insightflow.dataingestion.service.S3StorageService;
@@ -36,9 +38,12 @@ public class IngestionServiceImpl implements IngestionService {
     private final ProductVariantRepository productVariantRepository;
     private final InventoryFactRepository inventoryFactRepository;
     private final CatalogClient catalogClient;
-    private final InventoryEventProducer eventProducer;
     private final S3StorageService s3StorageService;
     private final DynamicFileParser dynamicFileParser;
+
+    // Đã thay thế InventoryEventProducer bằng Outbox Architecture
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     @Value("${aws.s3.bucket-name}")
     private String bucketName;
@@ -82,6 +87,10 @@ public class IngestionServiceImpl implements IngestionService {
 
             if (parsedRecords.isEmpty()) throw new RuntimeException("File rỗng hoặc sai định dạng!");
 
+            // Phân giải tên cột đa dạng của người dùng -> trường chuẩn (1 lần/file).
+            // Lỗi gọi sang product-catalog thì rơi về tên cột mặc định bên dưới, không chặn ingest.
+            Map<String, String> keyByField = resolveColumnMapping(parsedRecords);
+
             int successCount = 0;
             int totalFieldsChecked = 0;
             int totalFieldsMissing = 0;
@@ -89,15 +98,17 @@ public class IngestionServiceImpl implements IngestionService {
 
             for (Map<String, String> row : parsedRecords) {
                 try {
-                    String rawName = row.getOrDefault("ten_san_pham", row.get("name"));
-                    String rawCat = row.getOrDefault("danh_muc", row.get("category"));
-                    String rawColor = row.getOrDefault("mau_sac", row.get("color"));
+                    String rawName = pick(row, keyByField, "product_name", "ten_san_pham", "name");
+                    String rawCat = pick(row, keyByField, "category", "danh_muc", "doanh_muc", "category");
+                    String rawColor = pick(row, keyByField, "color", "mau_sac", "color");
 
-                    String productCode = row.getOrDefault("ma_san_pham", row.getOrDefault("product_code", UUID.randomUUID().toString()));
+                    String productCodeRaw = pick(row, keyByField, "product_code", "ma_san_pham", "product_code");
+                    final String productCode = productCodeRaw != null ? productCodeRaw : UUID.randomUUID().toString();
                     String colorSuffix = (rawColor != null && !rawColor.isEmpty()) ? "-" + rawColor : "";
-                    String sku = row.getOrDefault("sku", row.getOrDefault("ma_vach", productCode + colorSuffix));
+                    String skuRaw = pick(row, keyByField, "sku", "sku", "ma_vach");
+                    final String sku = skuRaw != null ? skuRaw : productCode + colorSuffix;
 
-                    List<String> rowMissing = calculateMissingFields(row);
+                    List<String> rowMissing = calculateMissingFields(row, keyByField);
                     allMissingFields.addAll(rowMissing);
                     totalFieldsMissing += rowMissing.size();
                     totalFieldsChecked += 5;
@@ -125,7 +136,7 @@ public class IngestionServiceImpl implements IngestionService {
                                     .sku(sku)
                                     .colorFamily(aiData.getColorFamily())
                                     .colorName(rawColor)
-                                    .size(row.getOrDefault("size", row.get("kich_co")))
+                                    .size(pick(row, keyByField, "size", "size", "kich_co"))
                                     .build()));
 
                     InventoryFact fact = inventoryFactRepository.findByVariantIdAndWorkspaceId(variant.getId(), workspaceId)
@@ -137,12 +148,11 @@ public class IngestionServiceImpl implements IngestionService {
                                     .quantitySold(0)
                                     .build());
 
-                    Integer stock = parseInt(row.getOrDefault("ton_kho", row.get("quantity")));
+                    Integer stock = parseInt(pick(row, keyByField, "stock", "ton_kho", "quantity"));
                     if (stock != null) fact.setQuantityInStock(stock);
-
-                    fact.setCostPrice(parseDouble(row.getOrDefault("gia_von", row.get("cost_price"))));
-                    fact.setRetailPrice(parseDouble(row.getOrDefault("gia_ban", row.get("retail_price"))));
-                    fact.setImportDate(parseDate(row.getOrDefault("ngay_nhap", row.get("import_date"))));
+                    fact.setCostPrice(parseDouble(pick(row, keyByField, "cost_price", "gia_von", "cost_price")));
+                    fact.setRetailPrice(parseDouble(pick(row, keyByField, "retail_price", "gia_ban", "retail_price")));
+                    fact.setImportDate(parseDate(pick(row, keyByField, "import_date", "ngay_nhap", "import_date")));
 
                     inventoryFactRepository.save(fact);
                     successCount++;
@@ -216,14 +226,55 @@ public class IngestionServiceImpl implements IngestionService {
         ingestionJobRepository.save(job);
     }
 
-    private List<String> calculateMissingFields(Map<String, String> row) {
+    private List<String> calculateMissingFields(Map<String, String> row, Map<String, String> keyByField) {
         List<String> missing = new ArrayList<>();
-        if (row.get("gia_von") == null && row.get("cost_price") == null) missing.add("Cost Price");
-        if (row.get("gia_ban") == null && row.get("retail_price") == null) missing.add("Retail Price");
-        if (row.get("mau_sac") == null && row.get("color") == null) missing.add("Color");
-        if (row.get("danh_muc") == null && row.get("category") == null) missing.add("Category");
-        if (row.get("ton_kho") == null && row.get("quantity") == null) missing.add("Quantity");
+        if (pick(row, keyByField, "cost_price", "gia_von", "cost_price") == null) missing.add("Cost Price");
+        if (pick(row, keyByField, "retail_price", "gia_ban", "retail_price") == null) missing.add("Retail Price");
+        if (pick(row, keyByField, "color", "mau_sac", "color") == null) missing.add("Color");
+        if (pick(row, keyByField, "category", "danh_muc", "doanh_muc", "category") == null) missing.add("Category");
+        if (pick(row, keyByField, "stock", "ton_kho", "quantity") == null) missing.add("Quantity");
         return missing;
+    }
+
+    /**
+     * Lấy giá trị một trường chuẩn từ row: ưu tiên cột đã được product-catalog phân giải,
+     * nếu trống thì thử các tên cột mặc định (để file đặt tên cũ vẫn chạy, không phá ngược).
+     */
+    private String pick(Map<String, String> row, Map<String, String> keyByField,
+                        String field, String... legacyKeys) {
+        String key = keyByField.get(field);
+        if (key != null) {
+            String v = row.get(key);
+            if (v != null && !v.isEmpty()) return v;
+        }
+        for (String legacyKey : legacyKeys) {
+            String v = row.get(legacyKey);
+            if (v != null && !v.isEmpty()) return v;
+        }
+        return null;
+    }
+
+    /**
+     * Gọi product-catalog phân giải header -> trường chuẩn (1 lần/file), trả về map
+     * field -> tên cột thực tế trong row. Lỗi mạng/service thì trả map rỗng để rơi về
+     * tên cột mặc định, KHÔNG chặn quá trình ingest.
+     */
+    private Map<String, String> resolveColumnMapping(List<Map<String, String>> records) {
+        Map<String, String> keyByField = new HashMap<>();
+        try {
+            if (records.isEmpty()) return keyByField;
+            List<String> headers = new ArrayList<>(records.get(0).keySet());
+            Map<String, String> headerToField = catalogClient.resolveColumns(
+                    ColumnResolveRequest.builder().headers(headers).build());
+            if (headerToField != null) {
+                // Đảo chiều: field -> header (header đầu tiên khớp được giữ lại).
+                headerToField.forEach((header, field) -> keyByField.putIfAbsent(field, header));
+            }
+            log.info("🧭 Map cột động: {} trường nhận diện từ {} cột.", keyByField.size(), headers.size());
+        } catch (Exception e) {
+            log.warn("⚠️ Không gọi được resolve-columns (dùng tên cột mặc định): {}", e.getMessage());
+        }
+        return keyByField;
     }
 
     private void sendSuccessEvent(String tenantId, String workspaceId, int totalItems, double completenessScore, List<String> missingFields) {
@@ -242,7 +293,18 @@ public class IngestionServiceImpl implements IngestionService {
                 .source("data-ingestion-service")
                 .payload(payload)
                 .build();
-        eventProducer.sendIngestionCompleted(env);
+
+        // Convert sang Map và lưu vào Outbox thay vì bắn Kafka trực tiếp
+        Map<String, Object> envelopeMap = objectMapper.convertValue(
+                env, new TypeReference<Map<String, Object>>() {});
+
+        OutboxEvent event = OutboxEvent.builder()
+                .aggregateId(UUID.fromString(tenantId))
+                .eventType("inventory.ingestion.completed")
+                .payload(envelopeMap)
+                .build();
+
+        outboxRepository.save(event);
     }
 
     private void sendFailEvent(String workspaceId, String errorMsg) {
@@ -255,7 +317,21 @@ public class IngestionServiceImpl implements IngestionService {
                 .timestamp(OffsetDateTime.now().toString())
                 .source("data-ingestion-service")
                 .payload(payload).build();
-        eventProducer.sendFailed(env);
+
+        // Convert sang Map và lưu vào Outbox thay vì bắn Kafka trực tiếp
+        Map<String, Object> envelopeMap = objectMapper.convertValue(
+                env, new TypeReference<Map<String, Object>>() {});
+
+        // Xử lý an toàn: Dùng UUID tạo từ workspaceId để tránh NullPointerException khi tenantId bị thiếu
+        UUID safeAggregateId = UUID.nameUUIDFromBytes(workspaceId.getBytes());
+
+        OutboxEvent event = OutboxEvent.builder()
+                .aggregateId(safeAggregateId)
+                .eventType("inventory.ingestion.failed")
+                .payload(envelopeMap)
+                .build();
+
+        outboxRepository.save(event);
     }
 
     private Double parseDouble(String val) {

@@ -28,20 +28,15 @@ public class S3Config {
     @Value("${aws.s3.endpoint-url:#{null}}")
     private String endpointUrl;
 
-    // MinIO serves S3 in path-style (http://host:9000/bucket/key); virtual-hosted
-    // style (bucket.host) does not resolve on localhost — force path-style.
-    private S3Configuration pathStyle() {
-        return S3Configuration.builder().pathStyleAccessEnabled(true).build();
-    }
-
     @Bean
     public S3Client s3Client() {
         S3ClientBuilder builder = S3Client.builder()
                 .region(Region.of(region))
-                .serviceConfiguration(pathStyle())
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)
-                ));
+                ))
+                // AWS SDK v2 yêu cầu forcePathStyle true đối với S3/Minio local
+                .forcePathStyle(true);
 
         if (endpointUrl != null && !endpointUrl.isBlank()) {
             builder.endpointOverride(URI.create(endpointUrl));
@@ -50,19 +45,25 @@ public class S3Config {
         return builder.build();
     }
 
-    @Bean
-    public S3Presigner s3Presigner() {
-        S3Presigner.Builder builder = S3Presigner.builder()
-                .region(Region.of(region))
-                .serviceConfiguration(pathStyle())
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKey, secretKey)
-                ));
 
-        if (endpointUrl != null && !endpointUrl.isBlank()) {
-            builder.endpointOverride(URI.create(endpointUrl));
-        }
+   // ...
 
-        return builder.build();
-    }
+       @Bean
+       public S3Presigner s3Presigner() {
+           S3Presigner.Builder builder = S3Presigner.builder()
+                   .region(Region.of(region))
+                   .credentialsProvider(StaticCredentialsProvider.create(
+                           AwsBasicCredentials.create(accessKey, secretKey)
+                   ))
+                   // Tách biệt việc ép kiểu PathStyle cho Presigner
+                   .serviceConfiguration(S3Configuration.builder()
+                           .pathStyleAccessEnabled(true)
+                           .build());
+
+           if (endpointUrl != null && !endpointUrl.isBlank()) {
+               builder.endpointOverride(URI.create(endpointUrl));
+           }
+
+           return builder.build();
+       }
 }

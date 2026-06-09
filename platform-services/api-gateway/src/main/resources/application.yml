@@ -469,3 +469,16 @@ logging:
   level:
     root: INFO
     com.insightflow.gateway: INFO
+
+    #====truy log lỗi====
+    org.springframework.cloud.gateway: TRACE
+    org.springframework.web: TRACE
+    org.springframework.data.redis: DEBUG
+    reactor.netty: DEBUG
+  server:
+      error:
+        include-message: always
+        include-stacktrace: always
+
+
+

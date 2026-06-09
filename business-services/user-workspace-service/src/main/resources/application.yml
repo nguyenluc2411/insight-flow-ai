@@ -44,6 +44,9 @@ eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true    # <-- THÊM DÒNG NÀY VÀO LÀ CỨU CẢ THẾ GIỚI
+    instance-id: ${spring.application.name}:${random.uuid}
 
 # Object storage — MinIO (S3-compatible); endpoint-url points the AWS SDK at MinIO.
 # Key names kept exactly as the service's @Value references; only bound to MINIO_* env.
@@ -55,7 +58,9 @@ aws:
     presign-expiration-minutes: 15
   credentials:
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
-    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    # Dev default must equal MinIO's root password (.env MINIO_SECRET_KEY/ROOT_PASSWORD);
+    # IDE/mvnw runs don't load .env, so a mismatch makes the presigned URL fail signing.
+    secret-key: ${MINIO_SECRET_KEY:change_me_in_prod}
 
 management:
   endpoints:

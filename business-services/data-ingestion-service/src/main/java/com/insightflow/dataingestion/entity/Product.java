@@ -31,7 +31,8 @@ public class Product extends BaseEntity {
     @Column(name = "product_code", length = 50, nullable = false)
     private String productCode;
 
-    @Column(name = "product_name", length = 255, nullable = false)
+    // Nullable: ingest lưu dữ liệu rã được; dòng thiếu tên để NULL thay vì sập constraint.
+    @Column(name = "product_name", length = 255)
     private String productName;
 
     @Column(name = "brand", length = 100)

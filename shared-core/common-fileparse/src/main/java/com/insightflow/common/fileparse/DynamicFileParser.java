@@ -93,6 +93,9 @@ public class DynamicFileParser {
             DataFormatter dataFormatter = new DataFormatter(); // Định dạng an toàn cho cả ngày tháng, số thập phân
 
             int totalSheets = workbook.getNumberOfSheets();
+            // Header của sheet dữ liệu đầu tiên làm chuẩn. Sheet sau không chia sẻ cột nào
+            // với chuẩn này (vd sheet "Legend"/chú thích) sẽ bị bỏ qua để không lẫn dòng rác.
+            Set<String> referenceHeaders = null;
             for (int sheetIndex = 0; sheetIndex < totalSheets; sheetIndex++) {
                 Sheet sheet = workbook.getSheetAt(sheetIndex);
                 Iterator<Row> rowIterator = sheet.iterator();
@@ -105,6 +108,21 @@ public class DynamicFileParser {
                 for (Cell cell : headerRow) {
                     String rawHeader = dataFormatter.formatCellValue(cell);
                     normalizedHeaders.add(normalizeHeader(rawHeader));
+                }
+
+                // Chống lẫn sheet phụ: sheet đầu (có dữ liệu) định nghĩa bộ cột chuẩn;
+                // các sheet sau phải chia sẻ ít nhất 1 cột, nếu không thì bỏ qua.
+                Set<String> headerSet = new HashSet<>(normalizedHeaders);
+                if (referenceHeaders == null) {
+                    referenceHeaders = headerSet;
+                } else {
+                    Set<String> overlap = new HashSet<>(headerSet);
+                    overlap.retainAll(referenceHeaders);
+                    if (overlap.isEmpty()) {
+                        log.warn("⚠️ Bỏ qua sheet '{}' — cột không khớp sheet dữ liệu chính (vd sheet chú thích/Legend).",
+                                sheet.getSheetName());
+                        continue;
+                    }
                 }
 
                 // Đọc dữ liệu từng dòng

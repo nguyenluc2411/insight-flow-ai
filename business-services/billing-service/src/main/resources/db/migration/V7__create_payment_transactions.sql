@@ -7,7 +7,7 @@
 -- =============================================================================
 SET search_path TO billing_db;
 
-CREATE TABLE payment_transactions (
+CREATE TABLE IF NOT EXISTS payment_transactions (
     id                     UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     sepay_id               VARCHAR(100) NOT NULL,
     tenant_id              UUID,                       -- null until a valid order code is matched

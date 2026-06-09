@@ -56,9 +56,12 @@ aws:
     endpoint-url: ${MINIO_ENDPOINT:http://localhost:9000}
     region: ${MINIO_REGION:ap-southeast-1}
     bucket-name: ${MINIO_BUCKET:insightflow-bucket}
+
   credentials:
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
-    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    # Dev default must equal MinIO's root password (.env MINIO_SECRET_KEY/ROOT_PASSWORD);
+    # IDE/mvnw runs don't load .env, so a mismatch makes S3 reads fail signing.
+    secret-key: ${MINIO_SECRET_KEY:change_me_in_prod}
 
 management:
   endpoints:

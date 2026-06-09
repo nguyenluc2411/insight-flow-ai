@@ -34,7 +34,7 @@ public class FileMetadata extends BaseEntity {
     @Column(name = "file_size", nullable = false)
     private Long fileSize;
 
-    @Column(name = "content_type", length = 50, nullable = false)
+    @Column(name = "content_type", length = 150, nullable = false)
     private String contentType;
 
     @Column(name = "s3_file_url", length = 500, nullable = false)
