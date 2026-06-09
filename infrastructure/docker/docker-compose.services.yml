@@ -27,6 +27,7 @@ services:
   # ============================================================================
 
   discovery-server:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/discovery-server:latest
     build:
       context: ../../platform-services/discovery-server
       dockerfile: Dockerfile
@@ -41,6 +42,7 @@ services:
       start_period: 90s
 
   config-server:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/config-server:latest
     build:
       context: ../../platform-services/config-server
       dockerfile: Dockerfile
@@ -64,6 +66,7 @@ services:
       start_period: 90s
 
   api-gateway:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/api-gateway:latest
     build:
       context: ../../platform-services/api-gateway
       dockerfile: Dockerfile
@@ -89,6 +92,7 @@ services:
   # ============================================================================
 
   auth-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/auth-service:latest
     build:
       context: ../../business-services/auth-service
       dockerfile: Dockerfile
@@ -114,6 +118,7 @@ services:
         condition: service_healthy
 
   catalog-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/catalog-service:latest
     build:
       context: ../../business-services/catalog-service
       dockerfile: Dockerfile
@@ -138,6 +143,7 @@ services:
         condition: service_healthy
 
   sales-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/sales-service:latest
     build:
       context: ../../business-services/sales-service
       dockerfile: Dockerfile
@@ -166,6 +172,7 @@ services:
   # ============================================================================
 
   integration-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/integration-service:latest
     build:
       context: ../../integration-services/integration-service
       dockerfile: Dockerfile
@@ -197,6 +204,7 @@ services:
   # ============================================================================
 
   ml-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/ml-service:latest
     build:
       context: ../../intelligence-services/ml-service
       dockerfile: Dockerfile
@@ -228,6 +236,7 @@ services:
   # ============================================================================
 
   dashboard-bff:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/dashboard-bff:latest
     build:
       context: ../../engagement-services/dashboard-bff
       dockerfile: Dockerfile
@@ -245,6 +254,7 @@ services:
         condition: service_healthy
 
   notification-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/notification-service:latest
     build:
       context: ../../engagement-services/notification-service
       dockerfile: Dockerfile

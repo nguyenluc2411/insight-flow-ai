@@ -78,9 +78,16 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: GHCR_TOKEN,REPO_OWNER
           script: |
+            set -e
             OWNER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+            cd ~/insight-flow-ai
+            git fetch origin main && git reset --hard origin/main
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
-            docker pull ghcr.io/${OWNER}/ml-service:latest
+            export REGISTRY_PREFIX="ghcr.io/${OWNER}"
+            COMPOSE="docker compose \
+              -f infrastructure/docker/docker-compose.yml \
+              -f infrastructure/docker/docker-compose.services.yml \
+              --env-file .env"
+            $COMPOSE pull ml-service
+            $COMPOSE up -d ml-service
             docker logout ghcr.io
-            cd ~/insight-flow-ai/infrastructure/docker
-            docker compose up -d ml-service
