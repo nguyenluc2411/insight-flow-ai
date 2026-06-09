@@ -15,6 +15,7 @@ Sources:
   - Lunar New Year (Tết) Gregorian dates (looked up, not computed):
     https://www.timeanddate.com/holidays/vietnam/
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -40,7 +41,9 @@ def _last_friday_of_november(year: int) -> pd.Timestamp:
     return nov_end - pd.Timedelta(days=offset)
 
 
-def _holiday_frame(name: str, dates: list, lower_window: int, upper_window: int) -> pd.DataFrame:
+def _holiday_frame(
+    name: str, dates: list, lower_window: int, upper_window: int
+) -> pd.DataFrame:
     """Build a Prophet-compatible holiday frame for one event across all years."""
     return pd.DataFrame(
         {
@@ -58,18 +61,17 @@ def _build_vn_holidays() -> pd.DataFrame:
         # Tết Nguyên Đán — biggest fashion spike of the year (áo dài, đồ mới).
         # Source: timeanddate.com (lunar→Gregorian), chinhphu.vn (official break)
         _holiday_frame("tet_nguyen_dan", [_TET_DATES[y] for y in _YEARS], -10, 3),
-
         # International Women's Day 8/3 & Vietnamese Women's Day 20/10 —
         # strong womenswear / accessories / gifting demand.
         # Source: chinhphu.vn
         _holiday_frame("quoc_te_phu_nu_8_3", [f"{y}-03-08" for y in _YEARS], -3, 1),
         _holiday_frame("phu_nu_viet_nam_20_10", [f"{y}-10-20" for y in _YEARS], -3, 1),
-
         # E-commerce mega-sale days driving fashion purchases in VN.
         # Source: Shopee/Lazada/TikTok Shop VN campaign calendar
         _holiday_frame("double_11", [f"{y}-11-11" for y in _YEARS], -2, 1),
-        _holiday_frame("black_friday", [_last_friday_of_november(y) for y in _YEARS], -2, 2),
-
+        _holiday_frame(
+            "black_friday", [_last_friday_of_november(y) for y in _YEARS], -2, 2
+        ),
         # Christmas (24–25/12) — gifting + party outfits; long ramp-up.
         # Valentine 14/2 — couples gifting.
         # Source: chinhphu.vn / retail seasonal calendar

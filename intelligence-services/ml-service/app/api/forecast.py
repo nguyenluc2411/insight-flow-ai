@@ -1,4 +1,5 @@
 """Forecast endpoints."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -77,15 +78,19 @@ def get_batch_forecast(
     out: list[ForecastResponse] = []
     now = datetime.now(tz=timezone.utc)
     for variant_id in request.variant_ids:
-        preds, confidence, basis = forecaster.predict(db, x_tenant_id, variant_id, request.days)
-        out.append(ForecastResponse(
-            variant_id=variant_id,
-            tenant_id=x_tenant_id,
-            forecast_days=request.days,
-            confidence=confidence,
-            basis=basis,
-            predictions=preds,
-            generated_at=now,
-            warning=_cold_start_warning(basis),
-        ))
+        preds, confidence, basis = forecaster.predict(
+            db, x_tenant_id, variant_id, request.days
+        )
+        out.append(
+            ForecastResponse(
+                variant_id=variant_id,
+                tenant_id=x_tenant_id,
+                forecast_days=request.days,
+                confidence=confidence,
+                basis=basis,
+                predictions=preds,
+                generated_at=now,
+                warning=_cold_start_warning(basis),
+            )
+        )
     return out

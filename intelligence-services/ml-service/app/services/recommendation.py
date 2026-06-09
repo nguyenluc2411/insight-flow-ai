@@ -156,9 +156,9 @@ class RuleBasedRecommender:
         # Replace this tenant's recommendations rather than appending — otherwise
         # every refresh accumulates duplicate rows for the same variant. Same
         # transaction as the inserts below, so it's atomic (rollback on error).
-        db.query(Recommendation).filter(
-            Recommendation.tenant_id == tenant_id
-        ).delete(synchronize_session=False)
+        db.query(Recommendation).filter(Recommendation.tenant_id == tenant_id).delete(
+            synchronize_session=False
+        )
 
         results: list[Recommendation] = []
         for variant_id in variant_ids:

@@ -1,4 +1,5 @@
 """Market trend service — queries Google Trends via pytrends for VN fashion categories."""
+
 from __future__ import annotations
 
 import logging
@@ -18,25 +19,25 @@ GEO_FALLBACK = "VN"
 
 # Top categories to query — representative keyword first (same convention as build_base_model.py)
 _CATEGORIES: list[tuple[str, str, str]] = [
-    ("ao_so_mi",    "Áo Sơ Mi",              "Sơ mi"),
-    ("vay_dam",     "Váy Đầm",               "Đầm"),
-    ("ao_thun",     "Áo Thun",               "Áo phông"),
-    ("ao_khoac",    "Áo Khoác / Hoodie",     "Khoác"),
-    ("chan_vay",    "Chân Váy",              "Chân váy"),
-    ("quan_jeans",  "Quần Jean",             "Denim"),
-    ("dam_cong_so", "Thời Trang Công Sở",    "Công sở"),
-    ("tui_xach",    "Túi Xách",              "Phụ kiện"),
+    ("ao_so_mi", "Áo Sơ Mi", "Sơ mi"),
+    ("vay_dam", "Váy Đầm", "Đầm"),
+    ("ao_thun", "Áo Thun", "Áo phông"),
+    ("ao_khoac", "Áo Khoác / Hoodie", "Khoác"),
+    ("chan_vay", "Chân Váy", "Chân váy"),
+    ("quan_jeans", "Quần Jean", "Denim"),
+    ("dam_cong_so", "Thời Trang Công Sở", "Công sở"),
+    ("tui_xach", "Túi Xách", "Phụ kiện"),
 ]
 
 _KEYWORDS: dict[str, str] = {
-    "ao_so_mi":    "áo sơ mi",
-    "vay_dam":     "váy đầm",
-    "ao_thun":     "áo thun",
-    "ao_khoac":    "áo khoác",
-    "chan_vay":    "chân váy",
-    "quan_jeans":  "quần jean",
+    "ao_so_mi": "áo sơ mi",
+    "vay_dam": "váy đầm",
+    "ao_thun": "áo thun",
+    "ao_khoac": "áo khoác",
+    "chan_vay": "chân váy",
+    "quan_jeans": "quần jean",
     "dam_cong_so": "thời trang công sở",
-    "tui_xach":    "túi xách",
+    "tui_xach": "túi xách",
 }
 
 
@@ -78,7 +79,12 @@ def get_market_trends(location: str = "hcmc") -> list[dict[str, Any]]:
             if df is None or df.empty:
                 df = _fetch_trends(kws, GEO_FALLBACK)
         except Exception as exc:
-            logger.warning("pytrends batch %s failed (geo=%s): %s — retrying with VN", batch, geo, exc)
+            logger.warning(
+                "pytrends batch %s failed (geo=%s): %s — retrying with VN",
+                batch,
+                geo,
+                exc,
+            )
             try:
                 df = _fetch_trends(kws, GEO_FALLBACK)
             except Exception as exc2:
@@ -98,12 +104,14 @@ def get_market_trends(location: str = "hcmc") -> list[dict[str, Any]]:
             display = next((d for k, d, _ in _CATEGORIES if k == key), key)
             tag = next((t for k, _, t in _CATEGORIES if k == key), key)
 
-            results.append({
-                "name": display,
-                "tag": tag,
-                "growthPct": growth,
-                "_interest": current_interest,
-            })
+            results.append(
+                {
+                    "name": display,
+                    "tag": tag,
+                    "growthPct": growth,
+                    "_interest": current_interest,
+                }
+            )
 
     results.sort(key=lambda x: x["_interest"], reverse=True)
     for r in results:

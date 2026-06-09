@@ -1,0 +1,62 @@
+Issue Type,Summary,Description,Epic Name,Epic Link,Story Points,Component,Sprint,Assignee,Priority,Start Date,Due Date,Labels
+Epic,IF-E0 Infrastructure & DevOps,"Ha tang dev, CI/CD, dockerize, deploy nen",Infrastructure & DevOps,,,infra,,,Medium,5/12/2026,6/15/2026,mvp
+Epic,IF-E1 Platform Services,"Discovery, Config, Gateway",Platform Services,,,gateway,,,High,5/12/2026,5/25/2026,mvp
+Epic,IF-E2 Auth & Multi-tenancy,"Tenant, user, role, JWT issuance",Auth & Multi-tenancy,,,auth,,,High,5/12/2026,5/25/2026,mvp
+Epic,IF-E3 Catalog,"Products, variants, inventory",Catalog,,,catalog,,,High,5/19/2026,6/1/2026,mvp
+Epic,IF-E4 Sales,"Orders, order items, customers, suppliers",Sales,,,sales,,,High,5/26/2026,6/3/2026,mvp
+Epic,IF-E5 Data Ingestion (CSV),Upload CSV products + sales history,Data Ingestion (CSV),,,integration,,,High,5/26/2026,6/1/2026,mvp
+Epic,IF-E6 ML Forecast & Recommendation,Prophet forecast + rule-based recommendation,ML Forecast & Recommendation,,,ml,,,High,5/12/2026,6/11/2026,mvp
+Epic,IF-E7 Dashboard BFF,Aggregate API cho frontend,Dashboard BFF,,,bff,,,High,6/2/2026,6/5/2026,mvp
+Epic,IF-E8 Notification,In-app + email alert,Notification,,,notification,,,Medium,6/2/2026,6/8/2026,mvp
+Epic,IF-E9 Frontend Web App,"Web app, dashboard, tich hop OpenAPI",Frontend Web App,,,frontend,,,High,5/12/2026,6/15/2026,mvp
+Epic,IF-E10 Deploy & Pilot,Deploy production + onboard shop dung thu,Deploy & Pilot,,,infra,,,High,6/9/2026,6/15/2026,mvp
+Story,IF-101 Dung docker-compose dev,"Postgres 16, Kafka, Redis, MinIO; healthcheck OK",,Infrastructure & DevOps,5,infra,Sprint 1,BE3,High,5/12/2026,5/13/2026,mvp
+Story,IF-102 Khoi tao schema DB + init.sql,"Moi service co schema rieng (auth_db, catalog_db...)",,Infrastructure & DevOps,2,infra,Sprint 1,BE3,High,5/14/2026,5/14/2026,mvp
+Story,IF-103 CI nen GitHub Actions,ci-java.yml + ci-python.yml; PR mo -> build+test,,Infrastructure & DevOps,3,infra,Sprint 1,BE3,High,5/15/2026,5/18/2026,mvp
+Story,IF-111 Discovery server (Eureka),"Service register duoc, port 8761",,Platform Services,3,gateway,Sprint 1,BE1,High,5/12/2026,5/12/2026,mvp
+Story,IF-112 Config server + config-repo,"Load config tap trung, port 8888",,Platform Services,5,gateway,Sprint 1,BE1,High,5/13/2026,5/14/2026,mvp
+Story,IF-113 shared-core (web/security/events),"common-web RFC7807, common-security TenantContext, common-events; mvn install",,Platform Services,8,gateway,Sprint 1,BE1,High,5/15/2026,5/18/2026,mvp
+Story,IF-121 Scaffold auth-service + Flyway,Tables tenants/users/roles/permissions/refresh_tokens tren auth_db,,Auth & Multi-tenancy,5,auth,Sprint 1,BE2,High,5/12/2026,5/13/2026,mvp
+Story,IF-122 Register-tenant + Login (JWT),Tao tenant+OWNER; login tra access+refresh token; BCrypt,,Auth & Multi-tenancy,8,auth,Sprint 1,BE2,High,5/14/2026,5/18/2026,mvp
+Story,IF-161 Scaffold ml-service (FastAPI),"app/{api,services,models,utils}, ruff/black, Dockerfile; /health 200",,ML Forecast & Recommendation,3,ml,Sprint 1,AI,High,5/12/2026,5/14/2026,mvp
+Story,IF-191 Scaffold frontend + auth flow,Routing + state + goi /auth/login that,,Frontend Web App,5,frontend,Sprint 1,FE,High,5/12/2026,5/18/2026,mvp
+Story,IF-114 Gateway skeleton + route auth,Route /api/v1/auth/** qua 8080,,Platform Services,3,gateway,Sprint 2,BE1,High,5/19/2026,5/19/2026,mvp
+Story,IF-115 JWT validation filter,Token sai/het han -> 401 RFC7807; propagate X-Tenant-Id/X-User-Id,,Platform Services,5,gateway,Sprint 2,BE1,High,5/20/2026,5/21/2026,mvp
+Story,IF-116 CORS + rate limit (Redis),CORS whitelist frontend; vuot limit -> 429,,Platform Services,5,gateway,Sprint 2,BE1,High,5/22/2026,5/25/2026,mvp
+Story,IF-123 Refresh token rotation + logout,Refresh doi token; logout revoke,,Auth & Multi-tenancy,3,auth,Sprint 2,BE2,High,5/19/2026,5/19/2026,mvp
+Story,IF-124 User management + roles (RBAC),"OWNER/MANAGER tao/sua user, gan role",,Auth & Multi-tenancy,5,auth,Sprint 2,BE2,High,5/20/2026,5/22/2026,mvp
+Story,IF-125 Export OpenAPI auth-service,Spec commit api-contracts/auth-service.yaml,,Auth & Multi-tenancy,2,auth,Sprint 2,BE2,Medium,5/25/2026,5/25/2026,mvp;contract
+Story,IF-131 Scaffold catalog + Flyway,products/variants/locations/inventory_levels/inventory_movements; port 8082,,Catalog,3,catalog,Sprint 2,BE3,High,5/19/2026,5/20/2026,mvp
+Story,IF-132 CRUD products + variants,"DTO, MapStruct, moi query filter tenant_id",,Catalog,8,catalog,Sprint 2,BE3,High,5/21/2026,5/25/2026,mvp
+Story,IF-162 ML consumer skeleton + data store,"Ket noi Kafka, san sang nhan event",,ML Forecast & Recommendation,3,ml,Sprint 2,AI,High,5/19/2026,5/21/2026,mvp
+Story,IF-192 Layout + auth guard + user/role UI,"Dang nhap, dieu huong, quan ly user",,Frontend Web App,5,frontend,Sprint 2,FE,High,5/19/2026,5/22/2026,mvp
+Story,IF-133 Inventory movements (append-only),Nhap/xuat -> movement; ton hien tai dung,,Catalog,5,catalog,Sprint 3,BE3,High,5/26/2026,5/28/2026,mvp
+Story,IF-134 Catalog events + OpenAPI,Publish catalog.product.created + catalog.inventory.updated; export spec,,Catalog,3,catalog,Sprint 3,BE3,High,5/29/2026,6/1/2026,mvp;contract
+Story,IF-141 Scaffold sales + Flyway,orders/order_items/customers/suppliers; port 8083,,Sales,3,sales,Sprint 3,BE2,High,5/26/2026,5/26/2026,mvp
+Story,IF-142 CRUD orders + customers,"Tenant filter, DTO; export OpenAPI",,Sales,8,sales,Sprint 3,BE2,High,5/27/2026,5/29/2026,mvp;contract
+Story,IF-143 Publish sales.order.completed,Catalog consume -> tru ton tu dong,,Sales,5,sales,Sprint 3,BE2,High,6/1/2026,6/1/2026,mvp
+Story,IF-151 Scaffold integration + upload CSV products,Upload CSV -> products vao catalog,,Data Ingestion (CSV),5,integration,Sprint 3,BE1,High,5/26/2026,5/28/2026,mvp
+Story,IF-152 Validate CSV + import sales history,Template chuan; bao loi theo dong; tao orders,,Data Ingestion (CSV),5,integration,Sprint 3,BE1,High,5/29/2026,6/1/2026,mvp
+Story,IF-163 Prophet forecast + fallback category,Forecast 30 ngay; SKU moi dung category (cold start),,ML Forecast & Recommendation,8,ml,Sprint 3,AI,High,5/26/2026,5/29/2026,mvp
+Story,IF-164 Publish ml.forecast.generated + REST,Event + GET /forecast/{sku} tra JSON,,ML Forecast & Recommendation,3,ml,Sprint 3,AI,High,6/1/2026,6/1/2026,mvp
+Story,IF-193 UI san pham + upload CSV + don hang,List/create + upload chay,,Frontend Web App,5,frontend,Sprint 3,FE,High,5/26/2026,5/29/2026,mvp
+Story,IF-165 Recommendation rule-based,Clearance: ton>90 ngay + sales giam>50%; Restock: forecast tang + ton thap,,ML Forecast & Recommendation,8,ml,Sprint 4,AI,High,6/2/2026,6/5/2026,mvp
+Story,IF-166 Publish ml.recommendation.created,Event len Kafka,,ML Forecast & Recommendation,2,ml,Sprint 4,AI,High,6/8/2026,6/8/2026,mvp
+Story,IF-171 Scaffold BFF + aggregate overview,GET /dashboard/overview gop inventory+forecast+recommendation,,Dashboard BFF,8,bff,Sprint 4,BE3,High,6/2/2026,6/4/2026,mvp
+Story,IF-172 Route BFF + export OpenAPI,/api/v1/dashboard/** qua 8080; spec commit,,Dashboard BFF,3,bff,Sprint 4,BE3,High,6/5/2026,6/5/2026,mvp;contract
+Story,IF-104 Dockerfile cho moi service,docker build moi service OK,,Infrastructure & DevOps,3,infra,Sprint 4,BE3,High,6/8/2026,6/8/2026,mvp
+Story,IF-181 Notification scaffold + consume,Consume ml events -> in-app + email (SMTP dev),,Notification,5,notification,Sprint 4,BE1,Medium,6/2/2026,6/4/2026,mvp;p1
+Story,IF-182 Idempotent consumer,Dedupe event_id; event trung khong gui 2 lan,,Notification,3,notification,Sprint 4,BE1,Medium,6/5/2026,6/8/2026,mvp;p1
+Story,IF-144 Customers analytics nhe,BFF lay duoc so lieu khach,,Sales,3,sales,Sprint 4,BE2,Medium,6/2/2026,6/3/2026,mvp;p1
+Story,IF-194 Dashboard tong quan,KPI + forecast chart + danh sach de xuat + alert; end-to-end data that,,Frontend Web App,8,frontend,Sprint 4,FE,High,6/2/2026,6/8/2026,mvp
+Story,IF-201 docker-compose.prod.yml,"Full stack, env vars, secret Jasypt",,Deploy & Pilot,5,infra,Sprint 5,BE3,High,6/9/2026,6/10/2026,mvp
+Story,IF-202 Deploy VM + reverse proxy + HTTPS,Truy cap production URL qua HTTPS,,Deploy & Pilot,5,infra,Sprint 5,BE3,High,6/11/2026,6/12/2026,mvp
+Story,IF-203 CI/CD deploy pipeline,Merge main -> auto deploy,,Deploy & Pilot,5,infra,Sprint 5,BE3,High,6/15/2026,6/15/2026,mvp
+Story,IF-105 Observability (Prometheus/Grafana),Dashboard trang thai + alert service-down,,Infrastructure & DevOps,5,infra,Sprint 5,BE1,High,6/9/2026,6/10/2026,mvp
+Story,IF-106 Backup DB tu dong daily,Backup chay; restore thu OK,,Infrastructure & DevOps,2,infra,Sprint 5,BE1,Medium,6/11/2026,6/11/2026,mvp
+Story,IF-211 Security review,"Ra tenant_id moi query, CORS prod, secrets, rate limit",,Deploy & Pilot,5,infra,Sprint 5,BE1,High,6/12/2026,6/15/2026,mvp;security
+Story,IF-204 Seed tenant + import CSV cho shop pilot,"2-3 shop login, thay data cua minh",,Deploy & Pilot,3,sales,Sprint 5,BE2,High,6/9/2026,6/10/2026,mvp
+Story,IF-212 Smoke test E2E production,Dang ky -> upload -> forecast -> dashboard pass 100%,,Deploy & Pilot,3,infra,Sprint 5,BE2,High,6/11/2026,6/12/2026,mvp
+Story,IF-205 Runbook + huong dan + kenh feedback,Tai lieu onboarding + form feedback,,Deploy & Pilot,2,frontend,Sprint 5,FE,Medium,6/9/2026,6/9/2026,mvp;p1
+Story,IF-213 Frontend responsive + error/empty state,UI on dinh tren prod,,Frontend Web App,5,frontend,Sprint 5,FE,High,6/10/2026,6/15/2026,mvp
+Story,IF-214 Validate forecast/recommendation pilot,"Output hop ly tren data that, khong loi",,ML Forecast & Recommendation,3,ml,Sprint 5,AI,High,6/9/2026,6/11/2026,mvp

@@ -49,7 +49,9 @@ async def lifespan(app: FastAPI):
                 s3.create_bucket(Bucket=settings.MINIO_BUCKET)
                 logger.info("Created MinIO bucket: %s", settings.MINIO_BUCKET)
         except Exception:  # noqa: BLE001 — never block startup on MinIO
-            logger.warning("MinIO bucket setup failed (model storage degraded)", exc_info=True)
+            logger.warning(
+                "MinIO bucket setup failed (model storage degraded)", exc_info=True
+            )
     try:
         kafka_consumer.start()
     except Exception:  # noqa: BLE001

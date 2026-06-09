@@ -1,4 +1,5 @@
 """Market trends endpoint."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -24,7 +25,9 @@ class MarketTrendsResponse(BaseModel):
 
 @router.get("", response_model=MarketTrendsResponse)
 def market_trends(
-    location: str = Query(default="hcmc", description="Region code: hcmc | hanoi | danang"),
+    location: str = Query(
+        default="hcmc", description="Region code: hcmc | hanoi | danang"
+    ),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> Any:
     """Return top trending fashion categories from Google Trends for the given region.

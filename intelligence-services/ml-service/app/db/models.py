@@ -118,6 +118,7 @@ class VariantCategoryMap(Base):
     name mapped via app.utils.category_mapper). No cross-service DB join: catalog
     owns the data and ships it on the event; ml owns the base-model taxonomy.
     """
+
     __tablename__ = "variant_category_map"
     __table_args__ = ({"schema": SCHEMA},)
 
@@ -125,7 +126,9 @@ class VariantCategoryMap(Base):
     tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     # One of the 14 base-model keys, or "unknown" when nothing maps.
     category_key = Column(String(50), nullable=False)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now()
+    )
 
 
 class InventorySnapshot(Base):

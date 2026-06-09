@@ -52,7 +52,9 @@ def process_ingestion_completed(
             .first()
         )
         if advice is not None and advice.status == "PROCESSING":
-            logger.warning("Workspace %s already being processed by the advisor", workspace_id)
+            logger.warning(
+                "Workspace %s already being processed by the advisor", workspace_id
+            )
             return
 
         if advice is None:
@@ -68,7 +70,9 @@ def process_ingestion_completed(
         advice.updated_at = datetime.now(tz=timezone.utc)
         session.commit()
     except Exception:  # noqa: BLE001
-        logger.error("Failed to mark advice PROCESSING for %s", workspace_id, exc_info=True)
+        logger.error(
+            "Failed to mark advice PROCESSING for %s", workspace_id, exc_info=True
+        )
         session.rollback()
         session.close()
         return
@@ -180,13 +184,17 @@ def _summarize(inventory: dict) -> str:
         retail = _num(_get(f, "retail_price", "retailPrice"))
         records.append(
             {
-                "sku": _get(variant, "sku") or _get(product, "product_code", "productCode") or "N/A",
+                "sku": _get(variant, "sku")
+                or _get(product, "product_code", "productCode")
+                or "N/A",
                 "name": _get(product, "product_name", "productName") or "Không tên",
                 "category": _get(product, "category") or "Khác",
                 "stock": stock,
                 "sold": int(_num(sold_raw)) if sold_raw is not None else None,
                 "retail": retail,
-                "margin_pct": round((retail - cost) / retail * 100) if retail > 0 else None,
+                "margin_pct": (
+                    round((retail - cost) / retail * 100) if retail > 0 else None
+                ),
                 "stock_age": _age_days(_get(f, "import_date", "importDate")),
             }
         )
@@ -211,9 +219,13 @@ def _summarize(inventory: dict) -> str:
             c["margins"].append(r["margin_pct"])
     cat_lines = []
     for name, c in sorted(cats.items(), key=lambda kv: kv[1]["stock"], reverse=True):
-        avg_margin = round(sum(c["margins"]) / len(c["margins"])) if c["margins"] else None
+        avg_margin = (
+            round(sum(c["margins"]) / len(c["margins"])) if c["margins"] else None
+        )
         margin_txt = f", biên LN TB ~{avg_margin}%" if avg_margin is not None else ""
-        cat_lines.append(f"- {name}: {c['skus']} SKU, tồn {c['stock']} chiếc{margin_txt}")
+        cat_lines.append(
+            f"- {name}: {c['skus']} SKU, tồn {c['stock']} chiếc{margin_txt}"
+        )
 
     def _line(r: dict) -> str:
         parts = [f"{r['sku']} {r['name']}", f"[{r['category']}]", f"tồn {r['stock']}"]
@@ -229,7 +241,9 @@ def _summarize(inventory: dict) -> str:
 
     overstock = sorted(records, key=lambda r: r["stock"], reverse=True)[:_TOP_N]
     low_sorted = sorted(records, key=lambda r: r["stock"])
-    low_stock = [r for r in low_sorted if r["stock"] <= _LOW_STOCK_MAX] or low_sorted[:5]
+    low_stock = [r for r in low_sorted if r["stock"] <= _LOW_STOCK_MAX] or low_sorted[
+        :5
+    ]
 
     sales_note = (
         "Có dữ liệu số lượng đã bán — hãy ưu tiên dùng nó để đánh giá tốc độ luân chuyển."
@@ -246,7 +260,8 @@ def _summarize(inventory: dict) -> str:
         f"DỮ LIỆU BÁN: {sales_note}\n\n"
         "TỒN KHO THEO DANH MỤC:\n" + "\n".join(cat_lines) + "\n\n"
         "NHÓM TỒN CAO NHẤT (ứng viên XẢ HÀNG / chậm luân chuyển):\n"
-        + "\n".join(_line(r) for r in overstock) + "\n\n"
+        + "\n".join(_line(r) for r in overstock)
+        + "\n\n"
         "NHÓM TỒN THẤP / SẮP HẾT (ứng viên NHẬP THÊM nếu đang bán chạy):\n"
         + "\n".join(_line(r) for r in low_stock)
     )

@@ -1,0 +1,169 @@
+Insight Flow AI — Mô tả dự án & công nghệ
+
+Tổng quan dự án
+
+Insight Flow AI là nền tảng SaaS B2B giúp các shop thời trang vừa và nhỏ tại Việt Nam (1–5 cửa hàng) tối ưu hóa tồn kho thông qua dự báo nhu cầu bằng AI. Hệ thống tự động kết nối với các phần mềm quản lý bán hàng phổ biến (KiotViet, Sapo, Haravan), phân tích dữ liệu bán hàng lịch sử, và đưa ra đề xuất hành động cụ thể như giảm giá, clearance hoặc nhập thêm hàng — giúp giảm tỷ lệ dead stock sau 3 tháng sử dụng.
+
+---
+Kiến trúc tổng quan
+
+Hệ thống theo mô hình Microservices Event-Driven, giao tiếp bất đồng bộ qua Apache Kafka, triển khai trên AWS EC2 bằng Docker. Toàn bộ traffic từ client đi qua một API Gateway duy nhất, xác thực JWT trước khi chuyển tiếp xuống các service nội bộ.
+
+[Browser / Mobile]
+        │ HTTPS
+        ▼
+  [API Gateway :8080]  ←── JWT Validation, Rate Limit, Routing
+        │
+  ┌─────┼─────────────────────────────┐
+  ▼     ▼     ▼        ▼        ▼     ▼
+Auth  Catalog Sales  Integration  BFF  Billing
+        │       │        │
+        └───────┴────────┘
+                │  Kafka Events
+                ▼
+           ML Service (Python)
+                │
+                ▼
+        Notification Service
+
+---
+Danh sách công nghệ & vai trò (dùng để tìm icon trong Figma)
+
+Frontend
+
+┌──────────────┬─────────────┬───────────────────────────────┐
+│  Công nghệ   │ Icon search │            Vai trò            │
+├──────────────┼─────────────┼───────────────────────────────┤
+│ Next.js 14   │ nextjs      │ Web app, admin dashboard, SSR │
+├──────────────┼─────────────┼───────────────────────────────┤
+│ TypeScript   │ typescript  │ Type-safe client code         │
+├──────────────┼─────────────┼───────────────────────────────┤
+│ Tailwind CSS │ tailwindcss │ UI styling                    │
+└──────────────┴─────────────┴───────────────────────────────┘
+
+Backend — Platform
+
+┌───────────────────────┬─────────────┬────────────────────────────────────────────┐
+│       Công nghệ       │ Icon search │                  Vai trò                   │
+├───────────────────────┼─────────────┼────────────────────────────────────────────┤
+│ Spring Boot 3.5       │ springboot  │ Framework cho tất cả Java services         │
+├───────────────────────┼─────────────┼────────────────────────────────────────────┤
+│ Spring Cloud Gateway  │ spring      │ API Gateway: JWT auth, rate limit, routing │
+├───────────────────────┼─────────────┼────────────────────────────────────────────┤
+│ Eureka (Spring Cloud) │ spring      │ Service discovery & registry               │
+├───────────────────────┼─────────────┼────────────────────────────────────────────┤
+│ Spring Cloud Config   │ spring      │ Centralized config management              │
+└───────────────────────┴─────────────┴────────────────────────────────────────────┘
+
+Backend — Business Services
+
+┌──────────────────────┬────────────────────────────┬──────────────────────────────────────────┐
+│       Service        │         Công nghệ          │                 Vai trò                  │
+├──────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+│ auth-service         │ Spring Boot + JWT          │ Tenant, user, RBAC, JWT issuance         │
+├──────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+│ catalog-service      │ Spring Boot + JPA          │ Products, variants, inventory            │
+├──────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+│ sales-service        │ Spring Boot + JPA          │ Orders, customers, suppliers             │
+├──────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+│ billing-service      │ Spring Boot + Outbox       │ Subscription plans, quota enforcement    │
+├──────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+│ integration-service  │ Spring Boot + Resilience4j │ POS connectors (KiotViet, Sapo, Haravan) │
+├──────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+│ dashboard-bff        │ Spring Boot WebFlux        │ API aggregation cho frontend             │
+├──────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+│ notification-service │ Spring Boot                │ Email, in-app alerts                     │
+└──────────────────────┴────────────────────────────┴──────────────────────────────────────────┘
+
+ML / AI
+
+┌────────────────┬─────────────┬────────────────────────────────────────────────┐
+│   Công nghệ    │ Icon search │                    Vai trò                     │
+├────────────────┼─────────────┼────────────────────────────────────────────────┤
+│ Python 3.11    │ python      │ ML service runtime                             │
+├────────────────┼─────────────┼────────────────────────────────────────────────┤
+│ FastAPI        │ fastapi     │ REST API cho ML service                        │
+├────────────────┼─────────────┼────────────────────────────────────────────────┤
+│ Prophet (Meta) │ python      │ Time-series demand forecasting                 │
+├────────────────┼─────────────┼────────────────────────────────────────────────┤
+│ XGBoost        │ python      │ Supplementary forecasting model                │
+├────────────────┼─────────────┼────────────────────────────────────────────────┤
+│ scikit-learn   │ scikitlearn │ Feature engineering, rule-based recommendation │
+└────────────────┴─────────────┴────────────────────────────────────────────────┘
+
+Data & Messaging
+
+┌───────────────┬─────────────┬───────────────────────────────────────────────────────┐
+│   Công nghệ   │ Icon search │                        Vai trò                        │
+├───────────────┼─────────────┼───────────────────────────────────────────────────────┤
+│ PostgreSQL 16 │ postgresql  │ Primary DB — 7 databases độc lập theo service         │
+├───────────────┼─────────────┼───────────────────────────────────────────────────────┤
+│ Redis 7       │ redis       │ Cache, session, rate limit counter                    │
+├───────────────┼─────────────┼───────────────────────────────────────────────────────┤
+│ Apache Kafka  │ apachekafka │ Event backbone: async communication giữa services     │
+├───────────────┼─────────────┼───────────────────────────────────────────────────────┤
+│ MinIO         │ minio       │ Object storage cho ML models & images (S3-compatible) │
+├───────────────┼─────────────┼───────────────────────────────────────────────────────┤
+│ Flyway        │ flyway      │ Database migration versioning                         │
+└───────────────┴─────────────┴───────────────────────────────────────────────────────┘
+
+Infrastructure & Deployment
+
+┌────────────────┬───────────────┬──────────────────────────────────────────────┐
+│   Công nghệ    │  Icon search  │                   Vai trò                    │
+├────────────────┼───────────────┼──────────────────────────────────────────────┤
+│ AWS EC2        │ amazonec2     │ Production server (deploy target)            │
+├────────────────┼───────────────┼──────────────────────────────────────────────┤
+│ Docker         │ docker        │ Container runtime cho tất cả services        │
+├────────────────┼───────────────┼──────────────────────────────────────────────┤
+│ Docker Compose │ docker        │ Orchestration trên single EC2 instance       │
+├────────────────┼───────────────┼──────────────────────────────────────────────┤
+│ GitHub Actions │ githubactions │ CI/CD pipeline: build, test, deploy          │
+├────────────────┼───────────────┼──────────────────────────────────────────────┤
+│ Nginx          │ nginx         │ Reverse proxy, SSL termination trước Gateway │
+└────────────────┴───────────────┴──────────────────────────────────────────────┘
+
+Observability
+
+┌────────────┬─────────────┬────────────────────────────────────────────────────────┐
+│ Công nghệ  │ Icon search │                        Vai trò                         │
+├────────────┼─────────────┼────────────────────────────────────────────────────────┤
+│ Prometheus │ prometheus  │ Metrics scraping từ tất cả services                    │
+├────────────┼─────────────┼────────────────────────────────────────────────────────┤
+│ Grafana    │ grafana     │ Dashboard: inventory health, order volume, ML accuracy │
+├────────────┼─────────────┼────────────────────────────────────────────────────────┤
+│ Loki       │ grafana     │ Log aggregation (Grafana stack)                        │
+└────────────┴─────────────┴────────────────────────────────────────────────────────┘
+
+Security & Auth
+
+┌──────────────────────┬───────────────┬────────────────────────────────────────┐
+│      Công nghệ       │  Icon search  │                Vai trò                 │
+├──────────────────────┼───────────────┼────────────────────────────────────────┤
+│ JWT (JSON Web Token) │ jsonwebtokens │ Stateless authentication token         │
+├──────────────────────┼───────────────┼────────────────────────────────────────┤
+│ Jasypt               │ spring        │ Credential encryption cho POS API keys │
+└──────────────────────┴───────────────┴────────────────────────────────────────┘
+
+---
+Deployment trên EC2
+
+EC2 Instance (Ubuntu 22.04)
+├── Nginx  (port 443/80) — SSL termination
+├── API Gateway (port 8080)
+├── Discovery Server (port 8761)
+├── Config Server  (port 8888)
+├── Auth Service   (port 8081)
+├── Catalog Service (port 8082)
+├── Sales Service  (port 8083)
+├── Billing Service (port 8086)
+├── Integration Service (port 8084)
+├── Dashboard BFF  (port 8090)
+├── Notification Service (port 8091)
+├── ML Service — Python (port 8000)
+├── PostgreSQL (port 5432) — 7 databases
+├── Redis (port 6379)
+├── Kafka + Zookeeper (port 9092)
+├── MinIO (port 9000)
+├── Prometheus (port 9090)
+└── Grafana (port 3001)

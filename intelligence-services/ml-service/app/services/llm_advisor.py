@@ -39,6 +39,7 @@ def _model_label(base_url: str) -> str:
     match = re.search(r"/models/([^:/?]+)", base_url)
     return match.group(1) if match else base_url
 
+
 _PROMPT_TEMPLATE = (
     "Bạn là Chuyên gia phân tích dữ liệu bán lẻ và Chiến lược gia chuỗi cung ứng "
     "ngành THỜI TRANG, am hiểu sâu thị trường TP. Hồ Chí Minh, Việt Nam (gu ăn mặc, "
@@ -50,15 +51,15 @@ _PROMPT_TEMPLATE = (
     "mức độ quan tâm tìm kiếm và xu hướng thời trang ĐANG diễn ra tại TP.HCM / Việt Nam "
     "(từ khoá hot, kiểu dáng/chất liệu/màu đang lên, yếu tố mùa vụ và dịp lễ sắp tới) để "
     "đưa ra DỰ BÁO CÓ CĂN CỨ THỰC TẾ thay vì phỏng đoán. Khi có thể, dẫn lại tín hiệu cụ "
-    "thể (ví dụ: từ khoá đang tăng) trong trường \"trend_evidence\".\n\n"
+    'thể (ví dụ: từ khoá đang tăng) trong trường "trend_evidence".\n\n'
     "NHIỆM VỤ:\n"
     "1) Chiến lược tồn kho (inventory_strategy): phân tích theo TỪNG SKU/danh mục CỤ THỂ "
     "có trong dữ liệu trên (nêu đúng mã SKU + tên). Phân biệt rõ:\n"
-    "   - Tồn rất CAO / chậm luân chuyển → action \"Xả hàng\" hoặc \"Khuyến mãi\", kèm "
+    '   - Tồn rất CAO / chậm luân chuyển → action "Xả hàng" hoặc "Khuyến mãi", kèm '
     "discount_percentage_recommendation hợp lý.\n"
-    "   - Tồn THẤP / sắp hết / hết hàng nhưng có dấu hiệu bán chạy → action \"Nhập thêm\", "
+    '   - Tồn THẤP / sắp hết / hết hàng nhưng có dấu hiệu bán chạy → action "Nhập thêm", '
     "kèm suggested_restock_quantity.\n"
-    "   - Gán priority \"HIGH\"/\"MEDIUM\"/\"LOW\" theo mức độ ảnh hưởng dòng vốn/doanh thu.\n"
+    '   - Gán priority "HIGH"/"MEDIUM"/"LOW" theo mức độ ảnh hưởng dòng vốn/doanh thu.\n'
     "2) Dự báo xu hướng (trend_forecasting): gợi ý mặt hàng NÊN nhập dựa trên xu hướng tra "
     "cứu được, ưu tiên thứ BỔ TRỢ cho tồn kho hiện có và TRÁNH trùng mặt hàng đang tồn cao.\n\n"
     "RÀNG BUỘC TUYỆT ĐỐI: CHỈ trả về KẾT QUẢ DUY NHẤT LÀ MỘT CHUỖI JSON hợp lệ "
@@ -90,7 +91,9 @@ def generate_inventory_strategy(
 
     score = completeness_score if completeness_score is not None else 0.0
     missing = missing_fields if missing_fields else "[]"
-    prompt = _PROMPT_TEMPLATE.format(score=score, missing=missing, inventory=inventory_summary)
+    prompt = _PROMPT_TEMPLATE.format(
+        score=score, missing=missing, inventory=inventory_summary
+    )
 
     body: dict = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -118,7 +121,9 @@ def generate_inventory_strategy(
         url = f"{base_url}?key={settings.GEMINI_API_KEY}"
         for attempt in range(1, _MAX_ATTEMPTS + 1):
             try:
-                logger.info("Calling Gemini %s (attempt %d/%d)", model, attempt, _MAX_ATTEMPTS)
+                logger.info(
+                    "Calling Gemini %s (attempt %d/%d)", model, attempt, _MAX_ATTEMPTS
+                )
                 with httpx.Client(timeout=60.0) as client:
                     resp = client.post(url, json=body)
                     resp.raise_for_status()
@@ -126,11 +131,15 @@ def generate_inventory_strategy(
 
                 candidates = data.get("candidates")
                 if not candidates:
-                    raise RuntimeError("Gemini returned no candidates (possibly blocked)")
+                    raise RuntimeError(
+                        "Gemini returned no candidates (possibly blocked)"
+                    )
                 # With Google Search grounding the answer can be split across several
                 # parts (and some parts carry no "text"), so join every text part.
                 parts = candidates[0].get("content", {}).get("parts", [])
-                raw_text = "".join(p["text"] for p in parts if isinstance(p, dict) and "text" in p)
+                raw_text = "".join(
+                    p["text"] for p in parts if isinstance(p, dict) and "text" in p
+                )
                 return _extract_clean_json(raw_text)
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
@@ -142,27 +151,45 @@ def generate_inventory_strategy(
                         f"Gemini {model} returned non-retryable HTTP {status}"
                     ) from None
                 logger.warning(
-                    "Gemini %s transient HTTP %d (attempt %d/%d)", model, status, attempt, _MAX_ATTEMPTS
+                    "Gemini %s transient HTTP %d (attempt %d/%d)",
+                    model,
+                    status,
+                    attempt,
+                    _MAX_ATTEMPTS,
                 )
             except httpx.RequestError as exc:
                 # Network / timeout / connection reset — transient, retry.
                 last_error = exc
                 logger.warning(
-                    "Gemini %s network error (attempt %d/%d): %s", model, attempt, _MAX_ATTEMPTS, _redact(str(exc))
+                    "Gemini %s network error (attempt %d/%d): %s",
+                    model,
+                    attempt,
+                    _MAX_ATTEMPTS,
+                    _redact(str(exc)),
                 )
-            except Exception as exc:  # noqa: BLE001 — empty/blocked/parse, retry once more
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 — empty/blocked/parse, retry once more
                 last_error = exc
                 logger.warning(
-                    "Gemini %s call failed (attempt %d/%d): %s", model, attempt, _MAX_ATTEMPTS, _redact(str(exc))
+                    "Gemini %s call failed (attempt %d/%d): %s",
+                    model,
+                    attempt,
+                    _MAX_ATTEMPTS,
+                    _redact(str(exc)),
                 )
 
             if attempt < _MAX_ATTEMPTS:
                 # Exponential backoff (2s, 4s, 8s...) capped, plus jitter so parallel
                 # workspaces don't all retry in lockstep against an overloaded API.
-                backoff = min(_RETRY_BASE_SECONDS * 2 ** (attempt - 1), _RETRY_MAX_SECONDS)
+                backoff = min(
+                    _RETRY_BASE_SECONDS * 2 ** (attempt - 1), _RETRY_MAX_SECONDS
+                )
                 time.sleep(backoff + random.uniform(0, backoff * 0.25))
 
-        logger.warning("Gemini model %s exhausted; trying fallback model if available", model)
+        logger.warning(
+            "Gemini model %s exhausted; trying fallback model if available", model
+        )
 
     raise RuntimeError(f"Gemini call failed for all models: {_redact(str(last_error))}")
 

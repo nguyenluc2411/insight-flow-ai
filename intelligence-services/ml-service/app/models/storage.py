@@ -12,6 +12,7 @@ restart the cache is empty and models are re-downloaded from MinIO on demand.
 verbatim as the MinIO object key, e.g. "base/ao_so_mi.pkl" or
 "{tenant_id}/{variant_id}/{version}.pkl".
 """
+
 from __future__ import annotations
 
 import logging
@@ -105,7 +106,9 @@ def list_keys(prefix: str) -> list[str]:
             keys.add(f"{prefix.rstrip('/')}/{p.name}")
     if settings.MINIO_ENABLED:
         try:
-            resp = _get_s3().list_objects_v2(Bucket=settings.MINIO_BUCKET, Prefix=prefix)
+            resp = _get_s3().list_objects_v2(
+                Bucket=settings.MINIO_BUCKET, Prefix=prefix
+            )
             for obj in resp.get("Contents", []):
                 if obj["Key"].endswith(".pkl"):
                     keys.add(obj["Key"])

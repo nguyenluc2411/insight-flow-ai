@@ -308,11 +308,13 @@ class KafkaEventConsumer:
                 mapped = resolve_category_key(event.category_slug, event.category_name)
                 mapping = session.get(VariantCategoryMap, UUID(event.variant_id))
                 if mapping is None:
-                    session.add(VariantCategoryMap(
-                        variant_id=UUID(event.variant_id),
-                        tenant_id=UUID(event.tenant_id),
-                        category_key=mapped,
-                    ))
+                    session.add(
+                        VariantCategoryMap(
+                            variant_id=UUID(event.variant_id),
+                            tenant_id=UUID(event.tenant_id),
+                            category_key=mapped,
+                        )
+                    )
                 else:
                     mapping.category_key = mapped
 

@@ -44,12 +44,20 @@ def _envelope(event_type: str, payload: dict) -> str:
 
 def send_recommendation_generated(workspace_id: str, tenant_id: str) -> None:
     payload = {"workspace_id": workspace_id, "tenant_id": tenant_id}
-    _emit(TOPIC_RECOMMENDATION_GENERATED, workspace_id, _envelope(TOPIC_RECOMMENDATION_GENERATED, payload))
+    _emit(
+        TOPIC_RECOMMENDATION_GENERATED,
+        workspace_id,
+        _envelope(TOPIC_RECOMMENDATION_GENERATED, payload),
+    )
 
 
 def send_recommendation_failed(workspace_id: str, error_message: str) -> None:
     payload = {"workspace_id": workspace_id, "error_message": error_message}
-    _emit(TOPIC_RECOMMENDATION_FAILED, workspace_id, _envelope(TOPIC_RECOMMENDATION_FAILED, payload))
+    _emit(
+        TOPIC_RECOMMENDATION_FAILED,
+        workspace_id,
+        _envelope(TOPIC_RECOMMENDATION_FAILED, payload),
+    )
 
 
 def _emit(topic: str, key: str, value: str) -> None:

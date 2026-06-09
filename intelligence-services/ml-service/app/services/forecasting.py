@@ -1,4 +1,5 @@
 """Prophet-based demand forecasting with cold-start fallback."""
+
 from __future__ import annotations
 
 import json
@@ -34,7 +35,9 @@ class InsufficientDataError(Exception):
 class ProphetForecaster:
     """Per-tenant per-variant Prophet forecaster with category fallback."""
 
-    def prepare_data(self, db: Session, tenant_id: UUID, variant_id: UUID) -> pd.DataFrame:
+    def prepare_data(
+        self, db: Session, tenant_id: UUID, variant_id: UUID
+    ) -> pd.DataFrame:
         """Aggregate sales by day; returns DataFrame with columns ds, y."""
         rows = (
             db.query(
@@ -93,7 +96,9 @@ class ProphetForecaster:
         with meta_path.open("w", encoding="utf-8") as f:
             json.dump(metadata, f)
 
-        logger.info("Trained model %s for tenant=%s variant=%s", version, tenant_id, variant_id)
+        logger.info(
+            "Trained model %s for tenant=%s variant=%s", version, tenant_id, variant_id
+        )
         return version
 
     def predict(
@@ -114,14 +119,22 @@ class ProphetForecaster:
         """
         latest_key = _find_latest_model_key(tenant_id, variant_id)
         if latest_key is None:
-            logger.info("No model found, using category fallback for variant=%s", variant_id)
-            return self._category_fallback(db, tenant_id, variant_id, days, category_key, sku)
+            logger.info(
+                "No model found, using category fallback for variant=%s", variant_id
+            )
+            return self._category_fallback(
+                db, tenant_id, variant_id, days, category_key, sku
+            )
 
         try:
             model = load_model(latest_key)
         except (FileNotFoundError, OSError):
-            logger.warning("Failed to load model %s, falling back", latest_key, exc_info=True)
-            return self._category_fallback(db, tenant_id, variant_id, days, category_key, sku)
+            logger.warning(
+                "Failed to load model %s, falling back", latest_key, exc_info=True
+            )
+            return self._category_fallback(
+                db, tenant_id, variant_id, days, category_key, sku
+            )
 
         future = model.make_future_dataframe(periods=days)
         forecast_df = model.predict(future)
@@ -167,13 +180,20 @@ class ProphetForecaster:
         if category_key is None and sku:
             category_key = self._guess_category_from_sku(sku)
             if category_key:
-                logger.info("Cold-start SKU hint: sku=%s → category=%s for variant=%s", sku, category_key, variant_id)
+                logger.info(
+                    "Cold-start SKU hint: sku=%s → category=%s for variant=%s",
+                    sku,
+                    category_key,
+                    variant_id,
+                )
 
         # Step 4: generic fallback — ao_thun is the safest default (common, smooth seasonality)
         if category_key is None:
             category_key = "ao_thun"
             basis = "market_trends_hcm_generic"
-            logger.info("Cold-start generic fallback (ao_thun) for variant=%s", variant_id)
+            logger.info(
+                "Cold-start generic fallback (ao_thun) for variant=%s", variant_id
+            )
 
         base_key = _base_key(category_key)
         if not model_exists(base_key):
@@ -183,18 +203,29 @@ class ProphetForecaster:
                 if model_exists(fallback_key):
                     base_key = fallback_key
                     basis = "market_trends_hcm_generic"
-                    logger.info("No base model for category=%s, using ao_thun generic", category_key)
+                    logger.info(
+                        "No base model for category=%s, using ao_thun generic",
+                        category_key,
+                    )
                 else:
-                    logger.warning("No base model for category=%s or generic (variant=%s)", category_key, variant_id)
+                    logger.warning(
+                        "No base model for category=%s or generic (variant=%s)",
+                        category_key,
+                        variant_id,
+                    )
                     return self._zeros(days), "none", "no_base_model"
             else:
-                logger.warning("No generic base model available for variant=%s", variant_id)
+                logger.warning(
+                    "No generic base model available for variant=%s", variant_id
+                )
                 return self._zeros(days), "none", "no_base_model"
 
         try:
             model = load_model(base_key)
         except (FileNotFoundError, OSError):
-            logger.warning("Failed to load base model %s, returning zeros", base_key, exc_info=True)
+            logger.warning(
+                "Failed to load base model %s, returning zeros", base_key, exc_info=True
+            )
             return self._zeros(days), "none", "no_base_model"
 
         future = model.make_future_dataframe(periods=days, freq="D")
@@ -210,7 +241,12 @@ class ProphetForecaster:
             )
             for row in tail.itertuples(index=False)
         ]
-        logger.info("Cold-start from base model category=%s basis=%s variant=%s", category_key, basis, variant_id)
+        logger.info(
+            "Cold-start from base model category=%s basis=%s variant=%s",
+            category_key,
+            basis,
+            variant_id,
+        )
         return predictions, "low", basis
 
     @staticmethod
@@ -218,20 +254,39 @@ class ProphetForecaster:
         """Map SKU prefix to a category_key using naming conventions."""
         sku_upper = sku.upper()
         SKU_HINTS = {
-            "ASM": "ao_so_mi", "SHIRT": "ao_so_mi",
-            "VD": "vay_dam", "DRESS": "vay_dam",
-            "QJ": "quan_jeans", "JEAN": "quan_jeans", "DENIM": "quan_jeans",
-            "AT": "ao_thun", "THUN": "ao_thun", "TSHIRT": "ao_thun",
-            "GS": "giay_sneaker", "SHOE": "giay_sneaker", "SNEAKER": "giay_sneaker",
-            "AK": "ao_khoac", "JACKET": "ao_khoac", "HOODIE": "ao_khoac",
-            "TX": "tui_xach", "BAG": "tui_xach", "TOTE": "tui_xach",
-            "AD": "ao_dai", "AODAI": "ao_dai",
-            "CV": "chan_vay", "SKIRT": "chan_vay",
-            "QA": "quan_au", "TROUSER": "quan_au",
-            "DT": "do_the_thao", "SPORT": "do_the_thao",
-            "DM": "dam_maxi", "MAXI": "dam_maxi",
-            "CS": "dam_cong_so", "OFFICE": "dam_cong_so",
-            "PK": "phu_kien", "ACC": "phu_kien",
+            "ASM": "ao_so_mi",
+            "SHIRT": "ao_so_mi",
+            "VD": "vay_dam",
+            "DRESS": "vay_dam",
+            "QJ": "quan_jeans",
+            "JEAN": "quan_jeans",
+            "DENIM": "quan_jeans",
+            "AT": "ao_thun",
+            "THUN": "ao_thun",
+            "TSHIRT": "ao_thun",
+            "GS": "giay_sneaker",
+            "SHOE": "giay_sneaker",
+            "SNEAKER": "giay_sneaker",
+            "AK": "ao_khoac",
+            "JACKET": "ao_khoac",
+            "HOODIE": "ao_khoac",
+            "TX": "tui_xach",
+            "BAG": "tui_xach",
+            "TOTE": "tui_xach",
+            "AD": "ao_dai",
+            "AODAI": "ao_dai",
+            "CV": "chan_vay",
+            "SKIRT": "chan_vay",
+            "QA": "quan_au",
+            "TROUSER": "quan_au",
+            "DT": "do_the_thao",
+            "SPORT": "do_the_thao",
+            "DM": "dam_maxi",
+            "MAXI": "dam_maxi",
+            "CS": "dam_cong_so",
+            "OFFICE": "dam_cong_so",
+            "PK": "phu_kien",
+            "ACC": "phu_kien",
         }
         for prefix, key in SKU_HINTS.items():
             if sku_upper.startswith(prefix):

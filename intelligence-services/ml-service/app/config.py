@@ -1,6 +1,7 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     PORT: int = 8000
 
@@ -13,7 +14,9 @@ class Settings(BaseSettings):
     DB_SCHEMA: str = "ml_service_db"
 
     # --- ÁNH XẠ KAFKA ---
-    KAFKA_BOOTSTRAP: str = Field(default="localhost:9092", alias="KAFKA_BOOTSTRAP_SERVERS")
+    KAFKA_BOOTSTRAP: str = Field(
+        default="localhost:9092", alias="KAFKA_BOOTSTRAP_SERVERS"
+    )
     KAFKA_GROUP_ID: str = "ml-service-group"
 
     MODEL_STORAGE_PATH: str = "./models"
@@ -53,4 +56,6 @@ class Settings(BaseSettings):
 
         # 2. Quan trọng: Bỏ qua tất cả các biến rác của service khác (SEPAY, MAIL...) để không bị văng lỗi
         extra = "ignore"
+
+
 settings = Settings()
