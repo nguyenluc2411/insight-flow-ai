@@ -1,0 +1,99 @@
+keyword,config,history_rows,mae,rmse,forecast_file
+adidas áo khoác,Cluster_HIGH_SEASONAL,1985,5.46,16.05,output\forecast_adidas_áo_khoác.csv
+ao khoac jean,Cluster_MODERATE,886,1.18,6.65,output\forecast_ao_khoac_jean.csv
+ao phong oversize,Cluster_STABLE,519,1.55,6.77,output\forecast_ao_phong_oversize.csv
+ao so mi nam,Cluster_MODERATE,1438,2.36,8.91,output\forecast_ao_so_mi_nam.csv
+bảng size quần jean nữ,Cluster_HIGH_SEASONAL,823,0.65,7.68,output\forecast_bảng_size_quần_jean_nữ.csv
+charles & keith,Cluster_STABLE,1985,4.76,6.54,output\forecast_charles_&_keith.csv
+charles & keith túi xách,Cluster_HIGH_SEASONAL,1985,1.52,9.46,output\forecast_charles_&_keith_túi_xách.csv
+chân váy nữ,Cluster_HIGH_SEASONAL,1985,3.2,14.52,output\forecast_chân_váy_nữ.csv
+dam maxi,Cluster_HIGH_SEASONAL,882,0.52,6.47,output\forecast_dam_maxi.csv
+dép sandal nữ,Cluster_HIGH_SEASONAL,1745,1.51,10.47,output\forecast_dép_sandal_nữ.csv
+dép sandal nữ đẹp,Cluster_HIGH_SEASONAL,823,0.63,7.46,output\forecast_dép_sandal_nữ_đẹp.csv
+dép sandal nữ đế cao,Cluster_HIGH_SEASONAL,1105,0.56,6.88,output\forecast_dép_sandal_nữ_đế_cao.csv
+giay sneaker,Cluster_MODERATE,1278,1.11,5.78,output\forecast_giay_sneaker.csv
+giày sandal nữ,Cluster_HIGH_SEASONAL,1865,3.54,14.07,output\forecast_giày_sandal_nữ.csv
+giày sandal nữ hàng hiệu,Cluster_HIGH_SEASONAL,1308,0.46,5.86,output\forecast_giày_sandal_nữ_hàng_hiệu.csv
+giày sandal nữ đi học,Cluster_HIGH_SEASONAL,1133,0.72,8.09,output\forecast_giày_sandal_nữ_đi_học.csv
+giày sandal nữ đẹp,Cluster_HIGH_SEASONAL,1581,0.76,8.21,output\forecast_giày_sandal_nữ_đẹp.csv
+giày sandal nữ đế cao,Cluster_HIGH_SEASONAL,1197,0.87,8.56,output\forecast_giày_sandal_nữ_đế_cao.csv
+giày sneaker adidas,Cluster_MODERATE,1561,2.02,7.97,output\forecast_giày_sneaker_adidas.csv
+giày sneaker chính hãng,Cluster_MODERATE,1742,1.96,8.06,output\forecast_giày_sneaker_chính_hãng.csv
+giày sneaker nike,Cluster_MODERATE,1740,2.29,8.52,output\forecast_giày_sneaker_nike.csv
+giày sneaker trắng,Cluster_MODERATE,1467,1.66,8.02,output\forecast_giày_sneaker_trắng.csv
+mẫu áo sơ mi nam,Cluster_MODERATE,1284,1.93,8.96,output\forecast_mẫu_áo_sơ_mi_nam.csv
+phối đồ với quần short nam,Cluster_MODERATE,1345,1.76,8.11,output\forecast_phối_đồ_với_quần_short_nam.csv
+quan jean nu,Cluster_HIGH_SEASONAL,1187,0.54,7.03,output\forecast_quan_jean_nu.csv
+quan short nam,Cluster_MODERATE,1306,1.29,6.76,output\forecast_quan_short_nam.csv
+quần jean nữ cao cấp,Cluster_HIGH_SEASONAL,1321,0.74,8.04,output\forecast_quần_jean_nữ_cao_cấp.csv
+quần jean nữ ống loe,Cluster_HIGH_SEASONAL,1005,0.62,7.44,output\forecast_quần_jean_nữ_ống_loe.csv
+quần jean nữ ống rộng,Cluster_HIGH_SEASONAL,1195,0.71,7.28,output\forecast_quần_jean_nữ_ống_rộng.csv
+quần short nam cao cấp,Cluster_MODERATE,1277,1.46,7.64,output\forecast_quần_short_nam_cao_cấp.csv
+quần short nam hàng hiệu,Cluster_MODERATE,830,1.12,6.22,output\forecast_quần_short_nam_hàng_hiệu.csv
+quần short nam ngắn,Cluster_MODERATE,1865,1.48,7.71,output\forecast_quần_short_nam_ngắn.csv
+quần short nam thể thao,Cluster_MODERATE,1319,1.98,8.86,output\forecast_quần_short_nam_thể_thao.csv
+quần short nam đẹp,Cluster_MODERATE,1315,0.97,6.27,output\forecast_quần_short_nam_đẹp.csv
+quần váy nữ,Cluster_HIGH_SEASONAL,1863,1.77,9.56,output\forecast_quần_váy_nữ.csv
+sandal nu,Cluster_HIGH_SEASONAL,700,0.6,7.17,output\forecast_sandal_nu.csv
+sandal nữ đẹp,Cluster_HIGH_SEASONAL,972,0.74,8.06,output\forecast_sandal_nữ_đẹp.csv
+shop giày sneaker,Cluster_MODERATE,1741,2.85,10.07,output\forecast_shop_giày_sneaker.csv
+shop quần jean nữ,Cluster_HIGH_SEASONAL,1315,0.79,8.53,output\forecast_shop_quần_jean_nữ.csv
+shop áo sơ mi nam,Cluster_MODERATE,1742,2.2,9.48,output\forecast_shop_áo_sơ_mi_nam.csv
+shop áo thun nam,Cluster_HIGH_SEASONAL,1462,0.89,8.29,output\forecast_shop_áo_thun_nam.csv
+shop đầm nữ,Cluster_HIGH_SEASONAL,1004,0.9,8.86,output\forecast_shop_đầm_nữ.csv
+size quần jean nữ,Cluster_HIGH_SEASONAL,1439,0.51,5.42,output\forecast_size_quần_jean_nữ.csv
+size áo khoác,Cluster_HIGH_SEASONAL,1985,5.63,17.16,output\forecast_size_áo_khoác.csv
+size áo sơ mi nam,Cluster_MODERATE,1862,2.73,9.97,output\forecast_size_áo_sơ_mi_nam.csv
+size áo thun nam,Cluster_HIGH_SEASONAL,1711,0.87,7.23,output\forecast_size_áo_thun_nam.csv
+tui xach nu,Cluster_HIGH_SEASONAL,1134,0.74,8.07,output\forecast_tui_xach_nu.csv
+túi charles & keith,Cluster_HIGH_SEASONAL,1985,16.72,23.68,output\forecast_túi_charles_&_keith.csv
+túi hapas,Cluster_HIGH_SEASONAL,1745,3.01,9.11,output\forecast_túi_hapas.csv
+túi pedro nữ,Cluster_HIGH_SEASONAL,1135,1.35,10.15,output\forecast_túi_pedro_nữ.csv
+túi xách da nữ,Cluster_HIGH_SEASONAL,1622,0.8,8.4,output\forecast_túi_xách_da_nữ.csv
+túi xách hapas,Cluster_HIGH_SEASONAL,861,1.2,9.75,output\forecast_túi_xách_hapas.csv
+túi xách hàng hiệu,Cluster_HIGH_SEASONAL,1985,2.01,9.41,output\forecast_túi_xách_hàng_hiệu.csv
+túi xách nam,Cluster_HIGH_SEASONAL,1985,7.4,16.07,output\forecast_túi_xách_nam.csv
+túi xách nữ charles & keith,Cluster_HIGH_SEASONAL,1588,0.77,8.21,output\forecast_túi_xách_nữ_charles_&_keith.csv
+túi xách nữ vascara,Cluster_HIGH_SEASONAL,1317,0.84,8.62,output\forecast_túi_xách_nữ_vascara.csv
+túi xách nữ đẹp,Cluster_HIGH_SEASONAL,1105,0.82,8.25,output\forecast_túi_xách_nữ_đẹp.csv
+túi xách pedro,Cluster_HIGH_SEASONAL,1741,0.98,8.88,output\forecast_túi_xách_pedro.csv
+túi xách pedro nữ,Cluster_HIGH_SEASONAL,1285,0.54,5.79,output\forecast_túi_xách_pedro_nữ.csv
+túi xách tay nữ,Cluster_HIGH_SEASONAL,830,0.66,7.66,output\forecast_túi_xách_tay_nữ.csv
+vay hoa,Cluster_HIGH_SEASONAL,1985,2.48,9.81,output\forecast_vay_hoa.csv
+váy nữ thời trang,Cluster_HIGH_SEASONAL,1618,0.75,8.2,output\forecast_váy_nữ_thời_trang.csv
+váy nữ đẹp,Cluster_HIGH_SEASONAL,1985,2.57,12.03,output\forecast_váy_nữ_đẹp.csv
+áo khoác bomber,Cluster_HIGH_SEASONAL,1985,7.17,17.86,output\forecast_áo_khoác_bomber.csv
+áo khoác da,Cluster_HIGH_SEASONAL,1985,8.56,17.64,output\forecast_áo_khoác_da.csv
+áo khoác dài,Cluster_HIGH_SEASONAL,1985,3.51,8.74,output\forecast_áo_khoác_dài.csv
+áo khoác dạ,Cluster_HIGH_SEASONAL,1865,6.8,17.38,output\forecast_áo_khoác_dạ.csv
+áo khoác gió,Cluster_HIGH_SEASONAL,1985,4.46,10.25,output\forecast_áo_khoác_gió.csv
+áo khoác jean,Cluster_HIGH_SEASONAL,1985,3.55,12.91,output\forecast_áo_khoác_jean.csv
+áo khoác len,Cluster_HIGH_SEASONAL,1985,7.79,18.95,output\forecast_áo_khoác_len.csv
+áo khoác lông,Cluster_HIGH_SEASONAL,1985,5.18,12.51,output\forecast_áo_khoác_lông.csv
+áo khoác nam,Cluster_MODERATE,1985,3.33,4.64,output\forecast_áo_khoác_nam.csv
+áo khoác nữ,Cluster_MODERATE,1985,3.9,5.32,output\forecast_áo_khoác_nữ.csv
+áo khoác uniqlo,Cluster_HIGH_SEASONAL,1985,2.79,10.9,output\forecast_áo_khoác_uniqlo.csv
+áo khoác đẹp,Cluster_HIGH_SEASONAL,1985,5.58,11.81,output\forecast_áo_khoác_đẹp.csv
+áo khoác đồng phục,Cluster_HIGH_SEASONAL,1985,1.41,7.53,output\forecast_áo_khoác_đồng_phục.csv
+áo polo,Cluster_STABLE,1985,6.83,9.02,output\forecast_áo_polo.csv
+áo polo nam,Cluster_HIGH_SEASONAL,1985,14.45,21.74,output\forecast_áo_polo_nam.csv
+áo sơ mi nam an phước,Cluster_MODERATE,1350,1.8,8.45,output\forecast_áo_sơ_mi_nam_an_phước.csv
+áo sơ mi nam cộc tay,Cluster_MODERATE,680,2.0,8.22,output\forecast_áo_sơ_mi_nam_cộc_tay.csv
+áo sơ mi nam hàng hiệu,Cluster_MODERATE,1315,1.62,8.08,output\forecast_áo_sơ_mi_nam_hàng_hiệu.csv
+áo sơ mi nam trắng,Cluster_MODERATE,1865,4.13,11.05,output\forecast_áo_sơ_mi_nam_trắng.csv
+áo sơ mi nam việt tiến,Cluster_MODERATE,1438,2.21,9.63,output\forecast_áo_sơ_mi_nam_việt_tiến.csv
+áo sơ mi nam đẹp,Cluster_MODERATE,1621,1.96,7.11,output\forecast_áo_sơ_mi_nam_đẹp.csv
+áo sơ mi việt tiến,Cluster_MODERATE,1863,2.02,7.6,output\forecast_áo_sơ_mi_việt_tiến.csv
+áo thun nam cao cấp,Cluster_HIGH_SEASONAL,1743,0.76,7.25,output\forecast_áo_thun_nam_cao_cấp.csv
+áo thun nam có cổ,Cluster_HIGH_SEASONAL,1592,0.78,7.13,output\forecast_áo_thun_nam_có_cổ.csv
+áo thun nam cổ tròn,Cluster_HIGH_SEASONAL,1985,0.67,7.21,output\forecast_áo_thun_nam_cổ_tròn.csv
+áo thun nam hàng hiệu,Cluster_HIGH_SEASONAL,734,0.45,6.37,output\forecast_áo_thun_nam_hàng_hiệu.csv
+áo thun nam pierre cardin,Cluster_HIGH_SEASONAL,1043,0.9,8.65,output\forecast_áo_thun_nam_pierre_cardin.csv
+áo thun nam polo,Cluster_HIGH_SEASONAL,1592,0.93,8.42,output\forecast_áo_thun_nam_polo.csv
+áo thun nam đẹp,Cluster_HIGH_SEASONAL,1169,1.32,10.59,output\forecast_áo_thun_nam_đẹp.csv
+áo thun trắng,Cluster_HIGH_SEASONAL,1985,3.21,10.38,output\forecast_áo_thun_trắng.csv
+áo đầm nữ,Cluster_HIGH_SEASONAL,1865,1.76,11.67,output\forecast_áo_đầm_nữ.csv
+đầm nữ cao cấp,Cluster_HIGH_SEASONAL,832,0.5,5.78,output\forecast_đầm_nữ_cao_cấp.csv
+đầm nữ trung niên,Cluster_HIGH_SEASONAL,1165,0.86,8.65,output\forecast_đầm_nữ_trung_niên.csv
+đầm nữ xinh,Cluster_HIGH_SEASONAL,1186,0.64,7.13,output\forecast_đầm_nữ_xinh.csv
+đầm nữ đẹp,Cluster_HIGH_SEASONAL,1135,1.24,9.87,output\forecast_đầm_nữ_đẹp.csv
