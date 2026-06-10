@@ -203,6 +203,41 @@ services:
         condition: service_healthy
 
   # ============================================================================
+  # Workspace (file-upload sessions, ingestion orchestration)
+  # ============================================================================
+
+  user-workspace-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/user-workspace-service:latest
+    build:
+      context: ../../business-services/user-workspace-service
+      dockerfile: Dockerfile
+    container_name: insight-workspace
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      WORKSPACE_DB_NAME: ${WORKSPACE_DB_NAME:-insightflow_workspace}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:-insightflow-service-jwt-secret-change-in-prod!!}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_REGION: ${MINIO_REGION:-ap-southeast-1}
+      MINIO_BUCKET: ${MINIO_BUCKET:-insightflow-bucket}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-change_me_in_prod}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ============================================================================
   # Integration
   # ============================================================================
 
