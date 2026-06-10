@@ -123,6 +123,8 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: GHCR_TOKEN,REPO_OWNER
+          # Default is 10m; ghcr pulls of several images can stall and blow past it.
+          command_timeout: "30m"
           script: |
             set -e
             OWNER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
@@ -135,6 +137,15 @@ jobs:
               -f infrastructure/docker/docker-compose.yml \
               -f infrastructure/docker/docker-compose.services.yml \
               --env-file .env"
-            $COMPOSE pull $SERVICES
+            # ghcr pulls occasionally stall (bytes freeze) and hang the whole deploy.
+            # Bound each attempt with `timeout` so a stall is killed and retried —
+            # reconnecting usually clears it.
+            for i in 1 2 3; do
+              timeout 600 $COMPOSE pull $SERVICES && break
+              echo "pull attempt $i/3 stalled/failed, retrying in 10s..."
+              sleep 10
+            done
             $COMPOSE up -d $SERVICES
+            # Reclaim disk: each deploy orphans the previous :latest layers.
+            docker image prune -f || true
             docker logout ghcr.io
