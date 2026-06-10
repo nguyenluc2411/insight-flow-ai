@@ -319,6 +319,9 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_URL: http://discovery-server:8761/eureka/
       CONFIG_SERVER_URL: http://config-server:8888
+      # ml-service is Python (not in Eureka) — BFF reaches it by container alias,
+      # NOT localhost, else /api/v1/ml/health fails and dashboard shows mlStatus=DOWN.
+      APP_DOWNSTREAM_ML_BASE_URL: http://ml-service:8000
     depends_on:
       kafka:
         condition: service_healthy
