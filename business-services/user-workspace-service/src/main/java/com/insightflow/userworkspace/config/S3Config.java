@@ -28,6 +28,14 @@ public class S3Config {
     @Value("${aws.s3.endpoint-url:#{null}}")
     private String endpointUrl;
 
+    // Public HTTPS endpoint the BROWSER uses to PUT/GET via presigned URLs.
+    // Server-side ops (s3Client) keep the internal endpoint-url (e.g. http://minio:9000),
+    // but presigned URLs must be signed with a publicly reachable HTTPS host, else the
+    // browser hits Mixed Content / an unresolvable internal hostname. Falls back to
+    // endpoint-url when unset (local dev).
+    @Value("${aws.s3.public-endpoint-url:#{null}}")
+    private String publicEndpointUrl;
+
     @Bean
     public S3Client s3Client() {
         S3ClientBuilder builder = S3Client.builder()
@@ -60,8 +68,12 @@ public class S3Config {
                            .pathStyleAccessEnabled(true)
                            .build());
 
-           if (endpointUrl != null && !endpointUrl.isBlank()) {
-               builder.endpointOverride(URI.create(endpointUrl));
+           // Sign with the public HTTPS endpoint when configured so browser-facing
+           // presigned URLs are reachable over HTTPS; otherwise fall back to internal.
+           String presignEndpoint = (publicEndpointUrl != null && !publicEndpointUrl.isBlank())
+                   ? publicEndpointUrl : endpointUrl;
+           if (presignEndpoint != null && !presignEndpoint.isBlank()) {
+               builder.endpointOverride(URI.create(presignEndpoint));
            }
 
            return builder.build();

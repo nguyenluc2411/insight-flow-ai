@@ -53,6 +53,9 @@ eureka:
 aws:
   s3:
     endpoint-url: ${MINIO_ENDPOINT:http://localhost:9000}
+    # Public HTTPS endpoint for browser-facing presigned URLs (server-side ops use
+    # endpoint-url above). Empty in local dev → presigner falls back to endpoint-url.
+    public-endpoint-url: ${MINIO_PUBLIC_ENDPOINT:}
     region: ${MINIO_REGION:ap-southeast-1}
     bucket-name: ${MINIO_BUCKET:insightflow-bucket}
     presign-expiration-minutes: 15
