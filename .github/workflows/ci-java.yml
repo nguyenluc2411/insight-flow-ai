@@ -59,6 +59,18 @@ jobs:
           mvn -f engagement-services/dashboard-bff/pom.xml         package -DskipTests -q
           mvn -f engagement-services/notification-service/pom.xml  package -DskipTests -q
 
+      # Pre-pull the shared base image with retries. Docker Hub pulls
+      # occasionally i/o-timeout on GitHub runners; cache it once here so the
+      # 13 service builds below reuse the local layer instead of each
+      # re-hitting registry-1.docker.io.
+      - name: Pre-pull base image (retry on Docker Hub flakes)
+        run: |
+          for i in 1 2 3 4 5; do
+            docker pull eclipse-temurin:21-jre-alpine && break
+            echo "base image pull failed (attempt $i/5), retrying in 15s..."
+            sleep 15
+          done
+
       # Build Docker images to verify Dockerfiles are correct (no push)
       - name: Docker build – all Java services
         run: |
