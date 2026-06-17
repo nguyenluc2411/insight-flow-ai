@@ -32,4 +32,10 @@ public class SecurityAutoConfiguration {
     public PermissionAspect permissionAspect() {
         return new PermissionAspect();
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public RoleAspect roleAspect() {
+        return new RoleAspect();
+    }
 }

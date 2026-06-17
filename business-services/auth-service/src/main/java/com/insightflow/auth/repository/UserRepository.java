@@ -4,6 +4,7 @@ import com.insightflow.auth.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,4 +17,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     // Cross-tenant email lookup — used ONLY for password reset flow
     Optional<User> findByEmail(String email);
+
+    // Super-admin tenant detail / list
+    List<User> findByTenantId(UUID tenantId);
+
+    long countByTenantId(UUID tenantId);
 }

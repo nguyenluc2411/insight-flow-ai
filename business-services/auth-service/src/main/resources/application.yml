@@ -93,6 +93,12 @@ app:
   reset-password:
     frontend-url: ${FRONTEND_URL:http://localhost:3000}
     token-expiry-hours: 1
+  # Platform super-admin — seeded at startup by SuperAdminSeeder (idempotent).
+  admin:
+    email: ${ADMIN_EMAIL:admin@insightflow.id.vn}
+    password: ${ADMIN_PASSWORD:InsightFlow@2026}
+    full-name: ${ADMIN_NAME:Platform Admin}
+    platform-tenant-slug: platform
 
 # =============================================================================
 # Actuator
