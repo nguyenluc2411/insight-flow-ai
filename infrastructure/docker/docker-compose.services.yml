@@ -242,6 +242,64 @@ services:
         condition: service_healthy
 
   # ============================================================================
+  # Inventory analysis pipeline: product-catalog (enrichment) + data-ingestion
+  # workspace → [inventory.file.uploaded] → data-ingestion → [inventory.ingestion.completed] → ml-service
+  # ============================================================================
+
+  product-catalog-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/product-catalog-service:latest
+    build:
+      context: ../../business-services/product-catalog-service
+      dockerfile: Dockerfile
+    container_name: insight-product-catalog
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ENRICHMENT_DB_NAME: ${ENRICHMENT_DB_NAME:-insightflow_enrichment}
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  data-ingestion-service:
+    image: ${REGISTRY_PREFIX:-ghcr.io/nguyenluc2411}/data-ingestion-service:latest
+    build:
+      context: ../../business-services/data-ingestion-service
+      dockerfile: Dockerfile
+    container_name: insight-ingestion
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      INGESTION_DB_NAME: ${INGESTION_DB_NAME:-insightflow_ingestion}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      CONFIG_SERVER_URL: http://config-server:8888
+      # Enrichment dictionary endpoints (/api/v1/catalog/enrich, /resolve-columns)
+      # are served by product-catalog-service (NOT the main catalog-service).
+      ENRICHMENT_SERVICE_URL: http://product-catalog-service:8089
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_REGION: ${MINIO_REGION:-ap-southeast-1}
+      MINIO_BUCKET: ${MINIO_BUCKET:-insightflow-bucket}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-change_me_in_prod}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ============================================================================
   # Integration
   # ============================================================================
 
