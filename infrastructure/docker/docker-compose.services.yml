@@ -354,6 +354,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MODEL_STORAGE_PATH: /app/models
+      # ml-service calls data-ingestion by container alias (NOT localhost, else
+      # _fetch_inventory → Connection refused and file-analysis advice never finishes).
+      DATA_INGESTION_URL: http://data-ingestion-service:8088
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
