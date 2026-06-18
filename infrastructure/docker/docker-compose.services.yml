@@ -81,6 +81,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # ml-service is Python (not in Eureka); the gateway routes /api/v1/ml/**
+      # to it by this host. Without it the route falls back to localhost:8000
+      # (the gateway itself → connection refused) so AI-advice polling never
+      # reaches ml and the report modal hangs on "AI đang phân tích".
+      ML_SERVICE_HOST: ml-service
+      ML_SERVICE_PORT: 8000
     depends_on:
       config-server:
         condition: service_healthy
