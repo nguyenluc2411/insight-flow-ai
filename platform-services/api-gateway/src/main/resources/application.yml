@@ -481,11 +481,14 @@ logging:
     root: INFO
     com.insightflow.gateway: INFO
 
-    #====truy log lỗi====
-    org.springframework.cloud.gateway: TRACE
-    org.springframework.web: TRACE
-    org.springframework.data.redis: DEBUG
-    reactor.netty: DEBUG
+    # Debug loggers — keep at INFO in prod. TRACE on cloud.gateway floods the
+    # boot logs with OnEnabled*/condition-evaluation lines and slows startup;
+    # TRACE on o.s.web logs every request → fills the container json log (14G
+    # disk-fill incidents). Bump these back up locally only when debugging routing.
+    org.springframework.cloud.gateway: INFO
+    org.springframework.web: INFO
+    org.springframework.data.redis: INFO
+    reactor.netty: INFO
   server:
       error:
         include-message: always
