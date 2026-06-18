@@ -357,6 +357,13 @@ services:
       # ml-service calls data-ingestion by container alias (NOT localhost, else
       # _fetch_inventory → Connection refused and file-analysis advice never finishes).
       DATA_INGESTION_URL: http://data-ingestion-service:8088
+      # Gemini credentials live in the server .env but were never wired into this
+      # container, so config.py fell back to GEMINI_API_KEY="" and every
+      # file-analysis advice failed fast with "GEMINI_API_KEY is not configured".
+      # config.py reads these by field name (no alias), so env var names match.
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_API_URL: ${GEMINI_API_URL:-https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent}
+      GEMINI_FALLBACK_API_URL: ${GEMINI_FALLBACK_API_URL:-https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
