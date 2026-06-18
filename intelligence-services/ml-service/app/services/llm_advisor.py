@@ -124,7 +124,11 @@ def generate_inventory_strategy(
                 logger.info(
                     "Calling Gemini %s (attempt %d/%d)", model, attempt, _MAX_ATTEMPTS
                 )
-                with httpx.Client(timeout=60.0) as client:
+                # Google-search grounding makes a single generateContent call
+                # take ~60s; a 60s deadline made attempt 1 time out almost every
+                # time and forced a wasteful retry (~2 min total). 120s lets the
+                # grounded call finish on the first attempt.
+                with httpx.Client(timeout=120.0) as client:
                     resp = client.post(url, json=body)
                     resp.raise_for_status()
                     data = resp.json()
