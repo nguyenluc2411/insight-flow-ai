@@ -132,6 +132,25 @@ spring:
             rateLimiter: defaultRateLimiter
           order: 2
 
+        # ── Platform admin (super-admin only) ─────────────────────────────────
+        # auth-service hosts the platform admin API at /api/v1/admin/**. The
+        # service enforces SUPER_ADMIN via @RequiresRole; the gateway just needs
+        # to route the path (it had no route before, so admin calls 404'd).
+        - id: auth-service-admin
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/admin/**
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: false
+            rateLimiter: defaultRateLimiter
+          order: 2
+
         # ── Catalog service ───────────────────────────────────────────────────
         - id: catalog-service
           uri: lb://catalog-service

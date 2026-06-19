@@ -1,6 +1,7 @@
 package com.insightflow.auth.controller;
 
 import com.insightflow.auth.dto.request.UpdateTenantStatusRequest;
+import com.insightflow.auth.dto.response.AdminMetricsResponse;
 import com.insightflow.auth.dto.response.AdminTenantDetail;
 import com.insightflow.auth.dto.response.AdminTenantListItem;
 import com.insightflow.auth.service.AdminTenantService;
@@ -30,6 +31,15 @@ import java.util.UUID;
 public class AdminController {
 
     private final AdminTenantService adminTenantService;
+
+    @GetMapping("/metrics")
+    @RequiresRole("SUPER_ADMIN")
+    @Operation(summary = "Aggregate platform metrics (tenants, users, sign-up trend) for the admin dashboard")
+    public AdminMetricsResponse getMetrics(
+            @CurrentUser UserContext user,
+            @RequestParam(defaultValue = "30") int days) {
+        return adminTenantService.getMetrics(days);
+    }
 
     @GetMapping("/tenants")
     @RequiresRole("SUPER_ADMIN")
