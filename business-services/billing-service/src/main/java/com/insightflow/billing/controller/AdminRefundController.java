@@ -11,9 +11,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -26,11 +27,20 @@ import java.util.UUID;
 @Tag(name = "Admin Refunds", description = "Quản lý đối soát và xác nhận hoàn tiền thủ công")
 public class AdminRefundController {
 
+    private static final String SUPER_ADMIN = "SUPER_ADMIN";
+
     private final SePayPaymentService sePayPaymentService;
+
+    // billing-service has no Spring method security (permitAll + UserContextFilter),
+    // so @PreAuthorize was never enforced. Gate on the gateway-propagated role instead.
+    private void requireSuperAdmin(UserContext user) {
+        if (user == null || user.roles() == null || !user.roles().contains(SUPER_ADMIN)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Requires SUPER_ADMIN role");
+        }
+    }
 
     @GetMapping
     @Operation(summary = "Lấy danh sách giao dịch lỗi cần đối soát")
-    @PreAuthorize("hasAuthority('SYSTEM_ADMIN')")
     public ResponseEntity<Page<PaymentTransactionResponse>> getTransactions(
             @CurrentUser UserContext adminUser,
             // SỬA Ở ĐÂY: Chỉ mặc định tìm đúng 1 trạng thái chờ hoàn tiền
@@ -38,6 +48,7 @@ public class AdminRefundController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
+        requireSuperAdmin(adminUser);
         List<String> upperStatuses = statuses.stream().map(String::toUpperCase).toList();
         return ResponseEntity.ok(sePayPaymentService.getTransactionsByStatuses(
                 upperStatuses,
@@ -47,21 +58,21 @@ public class AdminRefundController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết một giao dịch cần hoàn tiền")
-    @PreAuthorize("hasAuthority('SYSTEM_ADMIN')")
     public ResponseEntity<PaymentTransactionResponse> getTransactionDetail(
             @CurrentUser UserContext adminUser,
             @PathVariable UUID id) {
+        requireSuperAdmin(adminUser);
         return ResponseEntity.ok(sePayPaymentService.getTransactionDetail(id));
     }
 
     @PostMapping("/{id}/confirm-refund")
     @Operation(summary = "Xác nhận đã hoàn tiền thủ công cho khách")
-    @PreAuthorize("hasAuthority('SYSTEM_ADMIN')")
     public ResponseEntity<Map<String, String>> confirmManualRefund(
             @CurrentUser UserContext adminUser,
             @PathVariable UUID id,
             @RequestBody(required = false) Map<String, String> payload) {
 
+        requireSuperAdmin(adminUser);
         String refundNote = (payload != null) ? payload.getOrDefault("note", "") : "";
 
         log.warn("🚨 Admin [{}] XÁC NHẬN ĐÃ HOÀN TIỀN TAY CHO GIAO DỊCH [{}]", adminUser.userId(), id);

@@ -37,14 +37,21 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
     @Query("SELECT t.createdAt FROM Tenant t WHERE t.slug <> :excludeSlug AND t.createdAt >= :since")
     List<Instant> findCreatedAtSince(@Param("excludeSlug") String excludeSlug, @Param("since") Instant since);
 
-    /** Super-admin tenant search — excludes the internal platform tenant. */
+    /**
+     * Super-admin tenant search — excludes the internal platform tenant.
+     *
+     * <p>{@code :q}/{@code :status} are explicitly cast to text. Without the cast,
+     * a null bind has no inferable type and PostgreSQL falls back to {@code bytea},
+     * so {@code LOWER(CONCAT(..., :q, ...))} fails with
+     * {@code function lower(bytea) does not exist} (500 on the admin tenant list).</p>
+     */
     @Query("""
         SELECT t FROM Tenant t
         WHERE t.slug <> :excludeSlug
-          AND (:status IS NULL OR t.status = :status)
-          AND (:q IS NULL
-               OR LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%'))
-               OR LOWER(t.slug) LIKE LOWER(CONCAT('%', :q, '%')))
+          AND (CAST(:status AS string) IS NULL OR t.status = :status)
+          AND (CAST(:q AS string) IS NULL
+               OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
+               OR LOWER(t.slug) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))
         """)
     Page<Tenant> searchTenants(@Param("excludeSlug") String excludeSlug,
                                @Param("status") String status,

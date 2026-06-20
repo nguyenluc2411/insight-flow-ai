@@ -12,9 +12,12 @@ import com.insightflow.billing.repository.PlanRepository;
 import com.insightflow.common.web.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,6 +58,102 @@ public class PackageService {
                     return toPackageResponse(pkg, plans, featureCodes);
                 })
                 .collect(Collectors.toList());
+    }
+
+    // ─── Platform super-admin catalog management ──────────────────────────────
+
+    /** All packages (any status, including hidden/INACTIVE) with all their plans. */
+    public List<PackageResponse> getAllPackagesAdmin() {
+        List<BillingPackage> packages = packageRepository.findAll().stream()
+                .sorted(Comparator.comparing(
+                        p -> p.getDisplayOrder() == null ? Integer.MAX_VALUE : p.getDisplayOrder()))
+                .toList();
+
+        List<PackageFeature> allPackageFeatures = packageFeatureRepository.findAll();
+        Map<UUID, String> featureCodeMap = featureRepository.findAll().stream()
+                .collect(Collectors.toMap(Feature::getId, Feature::getCode));
+        Map<UUID, List<String>> packageFeatureCodesMap = allPackageFeatures.stream()
+                .collect(Collectors.groupingBy(
+                        PackageFeature::getPackageId,
+                        Collectors.mapping(pf -> featureCodeMap.getOrDefault(pf.getFeatureId(), ""), Collectors.toList())
+                ));
+
+        return packages.stream()
+                .map(pkg -> toPackageResponse(
+                        pkg,
+                        planRepository.findByPackageId(pkg.getId()),
+                        packageFeatureCodesMap.getOrDefault(pkg.getId(), List.of())))
+                .collect(Collectors.toList());
+    }
+
+    /** Update a plan's price / trial / cycle / status. Null fields are left unchanged. */
+    @Transactional
+    public PlanResponse updatePlan(UUID planId, Integer priceVnd, Integer trialDays,
+                                   String billingCycle, String status) {
+        Plan plan = planRepository.findById(planId)
+                .orElseThrow(() -> new ResourceNotFoundException("Plan not found: " + planId));
+        if (priceVnd != null) {
+            if (priceVnd < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "priceVnd must be >= 0");
+            plan.setPriceVnd(priceVnd);
+        }
+        if (trialDays != null) {
+            if (trialDays < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "trialDays must be >= 0");
+            plan.setTrialDays(trialDays);
+        }
+        if (billingCycle != null) plan.setBillingCycle(billingCycle);
+        if (status != null) plan.setStatus(status.toUpperCase());
+        log.info("Admin updated plan {} -> price={}, trialDays={}, cycle={}, status={}",
+                planId, plan.getPriceVnd(), plan.getTrialDays(), plan.getBillingCycle(), plan.getStatus());
+        return toPlanResponse(planRepository.save(plan));
+    }
+
+    /** Update package metadata / visibility. Null fields are left unchanged. */
+    @Transactional
+    public PackageResponse updatePackage(UUID id, String name, String description,
+                                         Integer displayOrder, String status) {
+        BillingPackage pkg = packageRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Package not found: " + id));
+        if (name != null) pkg.setName(name);
+        if (description != null) pkg.setDescription(description);
+        if (displayOrder != null) pkg.setDisplayOrder(displayOrder);
+        if (status != null) pkg.setStatus(status.toUpperCase());
+        packageRepository.save(pkg);
+        return toPackageResponse(pkg, planRepository.findByPackageId(id), getFeatureCodesForPackage(id));
+    }
+
+    /** Create a new package together with an initial monthly plan. */
+    @Transactional
+    public PackageResponse createPackage(String code, String name, String description,
+                                         Integer displayOrder, Integer monthlyPriceVnd, Integer trialDays) {
+        String normalizedCode = code == null ? null : code.trim().toUpperCase();
+        if (normalizedCode == null || normalizedCode.isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "code is required");
+        if (name == null || name.isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "name is required");
+        packageRepository.findByCode(normalizedCode).ifPresent(p -> {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Package code already exists: " + normalizedCode);
+        });
+
+        BillingPackage pkg = packageRepository.save(BillingPackage.builder()
+                .code(normalizedCode)
+                .name(name)
+                .description(description)
+                .displayOrder(displayOrder)
+                .status("ACTIVE")
+                .version(1)
+                .build());
+
+        Plan plan = planRepository.save(Plan.builder()
+                .packageId(pkg.getId())
+                .billingCycle("MONTHLY")
+                .priceVnd(monthlyPriceVnd == null ? 0 : monthlyPriceVnd)
+                .currency("VND")
+                .trialDays(trialDays == null ? 0 : trialDays)
+                .status("ACTIVE")
+                .build());
+
+        log.info("Admin created package {} ({}) with monthly plan price={}", normalizedCode, pkg.getId(), plan.getPriceVnd());
+        return toPackageResponse(pkg, List.of(plan), List.of());
     }
 
     public PackageResponse getPackageByCode(String code) {

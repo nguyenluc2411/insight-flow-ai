@@ -21,6 +21,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     Page<PaymentTransaction> findByStatusIn(List<String> statuses, Pageable pageable);
 
+    Page<PaymentTransaction> findByTenantIdOrderByCreatedAtDesc(UUID tenantId, Pageable pageable);
+
     List<PaymentTransaction> findByStatus(String status);
 
 }

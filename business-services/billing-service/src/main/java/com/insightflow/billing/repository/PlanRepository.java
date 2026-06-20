@@ -13,6 +13,8 @@ public interface PlanRepository extends JpaRepository<Plan, UUID> {
 
     List<Plan> findByPackageIdAndStatus(UUID packageId, String status);
 
+    List<Plan> findByPackageId(UUID packageId);
+
     Optional<Plan> findByPackageIdAndBillingCycle(UUID packageId, String billingCycle);
 
     List<Plan> findByStatus(String status);
