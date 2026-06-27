@@ -26,4 +26,8 @@ public class SePayWebhookRequest {
 
     @JsonProperty("accumulated")
     private Integer accumulated;
+
+    // Mã tham chiếu của ngân hàng/SePay — khóa đối chứng tin cậy nhất khi soát sao kê.
+    @JsonProperty("referenceCode")
+    private String referenceCode;
 }

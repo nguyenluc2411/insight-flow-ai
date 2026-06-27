@@ -143,12 +143,19 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_URL: http://discovery-server:8761/eureka/
       CONFIG_SERVER_URL: http://config-server:8888
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-insightflow-bucket}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
       config-server:
+        condition: service_healthy
+      minio:
         condition: service_healthy
 
   sales-service:

@@ -13,6 +13,14 @@ spring:
     name: api-gateway
 
   # ---------------------------------------------------------------------------
+  # Codec — increase buffer limit so multipart/form-data image uploads
+  # (news cover + body images) can pass through the gateway without hitting
+  # the default 256KB DataBufferLimitException.
+  # ---------------------------------------------------------------------------
+  codec:
+    max-in-memory-size: 20MB
+
+  # ---------------------------------------------------------------------------
   # Redis — backs the gateway's RequestRateLimiter. Bind to env so it works in
   # Docker (REDIS_HOST=redis container); falls back to localhost for bare-metal
   # local dev. No SSL (matches the plain redis:7 infra container).
@@ -115,6 +123,22 @@ spring:
             rateLimiter: loginRateLimiter
           order: 1
 
+        # ── Auth service — public analytics (no JWT) ─────────────────────────
+        - id: auth-service-analytics
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/analytics/track
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: defaultRateLimiter
+          order: 2
+
         # ── Auth service — protected endpoints (JWT required) ─────────────────
         # Covers password change, profile, admin user management, etc.
         - id: auth-service-protected
@@ -150,6 +174,23 @@ spring:
             public: false
             rateLimiter: defaultRateLimiter
           order: 2
+
+        # ── Catalog service — Public endpoints (News) ─────────────────────────
+        - id: catalog-service-public
+          uri: lb://catalog-service
+          predicates:
+            - Path=/api/v1/catalog/public/news/**
+            - Method=GET
+          filters:
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@defaultRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+          metadata:
+            public: true
+            rateLimiter: defaultRateLimiter
+          order: 9
 
         # ── Catalog service ───────────────────────────────────────────────────
         - id: catalog-service

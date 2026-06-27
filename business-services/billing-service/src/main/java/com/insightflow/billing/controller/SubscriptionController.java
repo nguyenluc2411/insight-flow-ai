@@ -7,11 +7,17 @@ import com.insightflow.billing.service.SubscriptionService;
 import com.insightflow.billing.service.UpgradeRequestService;
 import com.insightflow.security.CurrentUser;
 import com.insightflow.security.UserContext;
+import com.insightflow.billing.entity.PaymentTransaction;
+import com.insightflow.billing.repository.PaymentTransactionRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +29,7 @@ public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
     private final UpgradeRequestService upgradeRequestService;
+    private final PaymentTransactionRepository paymentTransactionRepository;
 
     @PostMapping("/upgrade-request")
     @Operation(summary = "Submit a manual upgrade request (admin approves it — no payment in MVP)")
@@ -45,4 +52,15 @@ public class SubscriptionController {
     // model: plan changes happen only via upgrade-request -> ops approval
     // (see UpgradeRequestService + InternalController). The underlying
     // SubscriptionService.upgradePlan/downgradePlan remain for the approval path.
+
+    @GetMapping("/transactions")
+    @Operation(summary = "Get transaction history for the current tenant")
+    @ApiResponse(responseCode = "200", description = "Transaction history returned")
+    public ResponseEntity<Page<PaymentTransaction>> getTransactions(
+            @CurrentUser UserContext user,
+            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(
+                paymentTransactionRepository.findByTenantIdOrderByCreatedAtDesc(user.tenantId(), pageable)
+        );
+    }
 }

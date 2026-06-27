@@ -8,6 +8,11 @@ spring:
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
   cloud:
     config:
       fail-fast: true
@@ -100,6 +105,24 @@ springdoc:
     enabled: false
     path: /swagger-ui.html
   show-actuator: false
+
+# =============================================================================
+# Logging
+# =============================================================================
+# =============================================================================
+# MinIO — object storage for news images and file uploads
+# MINIO_ENDPOINT must point to the container name (minio) in Docker,
+# or localhost:9000 for bare-metal dev.
+# =============================================================================
+minio:
+  url: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:insightflow-bucket}
+
+# Public base URL returned in image upload responses (browser-accessible)
+app:
+  public-url: ${APP_PUBLIC_URL:http://localhost:8080}
 
 # =============================================================================
 # Logging

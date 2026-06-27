@@ -16,9 +16,11 @@ public class PaymentTransactionResponse {
     private Integer amount;
     private String accountNumber;
     private String senderAccountNumber;
+    private String referenceCode;
     private String content;
     private String status;
     private String errorReason;
+    private LocalDateTime transactionDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

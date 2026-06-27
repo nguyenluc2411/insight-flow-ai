@@ -42,6 +42,8 @@ tags:
     description: Feature access and usage tracking
   - name: Billing Admin
     description: Billing history for current tenant
+  - name: Admin Refunds
+    description: Refund reconciliation for invalid/duplicate transfers (SUPER_ADMIN)
   - name: Internal
     description: Service-to-service endpoints (requires service JWT)
 
@@ -210,6 +212,239 @@ paths:
                 $ref: '#/components/schemas/PageBillingHistory'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /admin/refunds:
+    get:
+      operationId: listRefundTransactions
+      summary: List transactions awaiting refund reconciliation (SUPER_ADMIN)
+      description: >
+        Returns payment transactions filtered by status (default PENDING_REFUND),
+        newest first. Requires the SUPER_ADMIN role (enforced via the
+        gateway-propagated role header).
+      tags: [Admin Refunds]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: statuses
+          in: query
+          description: One or more statuses to include (case-insensitive). Values include SUCCESS, PENDING_REFUND, REFUNDED, JUNK.
+          schema:
+            type: array
+            items:
+              type: string
+            default: [PENDING_REFUND]
+        - name: q
+          in: query
+          required: false
+          description: >
+            Optional case-insensitive search keyword. Matches against reference code,
+            transfer memo (content), order code (IFLOWxxxxxx), package code and tenant id.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagePaymentTransaction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/refunds/{id}:
+    get:
+      operationId: getRefundTransactionDetail
+      summary: Get a transaction's detail for refund verification (SUPER_ADMIN)
+      description: >
+        Returns the transaction info an admin needs to reconcile a transfer: bank
+        reference code, transfer memo, amount and the actual transfer date. To get the
+        customer's contact details, resolve tenantId via auth-service's admin API
+        (GET /api/v1/admin/tenants/{id}); tenantId is null for unmatched transfers.
+      tags: [Admin Refunds]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transaction detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentTransactionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteJunkTransaction
+      summary: Permanently delete a junk transaction (SUPER_ADMIN)
+      description: >
+        Hard-deletes a transaction from the junk bin. Only a transaction already in
+        JUNK status can be deleted; this is irreversible.
+      tags: [Admin Refunds]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transaction permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: SUCCESS
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Transaction is not in JUNK state
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /admin/refunds/{id}/confirm-refund:
+    post:
+      operationId: confirmManualRefund
+      summary: Mark a transaction as manually refunded (SUPER_ADMIN)
+      description: >
+        Records that the admin has refunded the customer out-of-band. Only a
+        transaction in PENDING_REFUND can be confirmed; its status moves to REFUNDED,
+        an audit note is appended to errorReason, and a refund.success event is emitted.
+      tags: [Admin Refunds]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: Optional audit note (refund reference / reason).
+                  example: Đã hoàn 499.000đ qua MB, ref FT24XXXX
+      responses:
+        '200':
+          description: Refund confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: SUCCESS
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Transaction is not in PENDING_REFUND state
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /admin/refunds/{id}/mark-junk:
+    post:
+      operationId: markTransactionAsJunk
+      summary: Mark a transaction as not belonging to the system (SUPER_ADMIN)
+      description: >
+        Moves a PENDING_REFUND transaction into the junk bin (status JUNK) — e.g. a
+        stranger's transfer that does not belong to any order. Only a transaction in
+        PENDING_REFUND can be marked; an audit note is appended to errorReason.
+      tags: [Admin Refunds]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: Optional audit note (why it is not ours).
+      responses:
+        '200':
+          description: Transaction moved to junk
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: SUCCESS
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Transaction is not in PENDING_REFUND state
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
 
 x-internal-note: >
   Internal endpoints below are served at /api/v1/internal/** (not under /billing).
@@ -519,25 +754,69 @@ components:
         number:
           type: integer
 
-  responses:
-    NotFound:
-      description: Resource not found
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetail'
-    Unauthorized:
-      description: Missing or invalid JWT
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetail'
-    ValidationError:
-      description: Request validation failed
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetail'
+    PaymentTransactionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sepayId:
+          type: string
+          description: SePay transaction id (webhook idempotency key).
+        tenantId:
+          type: string
+          format: uuid
+          description: Null for transfers that could not be matched to a tenant.
+        packageCode:
+          type: string
+        amount:
+          type: integer
+          example: 499000
+        accountNumber:
+          type: string
+          description: Receiving (merchant) bank account.
+        senderAccountNumber:
+          type: string
+          description: Sender account — usually null (SePay does not provide it); use referenceCode instead.
+        referenceCode:
+          type: string
+          description: Bank/SePay reference code — the reliable key to reconcile against a bank statement.
+        content:
+          type: string
+          description: Raw bank transfer memo.
+        status:
+          type: string
+          enum: [SUCCESS, PENDING_REFUND, REFUNDED]
+        errorReason:
+          type: string
+          description: Why the transfer needs a refund, plus the admin audit trail.
+        transactionDate:
+          type: string
+          format: date-time
+          description: Actual bank-transfer time reported by the webhook.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PagePaymentTransaction:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentTransactionResponse'
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
 
     ProblemDetail:
       type: object
@@ -552,3 +831,29 @@ components:
           type: string
         instance:
           type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Authenticated but lacks the required role (SUPER_ADMIN)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'

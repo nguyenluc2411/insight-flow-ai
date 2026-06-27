@@ -16,6 +16,7 @@ public class SubscriptionResponse {
     private UUID id;
     private UUID tenantId;
     private UUID planId;
+    private String packageCode;
     private Integer priceAtSubscription;
     private List<String> featuresAtSubscription;
     private Map<String, Object> limitsAtSubscription;

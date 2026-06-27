@@ -129,3 +129,13 @@ out
 # Claude Code per-machine settings
 # ============================
 .claude/settings.local.json
+
+# ============================
+# Local Postman test collections (không push)
+# ============================
+postman/
+
+# ============================
+# Local file uploads (runtime files, không push lên git)
+# ============================
+uploads/

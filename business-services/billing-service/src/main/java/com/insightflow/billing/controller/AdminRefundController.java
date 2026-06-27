@@ -40,18 +40,20 @@ public class AdminRefundController {
     }
 
     @GetMapping
-    @Operation(summary = "Lấy danh sách giao dịch lỗi cần đối soát")
+    @Operation(summary = "Lấy danh sách giao dịch theo trạng thái (có hỗ trợ tìm kiếm)")
     public ResponseEntity<Page<PaymentTransactionResponse>> getTransactions(
             @CurrentUser UserContext adminUser,
-            // SỬA Ở ĐÂY: Chỉ mặc định tìm đúng 1 trạng thái chờ hoàn tiền
+            // Mặc định trạng thái chờ hoàn tiền; truyền statuses để xem SUCCESS / REFUNDED / JUNK
             @RequestParam(defaultValue = "PENDING_REFUND") List<String> statuses,
+            // Từ khoá tìm kiếm tuỳ chọn: mã tham chiếu, nội dung CK, mã đơn, mã gói, tenant id
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         requireSuperAdmin(adminUser);
         List<String> upperStatuses = statuses.stream().map(String::toUpperCase).toList();
         return ResponseEntity.ok(sePayPaymentService.getTransactionsByStatuses(
-                upperStatuses,
+                upperStatuses, q,
                 PageRequest.of(page, size, Sort.by("createdAt").descending())
         ));
     }
@@ -82,6 +84,42 @@ public class AdminRefundController {
         return ResponseEntity.ok(Map.of(
                 "status", "SUCCESS",
                 "message", "Đã chốt sổ trạng thái hoàn tiền và lưu vết thành công."
+        ));
+    }
+
+    @PostMapping("/{id}/mark-junk")
+    @Operation(summary = "Đánh dấu giao dịch không thuộc hệ thống (chuyển vào mục giao dịch rác)")
+    public ResponseEntity<Map<String, String>> markAsJunk(
+            @CurrentUser UserContext adminUser,
+            @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, String> payload) {
+
+        requireSuperAdmin(adminUser);
+        String note = (payload != null) ? payload.getOrDefault("note", "") : "";
+
+        log.warn("🗑️ Admin [{}] đánh dấu giao dịch [{}] là KHÔNG thuộc hệ thống", adminUser.userId(), id);
+        sePayPaymentService.markAsJunk(id, adminUser.userId().toString(), note);
+
+        return ResponseEntity.ok(Map.of(
+                "status", "SUCCESS",
+                "message", "Đã chuyển giao dịch vào mục giao dịch rác."
+        ));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Xoá vĩnh viễn một giao dịch rác")
+    public ResponseEntity<Map<String, String>> deleteJunk(
+            @CurrentUser UserContext adminUser,
+            @PathVariable UUID id) {
+
+        requireSuperAdmin(adminUser);
+
+        log.warn("❌ Admin [{}] XOÁ VĨNH VIỄN giao dịch rác [{}]", adminUser.userId(), id);
+        sePayPaymentService.deleteTransaction(id, adminUser.userId().toString());
+
+        return ResponseEntity.ok(Map.of(
+                "status", "SUCCESS",
+                "message", "Đã xoá vĩnh viễn giao dịch rác."
         ));
     }
 }

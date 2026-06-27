@@ -341,10 +341,16 @@ public class SubscriptionService {
     }
 
     private SubscriptionResponse toSubscriptionResponse(TenantSubscription sub) {
+        String packageCode = planRepository.findById(sub.getPlanId())
+                .flatMap(plan -> packageRepository.findById(plan.getPackageId()))
+                .map(BillingPackage::getCode)
+                .orElse(null);
+
         return SubscriptionResponse.builder()
                 .id(sub.getId())
                 .tenantId(sub.getTenantId())
                 .planId(sub.getPlanId())
+                .packageCode(packageCode)
                 .priceAtSubscription(sub.getPriceAtSubscription())
                 .featuresAtSubscription(sub.getFeaturesAtSubscription())
                 .limitsAtSubscription(sub.getLimitsAtSubscription())

@@ -3,6 +3,11 @@ spring:
     config:
       fail-fast: false
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${CATALOG_DB_NAME:insightflow_catalog}
     username: ${POSTGRES_USER:insightflow}

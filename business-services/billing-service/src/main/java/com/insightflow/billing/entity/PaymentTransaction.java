@@ -39,6 +39,14 @@ public class PaymentTransaction {
     @Column(name = "sender_account_number", length = 50)
     private String senderAccountNumber;
 
+    // Mã tham chiếu từ SePay/ngân hàng — dùng để admin đối chứng với sao kê.
+    @Column(name = "reference_code", length = 100)
+    private String referenceCode;
+
+    // Thời điểm chuyển khoản thật từ ngân hàng (khác created_at = giờ ghi DB).
+    @Column(name = "transaction_date")
+    private LocalDateTime transactionDate;
+
     @Column(columnDefinition = "TEXT")
     private String content;
 
@@ -53,7 +61,9 @@ public class PaymentTransaction {
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    @Column(name = "transaction_code", unique = true, length = 50)
+    // KHÔNG unique: 2 lần chuyển cho cùng 1 mã (double-pay) phải lưu được cả hai.
+    // Idempotency do sepay_id đảm nhiệm. Xem migration V9.
+    @Column(name = "transaction_code", length = 50)
     private String transactionCode;
 
     @Column(name = "updated_at")

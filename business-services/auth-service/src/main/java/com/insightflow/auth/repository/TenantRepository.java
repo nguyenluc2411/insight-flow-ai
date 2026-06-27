@@ -25,6 +25,12 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
     @Query("SELECT COUNT(t) FROM Tenant t WHERE t.slug <> :excludeSlug")
     long countNonPlatform(@Param("excludeSlug") String excludeSlug);
 
+    @Query("SELECT COUNT(t) FROM Tenant t WHERE t.slug <> :excludeSlug AND (CAST(:fromDate AS timestamp) IS NULL OR t.createdAt >= :fromDate) AND (CAST(:toDate AS timestamp) IS NULL OR t.createdAt <= :toDate)")
+    long countNonPlatformSince(@Param("excludeSlug") String excludeSlug, @Param("fromDate") Instant fromDate, @Param("toDate") Instant toDate);
+
+    @Query("SELECT COUNT(t) FROM Tenant t WHERE t.slug <> :excludeSlug AND LOWER(t.plan) NOT IN ('trial', 'free') AND (CAST(:fromDate AS timestamp) IS NULL OR t.createdAt >= :fromDate) AND (CAST(:toDate AS timestamp) IS NULL OR t.createdAt <= :toDate)")
+    long countPaidCustomersSince(@Param("excludeSlug") String excludeSlug, @Param("fromDate") Instant fromDate, @Param("toDate") Instant toDate);
+
     /** Returns rows of [status, count]. */
     @Query("SELECT t.status, COUNT(t) FROM Tenant t WHERE t.slug <> :excludeSlug GROUP BY t.status")
     List<Object[]> countByStatus(@Param("excludeSlug") String excludeSlug);
