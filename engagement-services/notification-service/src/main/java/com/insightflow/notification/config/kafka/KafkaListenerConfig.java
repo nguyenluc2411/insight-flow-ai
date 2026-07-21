@@ -1,5 +1,6 @@
 package com.insightflow.notification.config.kafka;
 
+import com.insightflow.common.events.billing.PaymentReceiptEvent;
 import com.insightflow.common.events.notification.IncomingNotificationEvent;
 import com.insightflow.common.events.notification.NotificationCreatedEvent;
 import com.insightflow.common.events.notification.NotificationRetryEvent;
@@ -85,6 +86,25 @@ public class KafkaListenerConfig {
         return buildListenerFactory(kafkaProperties, notificationCreatedErrorHandler, NotificationCreatedEvent.class);
     }
 
+    /**
+     * Consumer cho biên nhận thanh toán ({@code billing.payment.success}, phát bởi billing-service).
+     * Retry 3 lần rồi bỏ qua & log — không route sang DLQ notification (topic khác domain).
+     * Chống gửi trùng đã xử lý ở tầng consumer bằng ProcessedEventService.
+     */
+    @Bean
+    public DefaultErrorHandler paymentReceiptErrorHandler() {
+        return new DefaultErrorHandler(new FixedBackOff(3000L, 3L));
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, PaymentReceiptEvent>
+    paymentReceiptKafkaListenerContainerFactory(
+            KafkaProperties kafkaProperties,
+            DefaultErrorHandler paymentReceiptErrorHandler) {
+
+        return buildListenerFactory(kafkaProperties, paymentReceiptErrorHandler, PaymentReceiptEvent.class);
+    }
+
     private <T> ConcurrentKafkaListenerContainerFactory<String, T> buildListenerFactory(
             KafkaProperties kafkaProperties,
             DefaultErrorHandler notificationErrorHandler,
@@ -95,7 +115,9 @@ public class KafkaListenerConfig {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
         JsonDeserializer<T> valueDeserializer = new JsonDeserializer<>(targetType, false);
-        valueDeserializer.addTrustedPackages("com.insightflow.common.events.notification");
+        valueDeserializer.addTrustedPackages(
+                "com.insightflow.common.events.notification",
+                "com.insightflow.common.events.billing");
         valueDeserializer.setUseTypeMapperForKey(false);
 
         DefaultKafkaConsumerFactory<String, T> consumerFactory =

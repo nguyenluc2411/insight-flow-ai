@@ -20,11 +20,29 @@ spring:
     properties:
       mail:
         smtp:
-          auth: false
+          # Default false = MailHog (dev). Trên EC2 set MAIL_SMTP_AUTH=true + STARTTLS=true cho Gmail.
+          auth: ${MAIL_SMTP_AUTH:false}
           starttls:
-            enable: false
+            enable: ${MAIL_SMTP_STARTTLS:false}
+            required: ${MAIL_SMTP_STARTTLS:false}
+          ssl:
+            trust: ${MAIL_SMTP_SSL_TRUST:}
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
 
 app:
   notification:
     default-low-stock-threshold: 10
+    # From hiển thị trên email. Với Gmail nên set MAIL_FROM = chính địa chỉ Gmail đăng nhập.
     mail-from: ${MAIL_FROM:noreply@insightflow.ai}
+  # Thông tin bên bán in trên biên nhận thanh toán (email hóa đơn). Có thể override qua env.
+  invoice:
+    company-name: ${INVOICE_COMPANY_NAME:Insight Flow AI}
+    company-tagline: ${INVOICE_COMPANY_TAGLINE:Dự báo nhu cầu & tối ưu tồn kho cho nhà bán lẻ}
+    company-address: ${INVOICE_COMPANY_ADDRESS:}
+    company-tax-code: ${INVOICE_COMPANY_TAX_CODE:}
+    support-email: ${INVOICE_SUPPORT_EMAIL:support@insightflow.ai}
+    support-hotline: ${INVOICE_SUPPORT_HOTLINE:}
+    website: ${INVOICE_WEBSITE:https://insightflow.ai}
+    brand-color: ${INVOICE_BRAND_COLOR:#4f46e5}

@@ -433,13 +433,27 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      # Route email to MailHog container instead of localhost (MailHog needs no TLS/auth)
-      MAIL_HOST: mailhog
-      MAIL_PORT: 1025
-      MAIL_SMTP_AUTH: "false"
-      MAIL_SMTP_STARTTLS: "false"
-      MAIL_SMTP_STARTTLS_REQUIRED: "false"
+      # --- Email / SMTP ---
+      # Default = MailHog (chỉ bắt mail để test, KHÔNG gửi thật). Để gửi hóa đơn thật tới khách,
+      # set các biến MAIL_* trong file .env trên EC2 (xem docs/EMAIL_INVOICE_SETUP.md):
+      #   MAIL_HOST=smtp.gmail.com MAIL_PORT=587 MAIL_USER=<gmail> MAIL_PASS=<app-password>
+      #   MAIL_SMTP_AUTH=true MAIL_SMTP_STARTTLS=true MAIL_SMTP_SSL_TRUST=smtp.gmail.com
+      #   MAIL_FROM=<gmail>
+      MAIL_HOST: ${MAIL_HOST:-mailhog}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASS: ${MAIL_PASS:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
+      MAIL_SMTP_SSL_TRUST: ${MAIL_SMTP_SSL_TRUST:-}
       MAIL_FROM: ${MAIL_FROM:-noreply@insightflow.ai}
+      # Thông tin bên bán in trên biên nhận (tùy chọn — set trong .env nếu muốn tùy biến)
+      INVOICE_COMPANY_NAME: ${INVOICE_COMPANY_NAME:-Insight Flow AI}
+      INVOICE_COMPANY_ADDRESS: ${INVOICE_COMPANY_ADDRESS:-}
+      INVOICE_COMPANY_TAX_CODE: ${INVOICE_COMPANY_TAX_CODE:-}
+      INVOICE_SUPPORT_EMAIL: ${INVOICE_SUPPORT_EMAIL:-support@insightflow.ai}
+      INVOICE_SUPPORT_HOTLINE: ${INVOICE_SUPPORT_HOTLINE:-}
+      INVOICE_WEBSITE: ${INVOICE_WEBSITE:-https://insightflow.ai}
     depends_on:
       postgres:
         condition: service_healthy

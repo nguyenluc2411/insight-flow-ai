@@ -5,12 +5,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insightflow.billing.dto.request.SePayWebhookRequest;
 import com.insightflow.billing.dto.request.UpgradeRequest;
 import com.insightflow.billing.dto.response.PaymentTransactionResponse;
+import com.insightflow.billing.dto.response.SubscriptionResponse;
+import com.insightflow.billing.entity.BillingPackage;
 import com.insightflow.billing.entity.OutboxEvent;
 import com.insightflow.billing.entity.PaymentTransaction;
+import com.insightflow.billing.entity.TenantContact;
 import com.insightflow.billing.entity.TenantSubscription;
 import com.insightflow.billing.repository.OutboxRepository;
+import com.insightflow.billing.repository.PackageRepository;
 import com.insightflow.billing.repository.PaymentTransactionRepository;
+import com.insightflow.billing.repository.TenantContactRepository;
 import com.insightflow.billing.repository.TenantSubscriptionRepository;
+import com.insightflow.common.events.billing.PaymentReceiptEvent;
 import com.insightflow.common.web.exception.BusinessException;
 import com.insightflow.common.web.exception.ErrorCode;
 import com.insightflow.common.web.exception.ResourceNotFoundException;
@@ -44,9 +50,21 @@ public class SePayPaymentService {
     private final SubscriptionService subscriptionService;
     private final PaymentTransactionRepository transactionRepository;
     private final TenantSubscriptionRepository subscriptionRepository;
+    private final PackageRepository packageRepository;
+    private final TenantContactRepository tenantContactRepository;
     private final OutboxRepository outboxRepository;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+
+    // Thông tin tài khoản nhận tiền (bên bán) — hiển thị trên biên nhận. Trùng cấu hình CheckoutService.
+    @Value("${app.payment.bank-id:MB}")
+    private String bankId;
+    @Value("${app.payment.account-no:0367457851}")
+    private String bankAccountNo;
+    @Value("${app.payment.account-name:DOAN TRUNG TRUC}")
+    private String bankAccountName;
+
+    private static final DateTimeFormatter INVOICE_NO_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -150,7 +168,7 @@ public class SePayPaymentService {
             upgradeRequest.setBillingCycle(billingCycle);
             upgradeRequest.setAutoRenew(true);
 
-            subscriptionService.upgradePlan(tenantId, upgradeRequest);
+            SubscriptionResponse subscription = subscriptionService.upgradePlan(tenantId, upgradeRequest);
 
             PaymentTransaction tx = PaymentTransaction.builder()
                     .sepayId(request.getId())
@@ -170,12 +188,87 @@ public class SePayPaymentService {
             redisTemplate.delete(transactionCode);
             log.info("✅ [SEPAY] Đã xử lý thành công mã {} cho Tenant {}", transactionCode, tenantId);
 
+            // Phát biên nhận thanh toán qua outbox -> notification-service gửi email cho khách.
+            // Bọc try/catch: lỗi tạo biên nhận KHÔNG được làm rollback giao dịch đã thành công.
+            try {
+                emitPaymentReceipt(tx, subscription, packageCode, billingCycle);
+            } catch (Exception ex) {
+                log.error("⚠️ [SEPAY] Không tạo được biên nhận cho mã {} (giao dịch vẫn thành công): {}",
+                        transactionCode, ex.getMessage(), ex);
+            }
+
         } catch (Exception e) {
             // Rethrow so the tx rolls back and SePay retries — the idempotency guard
             // (findBySepayId) makes the retry safe. Log with stacktrace for diagnosis.
             log.error("❌ Lỗi hệ thống khi xử lý Webhook id={}", request.getId(), e);
             throw new RuntimeException("SePay webhook processing failed for id=" + request.getId(), e);
         }
+    }
+
+    /**
+     * Dựng dữ liệu biên nhận thanh toán và ghi vào outbox (event {@code payment.success}).
+     * OutboxPublisher sẽ đẩy lên Kafka topic {@code billing.payment.success}; notification-service
+     * tiêu thụ và gửi email biên nhận chuyên nghiệp cho khách.
+     */
+    private void emitPaymentReceipt(PaymentTransaction tx, SubscriptionResponse subscription,
+                                    String packageCode, String billingCycle) {
+        UUID tenantId = tx.getTenantId();
+
+        // Email + tên người nhận: lấy từ cache liên hệ tenant (populate từ auth.tenant.registered).
+        TenantContact contact = tenantId != null
+                ? tenantContactRepository.findById(tenantId).orElse(null)
+                : null;
+        String recipientEmail = contact != null ? contact.getEmail() : null;
+        String recipientName = contact != null ? contact.getName() : null;
+
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            // Không có email -> vẫn phát event để notification log lại, nhưng cảnh báo rõ ràng.
+            log.warn("📧 [SEPAY] Chưa có email liên hệ cho tenant={} — biên nhận sẽ không gửi được. "
+                    + "Hãy chắc chắn tenant đăng ký sau khi bật cache contact.", tenantId);
+        }
+
+        // Tên gói hiển thị (fallback về mã gói nếu không tra được).
+        String packageName = packageRepository.findByCodeAndStatus(packageCode, "ACTIVE")
+                .map(BillingPackage::getName)
+                .orElse(packageCode);
+
+        LocalDateTime now = LocalDateTime.now();
+        String invoiceNumber = "HD" + INVOICE_NO_DATE.format(now.toLocalDate()) + "-" + tx.getTransactionCode();
+
+        PaymentReceiptEvent receipt = PaymentReceiptEvent.builder()
+                .eventId(tx.getId() != null ? tx.getId().toString() : tx.getSepayId())
+                .invoiceNumber(invoiceNumber)
+                .issuedAt(now.toString())
+                .tenantId(tenantId != null ? tenantId.toString() : null)
+                .recipientEmail(recipientEmail)
+                .recipientName(recipientName)
+                .packageCode(packageCode)
+                .packageName(packageName)
+                .billingCycle(billingCycle)
+                .amount(tx.getAmount() != null ? tx.getAmount().longValue() : null)
+                .currency("VND")
+                .transactionCode(tx.getTransactionCode())
+                .sepayId(tx.getSepayId())
+                .transactionDate(tx.getTransactionDate() != null ? tx.getTransactionDate().toString() : null)
+                .paymentMethod("Chuyển khoản ngân hàng (SePay)")
+                .bankName(bankId)
+                .bankAccountNo(bankAccountNo)
+                .bankAccountName(bankAccountName)
+                .startDate(subscription != null && subscription.getStartDate() != null
+                        ? subscription.getStartDate().toString() : null)
+                .endDate(subscription != null && subscription.getEndDate() != null
+                        ? subscription.getEndDate().toString() : null)
+                .build();
+
+        Map<String, Object> payload = objectMapper.convertValue(receipt, new TypeReference<>() {});
+
+        outboxRepository.save(OutboxEvent.builder()
+                .aggregateId(tenantId != null ? tenantId : tx.getId())
+                .eventType("payment.success")
+                .payload(payload)
+                .build());
+
+        log.info("🧾 [SEPAY] Đã tạo biên nhận {} cho tenant={} email={}", invoiceNumber, tenantId, recipientEmail);
     }
 
     private void handleBusinessError(SePayWebhookRequest request, String transactionCode,
