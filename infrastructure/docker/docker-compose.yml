@@ -3,11 +3,19 @@
 #   docker-compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d
 # =============================================================================
 
+# Gioi han log container: khong service nao lam day disk duoc nua
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
 
   postgres:
     image: postgres:16
     container_name: insight-postgres
+    logging: *default-logging
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -27,6 +35,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4
     container_name: insight-pgadmin
+    logging: *default-logging
     restart: always
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
@@ -40,6 +49,7 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: insight-zookeeper
+    logging: *default-logging
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -56,6 +66,7 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: insight-kafka
+    logging: *default-logging
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -81,6 +92,7 @@ services:
   kafka-ui:
     image: provectuslabs/kafka-ui
     container_name: insight-kafka-ui
+    logging: *default-logging
     depends_on:
       kafka:
         condition: service_healthy
@@ -93,6 +105,7 @@ services:
   redis:
     image: redis:7
     container_name: insight-redis
+    logging: *default-logging
     ports:
       - "6379:6379"
     healthcheck:
@@ -104,6 +117,7 @@ services:
   mailhog:
     image: mailhog/mailhog:latest
     container_name: insight-mailhog
+    logging: *default-logging
     ports:
       - "1025:1025"
       - "8025:8025"
@@ -115,6 +129,7 @@ services:
   minio:
     image: minio/minio:latest
     container_name: insight-minio
+    logging: *default-logging
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
@@ -137,6 +152,7 @@ services:
   minio-init:
     image: minio/mc:latest
     container_name: insight-minio-init
+    logging: *default-logging
     depends_on:
       minio:
         condition: service_healthy
@@ -154,6 +170,7 @@ services:
   kafka-init:
     image: confluentinc/cp-kafka:7.5.0
     container_name: insight-kafka-init
+    logging: *default-logging
     depends_on:
       kafka:
         condition: service_healthy
@@ -171,6 +188,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: insight-prometheus
+    logging: *default-logging
     ports:
       - "9090:9090"
     volumes:
@@ -185,6 +203,7 @@ services:
   loki:
     image: grafana/loki:latest
     container_name: insight-loki
+    logging: *default-logging
     ports:
       - "3100:3100"
     volumes:
@@ -194,6 +213,7 @@ services:
   promtail:
     image: grafana/promtail:latest
     container_name: insight-promtail
+    logging: *default-logging
     volumes:
       - ../../observability/promtail/promtail.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -204,6 +224,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: insight-grafana
+    logging: *default-logging
     ports:
       - "3001:3000"
     environment:

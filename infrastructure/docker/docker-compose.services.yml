@@ -20,6 +20,13 @@
 #   - CONFIG_SERVER_URL=http://config-server:8888
 # =============================================================================
 
+# Gioi han log container: khong service nao lam day disk duoc nua
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
 
   # ============================================================================
@@ -32,6 +39,7 @@ services:
       context: ../../platform-services/discovery-server
       dockerfile: Dockerfile
     container_name: insight-discovery
+    logging: *default-logging
     ports:
       - "8761:8761"
     healthcheck:
@@ -47,6 +55,7 @@ services:
       context: ../../platform-services/config-server
       dockerfile: Dockerfile
     container_name: insight-config
+    logging: *default-logging
     ports:
       - "8888:8888"
     environment:
@@ -71,6 +80,7 @@ services:
       context: ../../platform-services/api-gateway
       dockerfile: Dockerfile
     container_name: insight-gateway
+    logging: *default-logging
     ports:
       - "8080:8080"
     environment:
@@ -103,6 +113,7 @@ services:
       context: ../../business-services/auth-service
       dockerfile: Dockerfile
     container_name: insight-auth
+    logging: *default-logging
     ports:
       - "8081:8081"
     environment:
@@ -132,6 +143,7 @@ services:
       context: ../../business-services/catalog-service
       dockerfile: Dockerfile
     container_name: insight-catalog
+    logging: *default-logging
     ports:
       - "8082:8082"
     environment:
@@ -164,6 +176,7 @@ services:
       context: ../../business-services/sales-service
       dockerfile: Dockerfile
     container_name: insight-sales
+    logging: *default-logging
     ports:
       - "8083:8083"
     environment:
@@ -189,6 +202,7 @@ services:
       context: ../../business-services/billing-service
       dockerfile: Dockerfile
     container_name: insight-billing
+    logging: *default-logging
     ports:
       - "8086:8086"
     environment:
@@ -225,6 +239,7 @@ services:
       context: ../../business-services/user-workspace-service
       dockerfile: Dockerfile
     container_name: insight-workspace
+    logging: *default-logging
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -265,6 +280,7 @@ services:
       context: ../../business-services/product-catalog-service
       dockerfile: Dockerfile
     container_name: insight-product-catalog
+    logging: *default-logging
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -285,6 +301,7 @@ services:
       context: ../../business-services/data-ingestion-service
       dockerfile: Dockerfile
     container_name: insight-ingestion
+    logging: *default-logging
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -322,6 +339,7 @@ services:
       context: ../../integration-services/integration-service
       dockerfile: Dockerfile
     container_name: insight-integration
+    logging: *default-logging
     ports:
       - "8084:8084"
     environment:
@@ -354,6 +372,7 @@ services:
       context: ../../intelligence-services/ml-service
       dockerfile: Dockerfile
     container_name: insight-ml
+    logging: *default-logging
     ports:
       - "8000:8000"
     environment:
@@ -398,6 +417,7 @@ services:
       context: ../../engagement-services/dashboard-bff
       dockerfile: Dockerfile
     container_name: insight-bff
+    logging: *default-logging
     ports:
       - "8090:8090"
     environment:
@@ -419,6 +439,7 @@ services:
       context: ../../engagement-services/notification-service
       dockerfile: Dockerfile
     container_name: insight-notification
+    logging: *default-logging
     ports:
       - "8091:8091"
     environment:
